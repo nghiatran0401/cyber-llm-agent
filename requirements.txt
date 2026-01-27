@@ -1,0 +1,29 @@
+# Core LangChain (use latest stable, test compatibility)
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-community>=0.0.20
+langgraph>=0.0.20
+
+# LLM Providers
+openai>=1.0.0
+huggingface-hub>=0.19.0
+
+# UI Frameworks
+streamlit>=1.28.0
+gradio>=4.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+pandas>=2.1.0
+matplotlib>=3.8.0
+
+# Testing
+pytest>=7.4.0
+pytest-mock>=3.12.0
+
+# Optional: Local LLM support (uncomment if needed)
+# litellm>=1.0.0
+# ollama>=0.1.0
+
