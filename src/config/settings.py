@@ -15,7 +15,11 @@ class Settings:
     HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
     
     # Model Configuration
-    MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
+    MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+    FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", MODEL_NAME)
+    STRONG_MODEL_NAME = os.getenv("STRONG_MODEL_NAME", "gpt-4o")
+    AUTO_MODEL_ROUTING = os.getenv("AUTO_MODEL_ROUTING", "true").lower() == "true"
+    TOOL_MANDATORY_FOR_HIGH_RISK = os.getenv("TOOL_MANDATORY_FOR_HIGH_RISK", "true").lower() == "true"
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
     
@@ -47,6 +51,56 @@ class Settings:
         if not cls.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is required. Set it in .env file.")
         return True
+
+    @classmethod
+    def is_high_risk_task(cls, task_text: str) -> bool:
+        """Return True when task likely needs evidence-first tool use."""
+        if not task_text:
+            return False
+
+        high_risk_keywords = (
+            "incident",
+            "compromise",
+            "breach",
+            "forensics",
+            "malware",
+            "ransomware",
+            "phishing",
+            "containment",
+            "remediation",
+            "critical",
+            "exploit",
+            "zero-day",
+            "ioc",
+            "siem",
+            "edr",
+            "block this ip",
+            "quarantine",
+            "production",
+        )
+        task_lower = task_text.lower()
+        return any(keyword in task_lower for keyword in high_risk_keywords)
+
+    @classmethod
+    def should_use_strong_model(cls, task_text: str) -> bool:
+        """Choose strong model for high-risk or complex prompts."""
+        if not cls.AUTO_MODEL_ROUTING:
+            return False
+        if cls.is_high_risk_task(task_text):
+            return True
+
+        task_lower = (task_text or "").lower()
+        complexity_hints = (
+            "step-by-step",
+            "multi-step",
+            "investigate",
+            "root cause",
+            "correlate",
+            "compare",
+            "summarize all",
+            "across",
+        )
+        return any(hint in task_lower for hint in complexity_hints)
 
 
 # Initialize directories on import
