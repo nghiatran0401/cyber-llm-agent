@@ -96,7 +96,19 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 - `ENVIRONMENT=production` forces sandbox off by validation rules.
 - `ENABLE_SANDBOX=true` is for local training/non-production use.
 - Sandbox API routes return `403` when sandbox is disabled.
+- `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
+- `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
+- CTI tool input supports:
+  - threat-type queries (example: `ransomware`)
+  - IOC queries (example: `ioc:ip:1.2.3.4`, `ioc:domain:example.com`, `ioc:url:https://bad.example`, `ioc:hash:<sha256>`)
 - Do **not** commit real secrets (`.env` is ignored).
+
+## OTX Rollout Guidance
+
+- Keep `CTI_PROVIDER=otx` with a valid key in each environment.
+- Enable and verify OTX first in local dev, then staging, then production.
+- Monitor timeout/rate-limit trends before broad rollout (`CTI_REQUEST_TIMEOUT_SECONDS`, `CTI_MAX_RETRIES`).
+- When OTX is unavailable, CTI returns a deterministic fallback report instead of failing the workflow.
 
 ## Quality Gate
 

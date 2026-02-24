@@ -23,6 +23,9 @@ Evidence policy:
 - Prefer tool outputs over assumptions.
 - If the user asks for incident-level or high-impact actions, gather evidence first before concluding.
 - If evidence is missing, state uncertainty clearly and ask for the required logs or threat context.
+- If you use CTIFetch, preserve provenance explicitly by including this exact line in your final answer:
+  Source: <provider from CTIFetch output>
+- Do not paraphrase or omit the Source line when CTIFetch was used.
 
 Always be thorough and provide actionable security recommendations."""
     return prompt

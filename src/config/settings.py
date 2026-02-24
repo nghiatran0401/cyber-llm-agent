@@ -30,6 +30,16 @@ class Settings:
     ENABLE_SANDBOX = os.getenv("ENABLE_SANDBOX", "false").lower() == "true"
     ALLOWED_LOG_EXTENSIONS = {".txt", ".log", ".json", ".jsonl"}
 
+    # CTI provider configuration
+    CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").lower()
+    OTX_API_KEY = os.getenv("OTX_API_KEY", "")
+    OTX_BASE_URL = os.getenv("OTX_BASE_URL", "https://otx.alienvault.com/api/v1").rstrip("/")
+    CTI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("CTI_REQUEST_TIMEOUT_SECONDS", "10"))
+    CTI_MAX_RETRIES = int(os.getenv("CTI_MAX_RETRIES", "2"))
+    CTI_RETRY_BACKOFF_SECONDS = float(os.getenv("CTI_RETRY_BACKOFF_SECONDS", "0.5"))
+    CTI_MAX_RESPONSE_CHARS = int(os.getenv("CTI_MAX_RESPONSE_CHARS", "3000"))
+    CTI_TOP_RESULTS = int(os.getenv("CTI_TOP_RESULTS", "5"))
+
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
     DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
@@ -66,6 +76,20 @@ class Settings:
             raise ValueError("TEMPERATURE must be between 0.0 and 1.0.")
         if cls.MAX_TOKENS <= 0:
             raise ValueError("MAX_TOKENS must be greater than 0.")
+        if cls.CTI_PROVIDER != "otx":
+            raise ValueError("CTI_PROVIDER must be 'otx'. Mock CTI has been removed.")
+        if not cls.OTX_API_KEY:
+            raise ValueError("OTX_API_KEY is required when CTI_PROVIDER=otx.")
+        if cls.CTI_REQUEST_TIMEOUT_SECONDS <= 0:
+            raise ValueError("CTI_REQUEST_TIMEOUT_SECONDS must be greater than 0.")
+        if cls.CTI_MAX_RETRIES < 0:
+            raise ValueError("CTI_MAX_RETRIES must be greater than or equal to 0.")
+        if cls.CTI_RETRY_BACKOFF_SECONDS < 0:
+            raise ValueError("CTI_RETRY_BACKOFF_SECONDS must be greater than or equal to 0.")
+        if cls.CTI_MAX_RESPONSE_CHARS <= 0:
+            raise ValueError("CTI_MAX_RESPONSE_CHARS must be greater than 0.")
+        if cls.CTI_TOP_RESULTS <= 0:
+            raise ValueError("CTI_TOP_RESULTS must be greater than 0.")
         return True
 
     @classmethod
