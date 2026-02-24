@@ -83,8 +83,8 @@ def test_cti_fetch_brute_force():
     assert "brute" in result.lower() or "threat" in result.lower()
 
 
-def test_log_parser_with_absolute_path():
-    """Test log parser with absolute path."""
+def test_log_parser_rejects_absolute_path_outside_logs_dir():
+    """Absolute paths outside the logs directory are blocked."""
     mock_data = "2026-01-27 Failed login attempt"
     abs_path = "/absolute/path/to/logs.txt"
     
@@ -92,5 +92,5 @@ def test_log_parser_with_absolute_path():
         with patch.object(Path, 'exists', return_value=True):
             with patch.object(Path, 'is_absolute', return_value=True):
                 result = parse_system_log(abs_path)
-                assert len(result) > 0
+                assert "Invalid log file path" in result
 

@@ -27,8 +27,8 @@ def _resolve_safe_log_path(log_file_path: str) -> Path:
     resolved = candidate.resolve()
     allowed_root = Settings.LOGS_DIR.resolve()
 
-    # Block traversal outside logs directory for relative paths.
-    if not raw_path.is_absolute() and allowed_root not in resolved.parents and resolved != allowed_root:
+    # Only allow reads under the configured logs directory.
+    if allowed_root not in resolved.parents and resolved != allowed_root:
         raise ValueError("Invalid log file path. Access outside data/logs is not allowed.")
 
     if resolved.suffix.lower() not in Settings.ALLOWED_LOG_EXTENSIONS:
@@ -179,7 +179,7 @@ log_parser = Tool(
     name="LogParser",
     func=parse_system_log,
     description="Parses system logs and extracts security-relevant entries. "
-                "Input should be a file path (relative to data/logs/ or absolute path). "
+                "Input should be a file path under data/logs/ (relative or absolute). "
                 "Returns security-relevant log entries containing keywords like 'failed', 'error', 'unauthorized', etc."
 )
 

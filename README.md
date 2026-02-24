@@ -95,6 +95,7 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 
 - `ENVIRONMENT=production` forces sandbox off by validation rules.
 - `ENABLE_SANDBOX=true` is for local training/non-production use.
+- Sandbox API routes return `403` when sandbox is disabled.
 - Do **not** commit real secrets (`.env` is ignored).
 
 ## Quality Gate

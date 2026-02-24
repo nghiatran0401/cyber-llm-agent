@@ -50,6 +50,11 @@ app.add_middleware(
 )
 
 
+def _require_sandbox_enabled() -> None:
+    if not Settings.sandbox_enabled():
+        raise HTTPException(status_code=403, detail="Sandbox is disabled for this environment.")
+
+
 def _build_success_response(
     request_id: str,
     mode: str | None,
@@ -103,6 +108,8 @@ def analyze_g1(payload: AnalyzeRequest) -> ApiResponse:
             trace=trace if payload.include_trace else [],
             start_time=start_time,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -121,6 +128,8 @@ def analyze_g2(payload: AnalyzeRequest) -> ApiResponse:
             trace=trace if payload.include_trace else [],
             start_time=start_time,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -139,6 +148,8 @@ def chat(payload: ChatRequest) -> ApiResponse:
             trace=trace if payload.include_trace else [],
             start_time=start_time,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -149,7 +160,6 @@ def workspace_stream(payload: WorkspaceStreamRequest):
     request_id = str(uuid4())
     event_queue: Queue[dict] = Queue()
     start_time = perf_counter()
-
     def _put_event(event_type: str, **data):
         event_queue.put({"type": event_type, **data})
 
@@ -211,6 +221,7 @@ def sandbox_simulate(payload: SandboxSimulateRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
+        _require_sandbox_enabled()
         event = simulate_sandbox_event(
             scenario=payload.scenario,
             vulnerable_mode=payload.vulnerable_mode,
@@ -225,6 +236,8 @@ def sandbox_simulate(payload: SandboxSimulateRequest) -> ApiResponse:
             trace=[],
             start_time=start_time,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -234,6 +247,7 @@ def sandbox_scenarios() -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
+        _require_sandbox_enabled()
         scenarios = get_sandbox_scenarios()
         return _build_success_response(
             request_id=request_id,
@@ -243,6 +257,8 @@ def sandbox_scenarios() -> ApiResponse:
             trace=[],
             start_time=start_time,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -252,6 +268,7 @@ def sandbox_analyze(payload: SandboxAnalyzeRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
+        _require_sandbox_enabled()
         result, trace, model = analyze_sandbox_event(
             event=payload.event,
             mode=payload.mode,
@@ -265,6 +282,8 @@ def sandbox_analyze(payload: SandboxAnalyzeRequest) -> ApiResponse:
             trace=trace if payload.include_trace else [],
             start_time=start_time,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

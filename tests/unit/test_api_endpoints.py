@@ -45,6 +45,7 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
 def test_sandbox_scenarios_endpoint(monkeypatch):
     client = TestClient(app)
 
+    monkeypatch.setattr("services.api.main.Settings.sandbox_enabled", lambda: True)
     monkeypatch.setattr("services.api.main.get_sandbox_scenarios", lambda: ["sqli", "xss"])
     response = client.get("/api/v1/sandbox/scenarios")
 
@@ -53,6 +54,17 @@ def test_sandbox_scenarios_endpoint(monkeypatch):
     assert body["ok"] is True
     assert body["result"] == ["sqli", "xss"]
     assert body["meta"]["api_version"] == "v1"
+
+
+def test_sandbox_endpoint_returns_403_when_disabled(monkeypatch):
+    client = TestClient(app)
+    monkeypatch.setattr("services.api.main.Settings.sandbox_enabled", lambda: False)
+
+    response = client.get("/api/v1/sandbox/scenarios")
+    assert response.status_code == 403
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "HTTP_403"
 
 
 def test_workspace_stream_emits_trace_and_final(monkeypatch):
