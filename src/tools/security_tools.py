@@ -20,6 +20,26 @@ from src.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
+def _resolve_safe_log_path(log_file_path: str) -> Path:
+    """Resolve log path and prevent traversal outside approved directories."""
+    raw_path = Path(log_file_path)
+    candidate = raw_path if raw_path.is_absolute() else (Settings.LOGS_DIR / raw_path)
+    resolved = candidate.resolve()
+    allowed_root = Settings.LOGS_DIR.resolve()
+
+    # Block traversal outside logs directory for relative paths.
+    if not raw_path.is_absolute() and allowed_root not in resolved.parents and resolved != allowed_root:
+        raise ValueError("Invalid log file path. Access outside data/logs is not allowed.")
+
+    if resolved.suffix.lower() not in Settings.ALLOWED_LOG_EXTENSIONS:
+        raise ValueError(
+            "Unsupported log file extension. "
+            f"Allowed: {', '.join(sorted(Settings.ALLOWED_LOG_EXTENSIONS))}."
+        )
+
+    return resolved
+
+
 def parse_system_log(log_file_path: str) -> str:
     """Parse system logs and extract relevant entries.
     
@@ -30,15 +50,12 @@ def parse_system_log(log_file_path: str) -> str:
         String containing relevant log entries (one per line)
     """
     try:
-        # Handle both absolute and relative paths
-        log_path = Path(log_file_path)
-        if not log_path.is_absolute():
-            log_path = Settings.LOGS_DIR / log_file_path
-        
+        log_path = _resolve_safe_log_path(log_file_path)
+
         if not log_path.exists():
             logger.warning(f"Log file not found: {log_path}")
             return "No log file found at the specified path."
-        
+
         relevant_logs = []
         security_keywords = [
             'failed',
@@ -71,7 +88,11 @@ def parse_system_log(log_file_path: str) -> str:
         result = "\n".join(relevant_logs)
         logger.info(f"Parsed {len(relevant_logs)} security-relevant entries from {log_path}")
         return result
-        
+
+    except ValueError as e:
+        error_msg = str(e)
+        logger.warning(error_msg)
+        return f"Error: {error_msg}"
     except FileNotFoundError:
         error_msg = f"Log file not found: {log_file_path}"
         logger.error(error_msg)

@@ -1,7 +1,8 @@
 """Centralized configuration management."""
 import os
-from dotenv import load_dotenv
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -9,11 +10,11 @@ load_dotenv()
 
 class Settings:
     """Application settings loaded from environment variables."""
-    
+
     # API Keys
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
-    
+
     # Model Configuration
     MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
     FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", MODEL_NAME)
@@ -22,11 +23,13 @@ class Settings:
     TOOL_MANDATORY_FOR_HIGH_RISK = os.getenv("TOOL_MANDATORY_FOR_HIGH_RISK", "true").lower() == "true"
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
-    
+
     # Environment
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-    
+    ENABLE_SANDBOX = os.getenv("ENABLE_SANDBOX", "false").lower() == "true"
+    ALLOWED_LOG_EXTENSIONS = {".txt", ".log", ".json", ".jsonl"}
+
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
     DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
@@ -48,9 +51,25 @@ class Settings:
     @classmethod
     def validate(cls):
         """Validate that required settings are present."""
+        allowed_envs = {"development", "staging", "production"}
+        if cls.ENVIRONMENT not in allowed_envs:
+            raise ValueError(
+                f"ENVIRONMENT must be one of {sorted(allowed_envs)}; got '{cls.ENVIRONMENT}'."
+            )
         if not cls.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is required. Set it in .env file.")
+        if not (0.0 <= cls.TEMPERATURE <= 1.0):
+            raise ValueError("TEMPERATURE must be between 0.0 and 1.0.")
+        if cls.MAX_TOKENS <= 0:
+            raise ValueError("MAX_TOKENS must be greater than 0.")
         return True
+
+    @classmethod
+    def sandbox_enabled(cls) -> bool:
+        """Allow sandbox only in non-production environments."""
+        if cls.ENVIRONMENT == "production":
+            return False
+        return cls.ENABLE_SANDBOX
 
     @classmethod
     def is_high_risk_task(cls, task_text: str) -> bool:

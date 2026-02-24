@@ -55,36 +55,28 @@ This project implements an LLM-powered cybersecurity support agent (G1) and mult
 ## Project Structure
 
 ```
-ai-agent/
+cyber-llm-agent/
 ├── src/
-│   ├── agents/          # Agent implementations
-│   │   ├── base/        # Base agent classes
-│   │   ├── single/      # G1 single agent
-│   │   └── multiagent/  # G2 multiagent system
-│   ├── tools/           # Security tools (log parser, CTI fetch)
-│   ├── utils/           # Utilities (logging, evaluation, session management)
-│   └── config/          # Configuration management
-├── data/
-│   ├── logs/            # Sample security logs
-│   ├── cti_feeds/       # CTI data
-│   ├── benchmarks/      # Evaluation datasets
-│   └── sessions/        # User session data
+│   ├── agents/
+│   │   ├── g1/                 # Single-agent modules (base, simple, memory)
+│   │   ├── g2/                 # Multiagent modules (roles, workflow)
+│   │   └── *.py                # Backward-compatible import wrappers
+│   ├── tools/                  # Security tools (log parser, CTI fetch)
+│   ├── sandbox/                # OWASP sandbox event generation/logging
+│   ├── utils/                  # Memory, sessions, evaluation, logging
+│   └── config/                 # Configuration and model routing policy
 ├── ui/
-│   ├── streamlit/        # Streamlit UI
-│   └── gradio/          # Gradio UI (alternative)
+│   ├── streamlit/app.py        # Primary customer-facing UI
+│   └── gradio/app.py           # Alternative UI (optional)
 ├── tests/
-│   ├── unit/            # Unit tests
-│   └── integration/     # Integration tests
-├── docs/
-│   ├── reports/         # Project reports
-│   ├── diagrams/        # Architecture diagrams
-│   ├── worklogs/        # Individual worklogs
-│   ├── analysis/        # Critical analysis
-│   └── video/          # Video presentation materials
-├── prompts/             # Prompt templates (version controlled)
-├── requirements.txt     # Python dependencies
-├── .env.example        # Environment variable template
-└── README.md           # This file
+│   ├── unit/                   # Unit tests
+│   └── integration/            # Integration tests
+├── data/
+│   └── benchmarks/             # Threat case datasets
+├── prompts/                    # Prompt templates (versioned)
+├── requirements.txt
+├── plan.md
+└── README.md
 ```
 
 ## Usage
@@ -92,13 +84,13 @@ ai-agent/
 ### Running the Single Agent (G1)
 
 ```bash
-python src/agents/single/simple_agent.py
+python -m src.agents.g1.simple_agent
 ```
 
 ### Running the Multiagent System (G2)
 
 ```bash
-python src/agents/multiagent/multiagent_system.py
+python -m src.agents.g2.multiagent_system
 ```
 
 ### Running the UI

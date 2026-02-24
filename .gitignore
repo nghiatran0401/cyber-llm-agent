@@ -48,6 +48,7 @@ logs/
 # Data (keep structure, ignore sensitive data)
 data/sessions/*.json
 data/logs/*.log
+data/logs/*.jsonl
 !data/logs/sample_logs.txt
 !data/logs/.gitkeep
 
@@ -60,5 +61,3 @@ Thumbs.db
 *.pyo
 *.pyd
 .cache/
-
-plan.md
