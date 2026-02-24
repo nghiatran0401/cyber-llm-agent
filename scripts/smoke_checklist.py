@@ -117,6 +117,9 @@ def run_checklist() -> int:
         results.append(_result("health endpoint", health.status_code == 200, f"status={health.status_code}"))
         ready = client.get("/api/v1/ready")
         results.append(_result("ready endpoint", ready.status_code == 200, f"status={ready.status_code}"))
+        metrics = client.get("/api/v1/metrics")
+        metrics_ok = metrics.status_code == 200 and "requests_total" in metrics.json().get("result", {})
+        results.append(_result("metrics endpoint", metrics_ok, f"status={metrics.status_code}"))
 
         # 2) Auth behavior
         with patch("services.api.main.Settings.API_AUTH_ENABLED", True), patch(

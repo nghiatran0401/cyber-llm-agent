@@ -31,6 +31,14 @@ class ResponseMeta(BaseModel):
     prompt_version: Optional[str] = None
     rubric_score: Optional[float] = None
     rubric_label: Optional[Literal["strong", "acceptable", "weak", "disabled", "n/a"]] = None
+    run_id: Optional[str] = None
+    input_tokens_est: Optional[int] = None
+    output_tokens_est: Optional[int] = None
+    total_tokens_est: Optional[int] = None
+    cost_est_usd: Optional[float] = None
+    tool_calls: Optional[int] = None
+    tool_success: Optional[int] = None
+    tool_fail: Optional[int] = None
 
 
 class StepTrace(BaseModel):
@@ -41,6 +49,9 @@ class StepTrace(BaseModel):
     prompt_preview: str
     input_summary: str
     output_summary: str
+    run_id: Optional[str] = None
+    step_id: Optional[str] = None
+    tool_call_id: Optional[str] = None
 
 
 class AnalyzeRequest(BaseModel):

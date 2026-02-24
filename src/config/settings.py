@@ -50,6 +50,10 @@ class Settings:
     PROMPT_VERSION_G1 = os.getenv("PROMPT_VERSION_G1", "security_analysis_v2.txt")
     PROMPT_VERSION_G2 = os.getenv("PROMPT_VERSION_G2", "security_analysis_v2.txt")
     ENABLE_RUBRIC_EVAL = os.getenv("ENABLE_RUBRIC_EVAL", "true").lower() == "true"
+    ENABLE_PROMPT_INJECTION_GUARD = os.getenv("ENABLE_PROMPT_INJECTION_GUARD", "true").lower() == "true"
+    ENABLE_OUTPUT_POLICY_GUARD = os.getenv("ENABLE_OUTPUT_POLICY_GUARD", "true").lower() == "true"
+    REQUIRE_HUMAN_APPROVAL_HIGH_RISK = os.getenv("REQUIRE_HUMAN_APPROVAL_HIGH_RISK", "false").lower() == "true"
+    MIN_EVIDENCE_FOR_HIGH_RISK = int(os.getenv("MIN_EVIDENCE_FOR_HIGH_RISK", "1"))
 
     # CTI provider configuration
     CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").lower()
@@ -151,6 +155,8 @@ class Settings:
             raise ValueError("PROMPT_VERSION_G1 must not be empty.")
         if not cls.PROMPT_VERSION_G2.strip():
             raise ValueError("PROMPT_VERSION_G2 must not be empty.")
+        if cls.MIN_EVIDENCE_FOR_HIGH_RISK < 0:
+            raise ValueError("MIN_EVIDENCE_FOR_HIGH_RISK must be greater than or equal to 0.")
         if cls.RAG_CHUNK_SIZE <= 0:
             raise ValueError("RAG_CHUNK_SIZE must be greater than 0.")
         if cls.RAG_MAX_RESULTS <= 0:

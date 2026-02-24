@@ -116,6 +116,13 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
   - `PROMPT_VERSION_G2`
 - Optional rubric evaluation:
   - `ENABLE_RUBRIC_EVAL`
+- Safety/governance guardrails:
+  - `ENABLE_PROMPT_INJECTION_GUARD`
+  - `ENABLE_OUTPUT_POLICY_GUARD`
+  - `MIN_EVIDENCE_FOR_HIGH_RISK`
+  - `REQUIRE_HUMAN_APPROVAL_HIGH_RISK`
+- Runtime metrics endpoint:
+  - `GET /api/v1/metrics`
 - `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
 - `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
 - Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.

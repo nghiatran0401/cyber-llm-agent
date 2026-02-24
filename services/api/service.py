@@ -28,6 +28,22 @@ _HUMAN_NEEDED_SIGNALS = (
     "unable to determine",
 )
 _SEVERITY_ORDER = ("critical", "high", "medium", "low")
+_PROMPT_INJECTION_MARKERS = (
+    "ignore previous instructions",
+    "ignore all prior",
+    "system prompt",
+    "developer message",
+    "reveal hidden instructions",
+    "bypass policy",
+    "disable guardrails",
+)
+_OUTPUT_POLICY_DENYLIST = (
+    "BEGIN PRIVATE KEY",
+    "OPENAI_API_KEY=",
+    "authorization: bearer ",
+    "how to weaponize",
+    "drop table users",
+)
 _PROMPT_MANAGER = PromptManager()
 _EVALUATOR = AgentEvaluator()
 
@@ -65,6 +81,64 @@ def _infer_stop_reason(response_text: str) -> str:
     if not content.strip():
         return "blocked"
     return "completed"
+
+
+def _sanitize_untrusted_text(text: str) -> str:
+    # Strip non-printable control chars and keep deterministic whitespace.
+    sanitized = "".join(ch for ch in str(text or "") if ch == "\n" or ch == "\t" or ord(ch) >= 32)
+    return sanitized.replace("\x00", "").strip()
+
+
+def _detect_prompt_injection(text: str) -> bool:
+    content = (text or "").lower()
+    return any(marker in content for marker in _PROMPT_INJECTION_MARKERS)
+
+
+def _count_evidence_markers(text: str) -> int:
+    content = (text or "").lower()
+    markers = (
+        content.count("source:"),
+        content.count("#chunk-"),
+        content.count("citation"),
+        content.count("cti"),
+    )
+    return sum(markers)
+
+
+def _apply_output_policy_guard(text: str) -> tuple[bool, str]:
+    if not Settings.ENABLE_OUTPUT_POLICY_GUARD:
+        return True, "disabled"
+    content = text or ""
+    for blocked in _OUTPUT_POLICY_DENYLIST:
+        if blocked.lower() in content.lower():
+            return False, f"blocked_content:{blocked}"
+    return True, "pass"
+
+
+def _apply_action_gating(
+    response: str,
+    *,
+    high_risk: bool,
+    evidence_count: int,
+) -> tuple[str, str]:
+    stop_reason = _infer_stop_reason(response)
+    if not high_risk:
+        return response, stop_reason
+
+    if evidence_count < Settings.MIN_EVIDENCE_FOR_HIGH_RISK:
+        gated = (
+            f"{response}\n\nSafety gate: high-risk recommendation lacks required evidence "
+            f"(minimum={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}, observed={evidence_count})."
+        )
+        return _enforce_response_boundaries(gated), "needs_human"
+
+    if Settings.REQUIRE_HUMAN_APPROVAL_HIGH_RISK:
+        gated = (
+            f"{response}\n\nSafety gate: high-risk actions require explicit human approval before execution."
+        )
+        return _enforce_response_boundaries(gated), "needs_human"
+
+    return response, stop_reason
 
 
 def _extract_bullets(section_name: str, text: str) -> List[str]:
@@ -253,12 +327,13 @@ def run_g1_analysis(
     session_id: Optional[str] = None,
 ) -> Tuple[str, List[StepTrace], str, str, int, str, Optional[float], str]:
     """Run G1 analysis and return response text, trace, model, stop reason, and steps."""
-    clean_input = _validate_input(user_input, "input")
+    clean_input = _sanitize_untrusted_text(_validate_input(user_input, "input"))
     prompt_version, prompt_template = _resolve_prompt_version("g1")
     prompted_input = _build_prompted_input(prompt_template, clean_input)
     strong = Settings.should_use_strong_model(clean_input)
     high_risk = Settings.is_high_risk_task(clean_input)
     selected_model = Settings.STRONG_MODEL_NAME if strong else Settings.FAST_MODEL_NAME
+    injection_detected = Settings.ENABLE_PROMPT_INJECTION_GUARD and _detect_prompt_injection(clean_input)
 
     trace: List[StepTrace] = [
         StepTrace(
@@ -287,6 +362,30 @@ def run_g1_analysis(
             output_summary="Prompt template resolved successfully.",
         )
     )
+    trace.append(
+        StepTrace(
+            step="SafetyGuard",
+            what_it_does="Detects prompt-injection patterns before execution.",
+            prompt_preview="prompt_injection_guard=enabled",
+            input_summary=_summarize_text(clean_input),
+            output_summary=f"injection_detected={injection_detected}",
+        )
+    )
+    if injection_detected:
+        blocked = (
+            "Potential prompt-injection content detected. "
+            "Please remove control-instruction text and retry with only incident data."
+        )
+        return (
+            blocked,
+            trace,
+            selected_model,
+            "needs_human",
+            0,
+            prompt_version,
+            None,
+            "n/a",
+        )
 
     agent = _get_or_create_memory_agent(session_id)
     response, stop_reason, steps_used = _run_single_agent_loop(agent, prompted_input)
@@ -295,6 +394,19 @@ def run_g1_analysis(
     if not critic_ok:
         response = _enforce_response_boundaries(
             f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence."
+        )
+        stop_reason = "needs_human"
+    evidence_count = _count_evidence_markers(response)
+    response, stop_reason = _apply_action_gating(
+        response,
+        high_risk=high_risk,
+        evidence_count=evidence_count,
+    )
+    policy_ok, policy_status = _apply_output_policy_guard(response)
+    if not policy_ok:
+        response = (
+            "Output policy blocked this response due to potentially unsafe content. "
+            "Please narrow the request to defensive security analysis."
         )
         stop_reason = "needs_human"
     trace.append(
@@ -333,6 +445,18 @@ def run_g1_analysis(
             output_summary=f"pass={critic_ok}; reason={critic_message}",
         )
     )
+    trace.append(
+        StepTrace(
+            step="PolicyGuard",
+            what_it_does="Applies output-policy and high-risk action gates.",
+            prompt_preview=(
+                f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}, "
+                f"human_approval={Settings.REQUIRE_HUMAN_APPROVAL_HIGH_RISK}"
+            ),
+            input_summary=f"high_risk={high_risk}, evidence_count={evidence_count}",
+            output_summary=f"policy={policy_status}, stop_reason={stop_reason}",
+        )
+    )
     rubric = _evaluate_response_rubric(response)
     trace.append(
         StepTrace(
@@ -361,12 +485,13 @@ def run_g1_analysis_with_progress(
     session_id: Optional[str] = None,
 ) -> Tuple[str, str, str, int, str, Optional[float], str]:
     """Run G1 with progressive step callbacks."""
-    clean_input = _validate_input(user_input, "input")
+    clean_input = _sanitize_untrusted_text(_validate_input(user_input, "input"))
     prompt_version, prompt_template = _resolve_prompt_version("g1")
     prompted_input = _build_prompted_input(prompt_template, clean_input)
     strong = Settings.should_use_strong_model(clean_input)
     high_risk = Settings.is_high_risk_task(clean_input)
     selected_model = Settings.STRONG_MODEL_NAME if strong else Settings.FAST_MODEL_NAME
+    injection_detected = Settings.ENABLE_PROMPT_INJECTION_GUARD and _detect_prompt_injection(clean_input)
 
     step1 = StepTrace(
         step="InputPreparation",
@@ -396,6 +521,25 @@ def run_g1_analysis_with_progress(
             output_summary="Prompt template resolved successfully.",
         )
     )
+    on_step(
+        StepTrace(
+            step="SafetyGuard",
+            what_it_does="Detects prompt-injection patterns before execution.",
+            prompt_preview="prompt_injection_guard=enabled",
+            input_summary=_summarize_text(clean_input),
+            output_summary=f"injection_detected={injection_detected}",
+        )
+    )
+    if injection_detected:
+        return (
+            "Potential prompt-injection content detected. Please remove control-instruction text and retry.",
+            selected_model,
+            "needs_human",
+            0,
+            prompt_version,
+            None,
+            "n/a",
+        )
 
     agent = _get_or_create_memory_agent(session_id)
     response, stop_reason, steps_used = _run_single_agent_loop(agent, prompted_input)
@@ -404,6 +548,19 @@ def run_g1_analysis_with_progress(
     if not critic_ok:
         response = _enforce_response_boundaries(
             f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence."
+        )
+        stop_reason = "needs_human"
+    evidence_count = _count_evidence_markers(response)
+    response, stop_reason = _apply_action_gating(
+        response,
+        high_risk=high_risk,
+        evidence_count=evidence_count,
+    )
+    policy_ok, policy_status = _apply_output_policy_guard(response)
+    if not policy_ok:
+        response = (
+            "Output policy blocked this response due to potentially unsafe content. "
+            "Please narrow the request to defensive security analysis."
         )
         stop_reason = "needs_human"
     step3 = StepTrace(
@@ -441,6 +598,18 @@ def run_g1_analysis_with_progress(
             output_summary=f"pass={critic_ok}; reason={critic_message}",
         )
     )
+    on_step(
+        StepTrace(
+            step="PolicyGuard",
+            what_it_does="Applies output-policy and high-risk action gates.",
+            prompt_preview=(
+                f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}, "
+                f"human_approval={Settings.REQUIRE_HUMAN_APPROVAL_HIGH_RISK}"
+            ),
+            input_summary=f"high_risk={high_risk}, evidence_count={evidence_count}",
+            output_summary=f"policy={policy_status}, stop_reason={stop_reason}",
+        )
+    )
     rubric = _evaluate_response_rubric(response)
     on_step(
         StepTrace(
@@ -466,9 +635,30 @@ def run_g2_analysis(
     log_input: str,
 ) -> Tuple[Dict[str, Any], List[StepTrace], str, str, int, str, Optional[float], str]:
     """Run G2 workflow and return result, trace, model, stop reason, and steps."""
-    clean_logs = _validate_input(log_input, "input")
+    clean_logs = _sanitize_untrusted_text(_validate_input(log_input, "input"))
     prompt_version, prompt_template = _resolve_prompt_version("g2")
     prompted_logs = _build_prompted_input(prompt_template, clean_logs)
+    injection_detected = Settings.ENABLE_PROMPT_INJECTION_GUARD and _detect_prompt_injection(clean_logs)
+    if injection_detected:
+        trace = [
+            StepTrace(
+                step="SafetyGuard",
+                what_it_does="Detects prompt-injection patterns before execution.",
+                prompt_preview="prompt_injection_guard=enabled",
+                input_summary=_summarize_text(clean_logs),
+                output_summary="injection_detected=True",
+            )
+        ]
+        return (
+            {"final_report": "Potential prompt-injection content detected. Provide only incident evidence."},
+            trace,
+            Settings.FAST_MODEL_NAME,
+            "needs_human",
+            0,
+            prompt_version,
+            None,
+            "n/a",
+        )
     executed = run_multiagent_with_trace(prompted_logs)
     result = executed["result"]
     trace = [StepTrace(**step) for step in executed["trace"]]
@@ -485,7 +675,34 @@ def run_g2_analysis(
     stop_reason = str(executed.get("stop_reason", "completed"))
     steps_used = int(executed.get("steps_used", len(trace)))
     final_text = str(result.get("final_report", ""))
-    rubric = _evaluate_response_rubric(final_text)
+    evidence_count = _count_evidence_markers(final_text + "\n" + str(result.get("cti_evidence", "")))
+    gated_text, gated_stop_reason = _apply_action_gating(
+        final_text,
+        high_risk=Settings.is_high_risk_task(clean_logs),
+        evidence_count=evidence_count,
+    )
+    result["final_report"] = gated_text
+    stop_reason = "needs_human" if stop_reason != "error" and gated_stop_reason == "needs_human" else stop_reason
+    policy_ok, policy_status = _apply_output_policy_guard(result["final_report"])
+    if not policy_ok:
+        result["final_report"] = (
+            "Output policy blocked this response due to potentially unsafe content. "
+            "Please narrow the request to defensive security analysis."
+        )
+        stop_reason = "needs_human"
+    rubric = _evaluate_response_rubric(result["final_report"])
+    trace.append(
+        StepTrace(
+            step="PolicyGuard",
+            what_it_does="Applies output-policy and high-risk action gates.",
+            prompt_preview=(
+                f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}, "
+                f"human_approval={Settings.REQUIRE_HUMAN_APPROVAL_HIGH_RISK}"
+            ),
+            input_summary=f"evidence_count={evidence_count}",
+            output_summary=f"policy={policy_status}, stop_reason={stop_reason}",
+        )
+    )
     trace.append(
         StepTrace(
             step="RubricEvaluation",
@@ -512,9 +729,29 @@ def run_g2_analysis_with_progress(
     on_step: Callable[[StepTrace], None],
 ) -> Tuple[Dict[str, Any], str, str, int, str, Optional[float], str]:
     """Run G2 and emit each step as soon as it completes."""
-    clean_logs = _validate_input(log_input, "input")
+    clean_logs = _sanitize_untrusted_text(_validate_input(log_input, "input"))
     prompt_version, prompt_template = _resolve_prompt_version("g2")
     prompted_logs = _build_prompted_input(prompt_template, clean_logs)
+    injection_detected = Settings.ENABLE_PROMPT_INJECTION_GUARD and _detect_prompt_injection(clean_logs)
+    if injection_detected:
+        on_step(
+            StepTrace(
+                step="SafetyGuard",
+                what_it_does="Detects prompt-injection patterns before execution.",
+                prompt_preview="prompt_injection_guard=enabled",
+                input_summary=_summarize_text(clean_logs),
+                output_summary="injection_detected=True",
+            )
+        )
+        return (
+            {"final_report": "Potential prompt-injection content detected. Provide only incident evidence."},
+            Settings.FAST_MODEL_NAME,
+            "needs_human",
+            0,
+            prompt_version,
+            None,
+            "n/a",
+        )
     on_step(
         StepTrace(
             step="PromptVersion",
@@ -532,7 +769,36 @@ def run_g2_analysis_with_progress(
     stop_reason = str(executed.get("stop_reason", "completed"))
     steps_used = int(executed.get("steps_used", len(executed.get("trace", []))))
     final_text = str(executed["result"].get("final_report", ""))
-    rubric = _evaluate_response_rubric(final_text)
+    evidence_count = _count_evidence_markers(
+        final_text + "\n" + str(executed["result"].get("cti_evidence", ""))
+    )
+    gated_text, gated_stop_reason = _apply_action_gating(
+        final_text,
+        high_risk=Settings.is_high_risk_task(clean_logs),
+        evidence_count=evidence_count,
+    )
+    executed["result"]["final_report"] = gated_text
+    stop_reason = "needs_human" if stop_reason != "error" and gated_stop_reason == "needs_human" else stop_reason
+    policy_ok, policy_status = _apply_output_policy_guard(executed["result"]["final_report"])
+    if not policy_ok:
+        executed["result"]["final_report"] = (
+            "Output policy blocked this response due to potentially unsafe content. "
+            "Please narrow the request to defensive security analysis."
+        )
+        stop_reason = "needs_human"
+    on_step(
+        StepTrace(
+            step="PolicyGuard",
+            what_it_does="Applies output-policy and high-risk action gates.",
+            prompt_preview=(
+                f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}, "
+                f"human_approval={Settings.REQUIRE_HUMAN_APPROVAL_HIGH_RISK}"
+            ),
+            input_summary=f"evidence_count={evidence_count}",
+            output_summary=f"policy={policy_status}, stop_reason={stop_reason}",
+        )
+    )
+    rubric = _evaluate_response_rubric(executed["result"]["final_report"])
     on_step(
         StepTrace(
             step="RubricEvaluation",

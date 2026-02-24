@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.config.settings import Settings
+from src.utils.logger import setup_logger, log_structured
 
 from .schemas import (
     AnalyzeRequest,
@@ -55,6 +56,17 @@ app = FastAPI(
 
 _RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 _RATE_LOCK = Lock()
+_METRICS_LOCK = Lock()
+_METRICS_STATE = {
+    "requests_total": 0,
+    "success_total": 0,
+    "error_total": 0,
+    "auth_fail_total": 0,
+    "rate_limited_total": 0,
+    "duration_total_ms": 0,
+    "by_endpoint": defaultdict(int),
+}
+logger = setup_logger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -85,6 +97,84 @@ def _check_rate_limit(client_key: str) -> tuple[bool, int]:
     return True, 0
 
 
+def _estimate_tokens(text: str) -> int:
+    content = str(text or "")
+    if not content.strip():
+        return 0
+    return max(1, len(content) // 4)
+
+
+def _extract_text_payload(value) -> str:
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=True)
+    return str(value or "")
+
+
+def _derive_tool_stats(result, trace) -> tuple[int, int, int]:
+    statuses: dict[str, bool] = {}
+    if isinstance(result, dict):
+        for key, tool_name in (
+            ("log_evidence", "LogParser"),
+            ("cti_evidence", "CTIFetch"),
+            ("rag_context", "RAGRetriever"),
+        ):
+            raw = str(result.get(key, "")).strip()
+            if not raw:
+                continue
+            failed = any(marker in raw.lower() for marker in ("error", "unavailable", "no relevant context"))
+            statuses[tool_name] = not failed
+
+    result_text = _extract_text_payload(result).lower()
+    if "source:" in result_text and "CTIFetch" not in statuses:
+        statuses["CTIFetch"] = True
+    if "#chunk-" in result_text and "RAGRetriever" not in statuses:
+        statuses["RAGRetriever"] = True
+
+    for item in trace or []:
+        step_name = item.get("step") if isinstance(item, dict) else getattr(item, "step", "")
+        if step_name == "WorkerTask":
+            statuses.setdefault("WorkerTask", True)
+
+    tool_calls = len(statuses)
+    tool_success = sum(1 for ok in statuses.values() if ok)
+    tool_fail = max(0, tool_calls - tool_success)
+    return tool_calls, tool_success, tool_fail
+
+
+def _enrich_trace(trace, run_id: str):
+    enriched: list[StepTrace] = []
+    for idx, item in enumerate(trace or [], start=1):
+        if hasattr(item, "model_dump"):
+            payload = item.model_dump()
+        elif isinstance(item, dict):
+            payload = dict(item)
+        else:
+            payload = {
+                "step": "Unknown",
+                "what_it_does": "",
+                "prompt_preview": "",
+                "input_summary": "",
+                "output_summary": "",
+            }
+        payload["run_id"] = run_id
+        payload["step_id"] = payload.get("step_id") or f"{run_id}-s{idx:03d}"
+        if payload.get("step") in {"WorkerTask", "SingleAgentExecution", "LogAnalyzer", "ThreatPredictor"}:
+            payload["tool_call_id"] = payload.get("tool_call_id") or f"{run_id}-t{idx:03d}"
+        enriched.append(StepTrace(**payload))
+    return enriched
+
+
+def _record_metric(endpoint: str, duration_ms: int, success: bool):
+    with _METRICS_LOCK:
+        _METRICS_STATE["requests_total"] += 1
+        _METRICS_STATE["duration_total_ms"] += max(0, int(duration_ms))
+        _METRICS_STATE["by_endpoint"][endpoint] += 1
+        if success:
+            _METRICS_STATE["success_total"] += 1
+        else:
+            _METRICS_STATE["error_total"] += 1
+
+
 def _build_success_response(
     request_id: str,
     mode: str | None,
@@ -97,14 +187,41 @@ def _build_success_response(
     prompt_version: str | None = None,
     rubric_score: float | None = None,
     rubric_label: str | None = None,
+    endpoint: str | None = None,
+    input_text: str = "",
 ) -> ApiResponse:
     duration_ms = int((perf_counter() - start_time) * 1000)
+    run_id = request_id
+    enriched_trace = _enrich_trace(trace, run_id=run_id)
+    input_tokens_est = _estimate_tokens(input_text)
+    output_tokens_est = _estimate_tokens(_extract_text_payload(result))
+    total_tokens_est = input_tokens_est + output_tokens_est
+    cost_est_usd = round((total_tokens_est / 1000) * 0.0005, 6)
+    tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=enriched_trace)
+
+    if endpoint:
+        _record_metric(endpoint=endpoint, duration_ms=duration_ms, success=True)
+    log_structured(
+        logger,
+        "info",
+        "api_request_completed",
+        run_id=run_id,
+        endpoint=endpoint,
+        mode=mode,
+        model=model,
+        duration_ms=duration_ms,
+        total_tokens_est=total_tokens_est,
+        cost_est_usd=cost_est_usd,
+        tool_calls=tool_calls,
+        tool_fail=tool_fail,
+    )
     return ApiResponse(
         ok=True,
         result=result,
-        trace=trace,
+        trace=enriched_trace,
         meta=ResponseMeta(
             request_id=request_id,
+            run_id=run_id,
             mode=mode,
             model=model,
             duration_ms=duration_ms,
@@ -113,6 +230,13 @@ def _build_success_response(
             prompt_version=prompt_version,
             rubric_score=rubric_score,
             rubric_label=rubric_label,
+            input_tokens_est=input_tokens_est,
+            output_tokens_est=output_tokens_est,
+            total_tokens_est=total_tokens_est,
+            cost_est_usd=cost_est_usd,
+            tool_calls=tool_calls,
+            tool_success=tool_success,
+            tool_fail=tool_fail,
         ),
         error=None,
     )
@@ -170,6 +294,8 @@ async def request_guardrails(request: Request, call_next):
         if Settings.API_AUTH_ENABLED:
             provided = request.headers.get("x-api-key", "")
             if provided != Settings.API_AUTH_KEY:
+                with _METRICS_LOCK:
+                    _METRICS_STATE["auth_fail_total"] += 1
                 response = ApiResponse(
                     ok=False,
                     result=None,
@@ -184,6 +310,8 @@ async def request_guardrails(request: Request, call_next):
             )
             allowed, retry_after = _check_rate_limit(client_key=client_key)
             if not allowed:
+                with _METRICS_LOCK:
+                    _METRICS_STATE["rate_limited_total"] += 1
                 response = ApiResponse(
                     ok=False,
                     result=None,
@@ -212,6 +340,35 @@ def ready() -> ApiResponse:
     )
 
 
+@app.get("/api/v1/metrics", response_model=ApiResponse)
+def metrics() -> ApiResponse:
+    request_id = str(uuid4())
+    with _METRICS_LOCK:
+        requests_total = int(_METRICS_STATE["requests_total"])
+        success_total = int(_METRICS_STATE["success_total"])
+        error_total = int(_METRICS_STATE["error_total"])
+        auth_fail_total = int(_METRICS_STATE["auth_fail_total"])
+        rate_limited_total = int(_METRICS_STATE["rate_limited_total"])
+        duration_total_ms = int(_METRICS_STATE["duration_total_ms"])
+        by_endpoint = dict(_METRICS_STATE["by_endpoint"])
+    avg_duration_ms = round(duration_total_ms / requests_total, 2) if requests_total else 0.0
+    return ApiResponse(
+        ok=True,
+        result={
+            "requests_total": requests_total,
+            "success_total": success_total,
+            "error_total": error_total,
+            "auth_fail_total": auth_fail_total,
+            "rate_limited_total": rate_limited_total,
+            "avg_duration_ms": avg_duration_ms,
+            "by_endpoint": by_endpoint,
+        },
+        trace=[],
+        meta=ResponseMeta(request_id=request_id, run_id=request_id, mode=None, model=None, duration_ms=0),
+        error=None,
+    )
+
+
 @app.post("/api/v1/analyze/g1", response_model=ApiResponse)
 def analyze_g1(payload: AnalyzeRequest) -> ApiResponse:
     request_id = str(uuid4())
@@ -234,6 +391,8 @@ def analyze_g1(payload: AnalyzeRequest) -> ApiResponse:
             prompt_version=prompt_version,
             rubric_score=rubric_score,
             rubric_label=rubric_label,
+            endpoint="/api/v1/analyze/g1",
+            input_text=payload.input,
         )
     except HTTPException:
         raise
@@ -261,6 +420,8 @@ def analyze_g2(payload: AnalyzeRequest) -> ApiResponse:
             prompt_version=prompt_version,
             rubric_score=rubric_score,
             rubric_label=rubric_label,
+            endpoint="/api/v1/analyze/g2",
+            input_text=payload.input,
         )
     except HTTPException:
         raise
@@ -290,6 +451,8 @@ def chat(payload: ChatRequest) -> ApiResponse:
             prompt_version=prompt_version,
             rubric_score=rubric_score,
             rubric_label=rubric_label,
+            endpoint="/api/v1/chat",
+            input_text=payload.input,
         )
     except HTTPException:
         raise
@@ -324,11 +487,31 @@ def workspace_stream(payload: WorkspaceStreamRequest):
             )
 
             duration_ms = int((perf_counter() - start_time) * 1000)
+            run_id = request_id
+            input_tokens_est = _estimate_tokens(payload.input)
+            output_tokens_est = _estimate_tokens(_extract_text_payload(result))
+            total_tokens_est = input_tokens_est + output_tokens_est
+            cost_est_usd = round((total_tokens_est / 1000) * 0.0005, 6)
+            tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=[])
+            _record_metric(endpoint="/api/v1/workspace/stream", duration_ms=duration_ms, success=True)
+            log_structured(
+                logger,
+                "info",
+                "workspace_stream_completed",
+                run_id=run_id,
+                mode=payload.mode,
+                duration_ms=duration_ms,
+                total_tokens_est=total_tokens_est,
+                cost_est_usd=cost_est_usd,
+                tool_calls=tool_calls,
+                tool_fail=tool_fail,
+            )
             _put_event(
                 "final",
                 result=result,
                 meta=ResponseMeta(
                     request_id=request_id,
+                    run_id=run_id,
                     mode=payload.mode,
                     model=model,
                     duration_ms=duration_ms,
@@ -337,6 +520,13 @@ def workspace_stream(payload: WorkspaceStreamRequest):
                     prompt_version=prompt_version,
                     rubric_score=rubric_score,
                     rubric_label=rubric_label,
+                    input_tokens_est=input_tokens_est,
+                    output_tokens_est=output_tokens_est,
+                    total_tokens_est=total_tokens_est,
+                    cost_est_usd=cost_est_usd,
+                    tool_calls=tool_calls,
+                    tool_success=tool_success,
+                    tool_fail=tool_fail,
                 ).model_dump(),
             )
         except Exception as exc:
@@ -387,6 +577,8 @@ def sandbox_simulate(payload: SandboxSimulateRequest) -> ApiResponse:
             result=event,
             trace=[],
             start_time=start_time,
+            endpoint="/api/v1/sandbox/simulate",
+            input_text=json.dumps(payload.model_dump(), ensure_ascii=True),
         )
     except HTTPException:
         raise
@@ -408,6 +600,8 @@ def sandbox_scenarios() -> ApiResponse:
             result=scenarios,
             trace=[],
             start_time=start_time,
+            endpoint="/api/v1/sandbox/scenarios",
+            input_text="",
         )
     except HTTPException:
         raise
@@ -442,6 +636,8 @@ def sandbox_analyze(payload: SandboxAnalyzeRequest) -> ApiResponse:
             prompt_version=prompt_version,
             rubric_score=rubric_score,
             rubric_label=rubric_label,
+            endpoint="/api/v1/sandbox/analyze",
+            input_text=json.dumps(payload.event, ensure_ascii=True),
         )
     except HTTPException:
         raise
@@ -459,6 +655,7 @@ async def http_exception_handler(_, exc: HTTPException):
         meta=ResponseMeta(request_id=request_id, mode=None, model=None, duration_ms=None),
         error=ErrorInfo(code=f"HTTP_{exc.status_code}", message=str(exc.detail)),
     )
+    _record_metric(endpoint=f"http_{exc.status_code}", duration_ms=0, success=False)
     return JSONResponse(status_code=exc.status_code, content=response.model_dump())
 
 
@@ -472,4 +669,5 @@ async def unhandled_exception_handler(_, exc: Exception):
         meta=ResponseMeta(request_id=request_id, mode=None, model=None, duration_ms=None),
         error=ErrorInfo(code="HTTP_500", message="Internal server error."),
     )
+    _record_metric(endpoint="unhandled", duration_ms=0, success=False)
     return JSONResponse(status_code=500, content=response.model_dump())

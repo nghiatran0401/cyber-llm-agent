@@ -44,6 +44,8 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
     assert body["meta"]["steps_used"] == 1
     assert body["meta"]["prompt_version"] == "security_analysis_v2.txt"
     assert body["meta"]["rubric_label"] == "strong"
+    assert body["meta"]["run_id"] == body["meta"]["request_id"]
+    assert body["meta"]["total_tokens_est"] >= 1
 
 
 def test_sandbox_scenarios_endpoint(monkeypatch):
@@ -114,6 +116,18 @@ def test_workspace_stream_emits_trace_and_final(monkeypatch):
     final_event = next(event for event in events if event.get("type") == "final")
     assert final_event["meta"]["stop_reason"] == "completed"
     assert final_event["meta"]["steps_used"] == 2
+    assert final_event["meta"]["run_id"]
+    assert final_event["meta"]["total_tokens_est"] >= 1
+
+
+def test_metrics_endpoint_returns_aggregates():
+    client = TestClient(app)
+    response = client.get("/api/v1/metrics")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert "requests_total" in body["result"]
+    assert "by_endpoint" in body["result"]
 
 
 def test_auth_middleware_rejects_missing_key(monkeypatch):
