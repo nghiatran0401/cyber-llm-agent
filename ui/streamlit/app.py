@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+import time
 from typing import Any, Dict, List
 
 import streamlit as st
@@ -26,6 +27,9 @@ from src.sandbox.owasp_sandbox import (
 
 MAX_UPLOAD_MB = 10
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+MAX_INPUT_CHARS = 50_000
+G1_STEP_ORDER = ["InputPreparation", "RoutingPolicy", "SingleAgentExecution"]
+G2_STEP_ORDER = ["LogAnalyzer", "ThreatPredictor", "IncidentResponder", "Orchestrator"]
 
 
 @st.cache_resource
@@ -63,8 +67,30 @@ def _render_trace(trace_steps: List[Dict[str, str]], title: str):
             st.code(step.get("output_summary", ""))
 
 
+def _render_timeline(trace_steps: List[Dict[str, str]], step_order: List[str]):
+    completed = {step.get("step", "") for step in trace_steps}
+    cells = st.columns(len(step_order))
+    for idx, step_name in enumerate(step_order):
+        is_done = step_name in completed
+        symbol = "✅" if is_done else "⏳"
+        with cells[idx]:
+            st.caption(f"{symbol} {step_name}")
+
+
+def _validate_text_input(text: str, input_name: str):
+    if not text or not text.strip():
+        raise ValueError(f"{input_name} is empty.")
+    if len(text) > MAX_INPUT_CHARS:
+        raise ValueError(
+            f"{input_name} is too large ({len(text)} chars). "
+            f"Please keep it under {MAX_INPUT_CHARS} characters."
+        )
+
+
 def _run_single_agent_with_trace(user_prompt: str) -> Dict[str, Any]:
     """Run G1 flow with live trace visualization."""
+    _validate_text_input(user_prompt, "Input text")
+    start_time = time.perf_counter()
     trace: List[Dict[str, str]] = []
     trace_placeholder = st.empty()
     status = st.status("Running G1 single-agent steps...", expanded=True)
@@ -79,6 +105,7 @@ def _run_single_agent_with_trace(user_prompt: str) -> Dict[str, Any]:
     trace.append(step1)
     status.write(f"{step1['step']}: {step1['what_it_does']}")
     with trace_placeholder.container():
+        _render_timeline(trace, G1_STEP_ORDER)
         _render_trace(trace, title="Live Agent Trace (G1)")
 
     strong = Settings.should_use_strong_model(user_prompt)
@@ -96,6 +123,7 @@ def _run_single_agent_with_trace(user_prompt: str) -> Dict[str, Any]:
     trace.append(step2)
     status.write(f"{step2['step']}: {step2['output_summary']}")
     with trace_placeholder.container():
+        _render_timeline(trace, G1_STEP_ORDER)
         _render_trace(trace, title="Live Agent Trace (G1)")
 
     response = get_memory_agent().run(user_prompt)
@@ -109,14 +137,18 @@ def _run_single_agent_with_trace(user_prompt: str) -> Dict[str, Any]:
     trace.append(step3)
     status.write(f"{step3['step']}: Response generated.")
     with trace_placeholder.container():
+        _render_timeline(trace, G1_STEP_ORDER)
         _render_trace(trace, title="Live Agent Trace (G1)")
 
     status.update(label="G1 execution complete", state="complete")
+    st.caption(f"Completed in {time.perf_counter() - start_time:.2f}s")
     return {"type": "g1", "response": response, "trace": trace}
 
 
 def _run_multiagent_with_trace(logs: str) -> Dict[str, Any]:
     """Run G2 flow with live trace visualization."""
+    _validate_text_input(logs, "Log input")
+    start_time = time.perf_counter()
     with st.spinner("Running multiagent workflow..."):
         progress = st.progress(0)
         progress.progress(20)
@@ -129,11 +161,13 @@ def _run_multiagent_with_trace(logs: str) -> Dict[str, Any]:
             live_trace.append(step)
             status.write(f"{step['step']}: {step['what_it_does']}")
             with trace_placeholder.container():
+                _render_timeline(live_trace, G2_STEP_ORDER)
                 _render_trace(live_trace, title="Live Agent Trace (G2)")
 
         traced = run_multiagent_with_trace(logs, on_step=_on_step)
         status.update(label="Multiagent workflow complete", state="complete")
         progress.progress(100)
+        st.caption(f"Completed in {time.perf_counter() - start_time:.2f}s")
         return {"type": "g2", "result": traced["result"], "trace": traced["trace"]}
 
 
@@ -141,7 +175,20 @@ def _extract_input_logs(uploaded_file, text_input: str) -> str:
     if uploaded_file is not None:
         if uploaded_file.size > MAX_UPLOAD_BYTES:
             raise ValueError(f"File too large. Maximum size is {MAX_UPLOAD_MB}MB.")
-        return uploaded_file.read().decode("utf-8")
+        suffix = Path(uploaded_file.name).suffix.lower()
+        if suffix not in Settings.ALLOWED_LOG_EXTENSIONS:
+            raise ValueError(
+                f"Unsupported file type '{suffix}'. "
+                f"Allowed: {sorted(Settings.ALLOWED_LOG_EXTENSIONS)}"
+            )
+        try:
+            payload = uploaded_file.read().decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("Uploaded file is not valid UTF-8 text.") from exc
+        _validate_text_input(payload, "Uploaded log file")
+        return payload
+    if text_input.strip():
+        _validate_text_input(text_input, "Pasted logs")
     return text_input.strip()
 
 
