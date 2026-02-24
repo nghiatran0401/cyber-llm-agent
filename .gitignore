@@ -61,3 +61,8 @@ Thumbs.db
 *.pyo
 *.pyd
 .cache/
+
+# Node / Next.js
+node_modules/
+apps/web/.next/
+apps/web/out/
