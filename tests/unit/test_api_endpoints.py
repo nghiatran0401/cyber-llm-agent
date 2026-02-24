@@ -128,6 +128,18 @@ def test_metrics_endpoint_returns_aggregates():
     assert body["ok"] is True
     assert "requests_total" in body["result"]
     assert "by_endpoint" in body["result"]
+    assert "by_stop_reason" in body["result"]
+
+
+def test_metrics_dashboard_endpoint_returns_summary():
+    client = TestClient(app)
+    response = client.get("/api/v1/metrics/dashboard")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert "summary" in body["result"]
+    assert "breakdown" in body["result"]
+    assert "recent_runs" in body["result"]
 
 
 def test_auth_middleware_rejects_missing_key(monkeypatch):

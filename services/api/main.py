@@ -6,6 +6,7 @@ import json
 import os
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from queue import Empty, Queue
 from threading import Lock
 from threading import Thread
@@ -64,7 +65,14 @@ _METRICS_STATE = {
     "auth_fail_total": 0,
     "rate_limited_total": 0,
     "duration_total_ms": 0,
+    "tokens_total_est": 0,
+    "cost_total_est_usd": 0.0,
+    "tool_calls_total": 0,
+    "tool_fail_total": 0,
     "by_endpoint": defaultdict(int),
+    "by_mode": defaultdict(int),
+    "by_stop_reason": defaultdict(int),
+    "recent_runs": deque(maxlen=200),
 }
 logger = setup_logger(__name__)
 
@@ -164,15 +172,50 @@ def _enrich_trace(trace, run_id: str):
     return enriched
 
 
-def _record_metric(endpoint: str, duration_ms: int, success: bool):
+def _record_metric(
+    *,
+    endpoint: str,
+    duration_ms: int,
+    success: bool,
+    mode: str | None = None,
+    stop_reason: str | None = None,
+    total_tokens_est: int = 0,
+    cost_est_usd: float = 0.0,
+    tool_calls: int = 0,
+    tool_fail: int = 0,
+    run_id: str | None = None,
+    model: str | None = None,
+):
     with _METRICS_LOCK:
         _METRICS_STATE["requests_total"] += 1
         _METRICS_STATE["duration_total_ms"] += max(0, int(duration_ms))
+        _METRICS_STATE["tokens_total_est"] += max(0, int(total_tokens_est))
+        _METRICS_STATE["cost_total_est_usd"] += max(0.0, float(cost_est_usd))
+        _METRICS_STATE["tool_calls_total"] += max(0, int(tool_calls))
+        _METRICS_STATE["tool_fail_total"] += max(0, int(tool_fail))
         _METRICS_STATE["by_endpoint"][endpoint] += 1
+        _METRICS_STATE["by_mode"][mode or "none"] += 1
+        _METRICS_STATE["by_stop_reason"][stop_reason or ("completed" if success else "error")] += 1
         if success:
             _METRICS_STATE["success_total"] += 1
         else:
             _METRICS_STATE["error_total"] += 1
+        _METRICS_STATE["recent_runs"].appendleft(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "run_id": run_id,
+                "endpoint": endpoint,
+                "mode": mode,
+                "model": model,
+                "success": success,
+                "stop_reason": stop_reason or ("completed" if success else "error"),
+                "duration_ms": int(duration_ms),
+                "total_tokens_est": int(total_tokens_est),
+                "cost_est_usd": round(float(cost_est_usd), 6),
+                "tool_calls": int(tool_calls),
+                "tool_fail": int(tool_fail),
+            }
+        )
 
 
 def _build_success_response(
@@ -200,7 +243,19 @@ def _build_success_response(
     tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=enriched_trace)
 
     if endpoint:
-        _record_metric(endpoint=endpoint, duration_ms=duration_ms, success=True)
+        _record_metric(
+            endpoint=endpoint,
+            duration_ms=duration_ms,
+            success=True,
+            mode=mode,
+            stop_reason=stop_reason,
+            total_tokens_est=total_tokens_est,
+            cost_est_usd=cost_est_usd,
+            tool_calls=tool_calls,
+            tool_fail=tool_fail,
+            run_id=run_id,
+            model=model,
+        )
     log_structured(
         logger,
         "info",
@@ -296,6 +351,13 @@ async def request_guardrails(request: Request, call_next):
             if provided != Settings.API_AUTH_KEY:
                 with _METRICS_LOCK:
                     _METRICS_STATE["auth_fail_total"] += 1
+                _record_metric(
+                    endpoint=path,
+                    duration_ms=0,
+                    success=False,
+                    mode=None,
+                    stop_reason="error",
+                )
                 response = ApiResponse(
                     ok=False,
                     result=None,
@@ -312,6 +374,13 @@ async def request_guardrails(request: Request, call_next):
             if not allowed:
                 with _METRICS_LOCK:
                     _METRICS_STATE["rate_limited_total"] += 1
+                _record_metric(
+                    endpoint=path,
+                    duration_ms=0,
+                    success=False,
+                    mode=None,
+                    stop_reason="budget_exceeded",
+                )
                 response = ApiResponse(
                     ok=False,
                     result=None,
@@ -350,7 +419,13 @@ def metrics() -> ApiResponse:
         auth_fail_total = int(_METRICS_STATE["auth_fail_total"])
         rate_limited_total = int(_METRICS_STATE["rate_limited_total"])
         duration_total_ms = int(_METRICS_STATE["duration_total_ms"])
+        tokens_total_est = int(_METRICS_STATE["tokens_total_est"])
+        cost_total_est_usd = float(_METRICS_STATE["cost_total_est_usd"])
+        tool_calls_total = int(_METRICS_STATE["tool_calls_total"])
+        tool_fail_total = int(_METRICS_STATE["tool_fail_total"])
         by_endpoint = dict(_METRICS_STATE["by_endpoint"])
+        by_mode = dict(_METRICS_STATE["by_mode"])
+        by_stop_reason = dict(_METRICS_STATE["by_stop_reason"])
     avg_duration_ms = round(duration_total_ms / requests_total, 2) if requests_total else 0.0
     return ApiResponse(
         ok=True,
@@ -361,7 +436,55 @@ def metrics() -> ApiResponse:
             "auth_fail_total": auth_fail_total,
             "rate_limited_total": rate_limited_total,
             "avg_duration_ms": avg_duration_ms,
+            "tokens_total_est": tokens_total_est,
+            "cost_total_est_usd": round(cost_total_est_usd, 6),
+            "tool_calls_total": tool_calls_total,
+            "tool_fail_total": tool_fail_total,
             "by_endpoint": by_endpoint,
+            "by_mode": by_mode,
+            "by_stop_reason": by_stop_reason,
+        },
+        trace=[],
+        meta=ResponseMeta(request_id=request_id, run_id=request_id, mode=None, model=None, duration_ms=0),
+        error=None,
+    )
+
+
+@app.get("/api/v1/metrics/dashboard", response_model=ApiResponse)
+def metrics_dashboard() -> ApiResponse:
+    request_id = str(uuid4())
+    with _METRICS_LOCK:
+        requests_total = int(_METRICS_STATE["requests_total"])
+        success_total = int(_METRICS_STATE["success_total"])
+        error_total = int(_METRICS_STATE["error_total"])
+        duration_total_ms = int(_METRICS_STATE["duration_total_ms"])
+        cost_total_est_usd = float(_METRICS_STATE["cost_total_est_usd"])
+        tokens_total_est = int(_METRICS_STATE["tokens_total_est"])
+        by_mode = dict(_METRICS_STATE["by_mode"])
+        by_stop_reason = dict(_METRICS_STATE["by_stop_reason"])
+        recent_runs = list(_METRICS_STATE["recent_runs"])[:25]
+
+    success_rate = round((success_total / requests_total) * 100, 2) if requests_total else 0.0
+    avg_duration_ms = round(duration_total_ms / requests_total, 2) if requests_total else 0.0
+    avg_tokens = round(tokens_total_est / requests_total, 2) if requests_total else 0.0
+
+    return ApiResponse(
+        ok=True,
+        result={
+            "summary": {
+                "requests_total": requests_total,
+                "success_total": success_total,
+                "error_total": error_total,
+                "success_rate_pct": success_rate,
+                "avg_duration_ms": avg_duration_ms,
+                "avg_tokens_est": avg_tokens,
+                "cost_total_est_usd": round(cost_total_est_usd, 6),
+            },
+            "breakdown": {
+                "by_mode": by_mode,
+                "by_stop_reason": by_stop_reason,
+            },
+            "recent_runs": recent_runs,
         },
         trace=[],
         meta=ResponseMeta(request_id=request_id, run_id=request_id, mode=None, model=None, duration_ms=0),
@@ -493,7 +616,19 @@ def workspace_stream(payload: WorkspaceStreamRequest):
             total_tokens_est = input_tokens_est + output_tokens_est
             cost_est_usd = round((total_tokens_est / 1000) * 0.0005, 6)
             tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=[])
-            _record_metric(endpoint="/api/v1/workspace/stream", duration_ms=duration_ms, success=True)
+            _record_metric(
+                endpoint="/api/v1/workspace/stream",
+                duration_ms=duration_ms,
+                success=True,
+                mode=payload.mode,
+                stop_reason=stop_reason,
+                total_tokens_est=total_tokens_est,
+                cost_est_usd=cost_est_usd,
+                tool_calls=tool_calls,
+                tool_fail=tool_fail,
+                run_id=run_id,
+                model=model,
+            )
             log_structured(
                 logger,
                 "info",
@@ -655,7 +790,13 @@ async def http_exception_handler(_, exc: HTTPException):
         meta=ResponseMeta(request_id=request_id, mode=None, model=None, duration_ms=None),
         error=ErrorInfo(code=f"HTTP_{exc.status_code}", message=str(exc.detail)),
     )
-    _record_metric(endpoint=f"http_{exc.status_code}", duration_ms=0, success=False)
+    _record_metric(
+        endpoint=f"http_{exc.status_code}",
+        duration_ms=0,
+        success=False,
+        mode=None,
+        stop_reason="error",
+    )
     return JSONResponse(status_code=exc.status_code, content=response.model_dump())
 
 
@@ -669,5 +810,11 @@ async def unhandled_exception_handler(_, exc: Exception):
         meta=ResponseMeta(request_id=request_id, mode=None, model=None, duration_ms=None),
         error=ErrorInfo(code="HTTP_500", message="Internal server error."),
     )
-    _record_metric(endpoint="unhandled", duration_ms=0, success=False)
+    _record_metric(
+        endpoint="unhandled",
+        duration_ms=0,
+        success=False,
+        mode=None,
+        stop_reason="error",
+    )
     return JSONResponse(status_code=500, content=response.model_dump())

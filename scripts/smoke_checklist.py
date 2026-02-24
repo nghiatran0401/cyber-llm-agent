@@ -120,6 +120,9 @@ def run_checklist() -> int:
         metrics = client.get("/api/v1/metrics")
         metrics_ok = metrics.status_code == 200 and "requests_total" in metrics.json().get("result", {})
         results.append(_result("metrics endpoint", metrics_ok, f"status={metrics.status_code}"))
+        dashboard = client.get("/api/v1/metrics/dashboard")
+        dashboard_ok = dashboard.status_code == 200 and "summary" in dashboard.json().get("result", {})
+        results.append(_result("metrics dashboard endpoint", dashboard_ok, f"status={dashboard.status_code}"))
 
         # 2) Auth behavior
         with patch("services.api.main.Settings.API_AUTH_ENABLED", True), patch(

@@ -123,6 +123,7 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
   - `REQUIRE_HUMAN_APPROVAL_HIGH_RISK`
 - Runtime metrics endpoint:
   - `GET /api/v1/metrics`
+  - `GET /api/v1/metrics/dashboard` for summary + recent runs
 - `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
 - `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
 - Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.
