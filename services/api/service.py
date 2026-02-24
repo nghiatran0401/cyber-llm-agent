@@ -210,6 +210,9 @@ def _get_or_create_memory_agent(session_id: Optional[str]):
             create_agent_with_memory(
             memory_type="buffer",
             max_messages=12,
+            max_episodic_items=Settings.MEMORY_MAX_EPISODIC_ITEMS,
+            max_semantic_facts=Settings.MEMORY_MAX_SEMANTIC_FACTS,
+            recall_top_k=Settings.MEMORY_RECALL_TOP_K,
             session_id=session_id,
             verbose=False,
             ),

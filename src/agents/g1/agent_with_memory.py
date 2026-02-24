@@ -18,12 +18,21 @@ class StatefulSecurityAgent:
         self,
         memory_type: str = "buffer",
         max_messages: int = 12,
+        max_episodic_items: int = 30,
+        max_semantic_facts: int = 80,
+        recall_top_k: int = 3,
         session_id: Optional[str] = None,
         backend_agent: Optional[Any] = None,
         verbose: bool = True,
     ):
         self.session_id = session_id or f"session_{uuid4().hex[:10]}"
-        self.memory = ConversationMemory(memory_type=memory_type, max_messages=max_messages)
+        self.memory = ConversationMemory(
+            memory_type=memory_type,
+            max_messages=max_messages,
+            max_episodic_items=max_episodic_items,
+            max_semantic_facts=max_semantic_facts,
+            recall_top_k=recall_top_k,
+        )
         self.session_manager = SessionManager()
         self.backend_agent = backend_agent or AdaptiveSecurityAgent(verbose=verbose)
 
@@ -32,6 +41,8 @@ class StatefulSecurityAgent:
             self.memory.load_state(
                 messages=existing.get("messages", []),
                 running_summary=existing.get("running_summary", ""),
+                episodic_memories=existing.get("episodic_memories", []),
+                semantic_facts=existing.get("semantic_facts", []),
             )
             logger.info("Loaded existing session: %s", self.session_id)
         else:
@@ -40,7 +51,7 @@ class StatefulSecurityAgent:
     def invoke(self, payload: Any):
         """Invoke backend agent with memory-aware context injection."""
         user_text = self._extract_user_text(payload)
-        context_block = self.memory.render_context()
+        context_block = self.memory.render_context(query=user_text)
         augmented_prompt = (
             "Use this conversation context when answering.\n\n"
             f"{context_block}\n\n"
@@ -52,6 +63,7 @@ class StatefulSecurityAgent:
 
         self.memory.add_turn("user", user_text)
         self.memory.add_turn("assistant", answer_text)
+        self.memory.update_long_term_from_turn(user_text=user_text, assistant_text=answer_text)
         self._persist()
         return result
 
@@ -61,13 +73,7 @@ class StatefulSecurityAgent:
         return self._extract_response_text(result)
 
     def _persist(self):
-        self.session_manager.save_session(
-            self.session_id,
-            {
-                "running_summary": self.memory.running_summary,
-                "messages": self.memory.messages,
-            },
-        )
+        self.session_manager.save_session(self.session_id, self.memory.get_state())
 
     @staticmethod
     def _extract_user_text(payload: Any) -> str:
@@ -101,6 +107,9 @@ class StatefulSecurityAgent:
 def create_agent_with_memory(
     memory_type: str = "buffer",
     max_messages: int = 12,
+    max_episodic_items: int = 30,
+    max_semantic_facts: int = 80,
+    recall_top_k: int = 3,
     session_id: Optional[str] = None,
     verbose: bool = True,
 ) -> StatefulSecurityAgent:
@@ -108,6 +117,9 @@ def create_agent_with_memory(
     return StatefulSecurityAgent(
         memory_type=memory_type,
         max_messages=max_messages,
+        max_episodic_items=max_episodic_items,
+        max_semantic_facts=max_semantic_facts,
+        recall_top_k=recall_top_k,
         session_id=session_id,
         verbose=verbose,
     )

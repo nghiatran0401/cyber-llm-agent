@@ -21,6 +21,7 @@ class SessionManager:
 
     def save_session(self, session_id: str, payload: Dict[str, Any]):
         """Persist session payload to disk."""
+        self.prune_expired_sessions()
         session_file = self._session_path(session_id)
         data = {
             "session_id": session_id,
@@ -37,4 +38,23 @@ class SessionManager:
             return {}
         with open(session_file, "r", encoding="utf-8") as handle:
             return json.load(handle)
+
+    def prune_expired_sessions(self):
+        """Delete expired session files based on retention policy."""
+        retention_seconds = max(1, Settings.SESSION_RETENTION_DAYS) * 24 * 60 * 60
+        now = datetime.now(timezone.utc)
+        for session_file in self.session_dir.glob("*.json"):
+            try:
+                with open(session_file, "r", encoding="utf-8") as handle:
+                    data = json.load(handle)
+                updated_at = data.get("updated_at")
+                if not updated_at:
+                    continue
+                updated_time = datetime.fromisoformat(str(updated_at))
+                age_seconds = (now - updated_time).total_seconds()
+                if age_seconds > retention_seconds:
+                    session_file.unlink(missing_ok=True)
+            except Exception:
+                # Keep best-effort cleanup non-fatal for runtime paths.
+                continue
 

@@ -106,6 +106,11 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
   - `MAX_TOOL_CALLS`
   - `MAX_RUNTIME_SECONDS`
   - `MAX_WORKER_TASKS`
+- Memory retention and recall controls:
+  - `MEMORY_MAX_EPISODIC_ITEMS`
+  - `MEMORY_MAX_SEMANTIC_FACTS`
+  - `MEMORY_RECALL_TOP_K`
+  - `SESSION_RETENTION_DAYS`
 - `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
 - `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
 - Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.

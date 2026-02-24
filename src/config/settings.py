@@ -43,6 +43,10 @@ class Settings:
     MAX_TOOL_CALLS = int(os.getenv("MAX_TOOL_CALLS", "8"))
     MAX_RUNTIME_SECONDS = int(os.getenv("MAX_RUNTIME_SECONDS", "60"))
     MAX_WORKER_TASKS = int(os.getenv("MAX_WORKER_TASKS", "4"))
+    MEMORY_MAX_EPISODIC_ITEMS = int(os.getenv("MEMORY_MAX_EPISODIC_ITEMS", "30"))
+    MEMORY_MAX_SEMANTIC_FACTS = int(os.getenv("MEMORY_MAX_SEMANTIC_FACTS", "80"))
+    MEMORY_RECALL_TOP_K = int(os.getenv("MEMORY_RECALL_TOP_K", "3"))
+    SESSION_RETENTION_DAYS = int(os.getenv("SESSION_RETENTION_DAYS", "30"))
 
     # CTI provider configuration
     CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").lower()
@@ -132,6 +136,14 @@ class Settings:
             raise ValueError("MAX_RUNTIME_SECONDS must be greater than 0.")
         if cls.MAX_WORKER_TASKS <= 0:
             raise ValueError("MAX_WORKER_TASKS must be greater than 0.")
+        if cls.MEMORY_MAX_EPISODIC_ITEMS <= 0:
+            raise ValueError("MEMORY_MAX_EPISODIC_ITEMS must be greater than 0.")
+        if cls.MEMORY_MAX_SEMANTIC_FACTS <= 0:
+            raise ValueError("MEMORY_MAX_SEMANTIC_FACTS must be greater than 0.")
+        if cls.MEMORY_RECALL_TOP_K <= 0:
+            raise ValueError("MEMORY_RECALL_TOP_K must be greater than 0.")
+        if cls.SESSION_RETENTION_DAYS <= 0:
+            raise ValueError("SESSION_RETENTION_DAYS must be greater than 0.")
         if cls.RAG_CHUNK_SIZE <= 0:
             raise ValueError("RAG_CHUNK_SIZE must be greater than 0.")
         if cls.RAG_MAX_RESULTS <= 0:
