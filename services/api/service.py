@@ -11,6 +11,8 @@ from src.agents.g1.agent_with_memory import create_agent_with_memory
 from src.agents.g2.multiagent_system import run_multiagent_with_trace
 from src.config.settings import Settings
 from src.sandbox.owasp_sandbox import append_event_to_live_log, event_to_analysis_text, generate_event, list_scenarios
+from src.utils.evaluator import AgentEvaluator
+from src.utils.prompt_manager import PromptManager
 
 from .schemas import StepTrace
 
@@ -26,6 +28,8 @@ _HUMAN_NEEDED_SIGNALS = (
     "unable to determine",
 )
 _SEVERITY_ORDER = ("critical", "high", "medium", "low")
+_PROMPT_MANAGER = PromptManager()
+_EVALUATOR = AgentEvaluator()
 
 
 def _summarize_text(text: str, max_len: int = 220) -> str:
@@ -162,6 +166,29 @@ def _run_single_agent_loop(agent: Any, user_input: str) -> tuple[str, str, int]:
     return response, stop_reason, steps_used
 
 
+def _resolve_prompt_version(mode: str) -> tuple[str, str]:
+    selected = Settings.PROMPT_VERSION_G1 if mode == "g1" else Settings.PROMPT_VERSION_G2
+    try:
+        prompt_template = _PROMPT_MANAGER.load_prompt(selected)
+        return selected, prompt_template
+    except Exception:
+        fallback = "security_analysis_v1.txt"
+        try:
+            return fallback, _PROMPT_MANAGER.load_prompt(fallback)
+        except Exception:
+            return "inline_fallback", "You are a cybersecurity analyst. Provide evidence-first analysis."
+
+
+def _build_prompted_input(prompt_template: str, user_input: str) -> str:
+    return f"{prompt_template}\n\nUser input:\n{user_input}\n\nAnalysis:"
+
+
+def _evaluate_response_rubric(response_text: str) -> Dict[str, Any]:
+    if not Settings.ENABLE_RUBRIC_EVAL:
+        return {"rubric_score": None, "rubric_label": "disabled", "checks": {}}
+    return _EVALUATOR.evaluate_rubric(response_text)
+
+
 def _prune_agent_cache() -> None:
     now = time.time()
     expired = []
@@ -224,9 +251,11 @@ def _get_or_create_memory_agent(session_id: Optional[str]):
 def run_g1_analysis(
     user_input: str,
     session_id: Optional[str] = None,
-) -> Tuple[str, List[StepTrace], str, str, int]:
+) -> Tuple[str, List[StepTrace], str, str, int, str, Optional[float], str]:
     """Run G1 analysis and return response text, trace, model, stop reason, and steps."""
     clean_input = _validate_input(user_input, "input")
+    prompt_version, prompt_template = _resolve_prompt_version("g1")
+    prompted_input = _build_prompted_input(prompt_template, clean_input)
     strong = Settings.should_use_strong_model(clean_input)
     high_risk = Settings.is_high_risk_task(clean_input)
     selected_model = Settings.STRONG_MODEL_NAME if strong else Settings.FAST_MODEL_NAME
@@ -235,7 +264,7 @@ def run_g1_analysis(
         StepTrace(
             step="InputPreparation",
             what_it_does="Validates and prepares request for G1 execution.",
-            prompt_preview=_summarize_text(clean_input),
+            prompt_preview=_summarize_text(prompted_input),
             input_summary=_summarize_text(clean_input),
             output_summary="Input accepted and formatted.",
         ),
@@ -249,9 +278,18 @@ def run_g1_analysis(
             output_summary=f"Selected model: {selected_model}",
         ),
     ]
+    trace.append(
+        StepTrace(
+            step="PromptVersion",
+            what_it_does="Loads prompt template version for this run.",
+            prompt_preview=_summarize_text(prompt_template, 180),
+            input_summary=f"mode=g1 version={prompt_version}",
+            output_summary="Prompt template resolved successfully.",
+        )
+    )
 
     agent = _get_or_create_memory_agent(session_id)
-    response, stop_reason, steps_used = _run_single_agent_loop(agent, clean_input)
+    response, stop_reason, steps_used = _run_single_agent_loop(agent, prompted_input)
     structured = _build_structured_g1_report(response)
     critic_ok, critic_message = _critic_validate_structured_output(structured, high_risk=high_risk)
     if not critic_ok:
@@ -263,7 +301,7 @@ def run_g1_analysis(
         StepTrace(
             step="SingleAgentExecution",
             what_it_does="Runs a memory-enabled agent with tools.",
-            prompt_preview=_summarize_text(clean_input),
+            prompt_preview=_summarize_text(prompted_input),
             input_summary=_summarize_text(clean_input),
             output_summary=_summarize_text(response),
         )
@@ -295,16 +333,37 @@ def run_g1_analysis(
             output_summary=f"pass={critic_ok}; reason={critic_message}",
         )
     )
-    return response, trace, selected_model, stop_reason, steps_used
+    rubric = _evaluate_response_rubric(response)
+    trace.append(
+        StepTrace(
+            step="RubricEvaluation",
+            what_it_does="Scores response quality against rubric checks.",
+            prompt_preview="criteria={evidence,severity,actions,clarity}",
+            input_summary=_summarize_text(response),
+            output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}",
+        )
+    )
+    return (
+        response,
+        trace,
+        selected_model,
+        stop_reason,
+        steps_used,
+        prompt_version,
+        rubric.get("rubric_score"),
+        str(rubric.get("rubric_label", "n/a")),
+    )
 
 
 def run_g1_analysis_with_progress(
     user_input: str,
     on_step: Callable[[StepTrace], None],
     session_id: Optional[str] = None,
-) -> Tuple[str, str, str, int]:
+) -> Tuple[str, str, str, int, str, Optional[float], str]:
     """Run G1 with progressive step callbacks."""
     clean_input = _validate_input(user_input, "input")
+    prompt_version, prompt_template = _resolve_prompt_version("g1")
+    prompted_input = _build_prompted_input(prompt_template, clean_input)
     strong = Settings.should_use_strong_model(clean_input)
     high_risk = Settings.is_high_risk_task(clean_input)
     selected_model = Settings.STRONG_MODEL_NAME if strong else Settings.FAST_MODEL_NAME
@@ -312,7 +371,7 @@ def run_g1_analysis_with_progress(
     step1 = StepTrace(
         step="InputPreparation",
         what_it_does="Validates and prepares request for G1 execution.",
-        prompt_preview=_summarize_text(clean_input),
+        prompt_preview=_summarize_text(prompted_input),
         input_summary=_summarize_text(clean_input),
         output_summary="Input accepted and formatted.",
     )
@@ -328,9 +387,18 @@ def run_g1_analysis_with_progress(
         output_summary=f"Selected model: {selected_model}",
     )
     on_step(step2)
+    on_step(
+        StepTrace(
+            step="PromptVersion",
+            what_it_does="Loads prompt template version for this run.",
+            prompt_preview=_summarize_text(prompt_template, 180),
+            input_summary=f"mode=g1 version={prompt_version}",
+            output_summary="Prompt template resolved successfully.",
+        )
+    )
 
     agent = _get_or_create_memory_agent(session_id)
-    response, stop_reason, steps_used = _run_single_agent_loop(agent, clean_input)
+    response, stop_reason, steps_used = _run_single_agent_loop(agent, prompted_input)
     structured = _build_structured_g1_report(response)
     critic_ok, critic_message = _critic_validate_structured_output(structured, high_risk=high_risk)
     if not critic_ok:
@@ -341,7 +409,7 @@ def run_g1_analysis_with_progress(
     step3 = StepTrace(
         step="SingleAgentExecution",
         what_it_does="Runs a memory-enabled agent with tools.",
-        prompt_preview=_summarize_text(clean_input),
+        prompt_preview=_summarize_text(prompted_input),
         input_summary=_summarize_text(clean_input),
         output_summary=_summarize_text(response),
     )
@@ -373,44 +441,140 @@ def run_g1_analysis_with_progress(
             output_summary=f"pass={critic_ok}; reason={critic_message}",
         )
     )
-    return response, selected_model, stop_reason, steps_used
+    rubric = _evaluate_response_rubric(response)
+    on_step(
+        StepTrace(
+            step="RubricEvaluation",
+            what_it_does="Scores response quality against rubric checks.",
+            prompt_preview="criteria={evidence,severity,actions,clarity}",
+            input_summary=_summarize_text(response),
+            output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}",
+        )
+    )
+    return (
+        response,
+        selected_model,
+        stop_reason,
+        steps_used,
+        prompt_version,
+        rubric.get("rubric_score"),
+        str(rubric.get("rubric_label", "n/a")),
+    )
 
 
-def run_g2_analysis(log_input: str) -> Tuple[Dict[str, Any], List[StepTrace], str, str, int]:
+def run_g2_analysis(
+    log_input: str,
+) -> Tuple[Dict[str, Any], List[StepTrace], str, str, int, str, Optional[float], str]:
     """Run G2 workflow and return result, trace, model, stop reason, and steps."""
     clean_logs = _validate_input(log_input, "input")
-    executed = run_multiagent_with_trace(clean_logs)
+    prompt_version, prompt_template = _resolve_prompt_version("g2")
+    prompted_logs = _build_prompted_input(prompt_template, clean_logs)
+    executed = run_multiagent_with_trace(prompted_logs)
     result = executed["result"]
     trace = [StepTrace(**step) for step in executed["trace"]]
+    trace.insert(
+        0,
+        StepTrace(
+            step="PromptVersion",
+            what_it_does="Loads prompt template version for this run.",
+            prompt_preview=_summarize_text(prompt_template, 180),
+            input_summary=f"mode=g2 version={prompt_version}",
+            output_summary="Prompt template resolved successfully.",
+        ),
+    )
     stop_reason = str(executed.get("stop_reason", "completed"))
     steps_used = int(executed.get("steps_used", len(trace)))
-    return result, trace, Settings.FAST_MODEL_NAME, stop_reason, steps_used
+    final_text = str(result.get("final_report", ""))
+    rubric = _evaluate_response_rubric(final_text)
+    trace.append(
+        StepTrace(
+            step="RubricEvaluation",
+            what_it_does="Scores response quality against rubric checks.",
+            prompt_preview="criteria={evidence,severity,actions,clarity}",
+            input_summary=_summarize_text(final_text),
+            output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}",
+        )
+    )
+    return (
+        result,
+        trace,
+        Settings.FAST_MODEL_NAME,
+        stop_reason,
+        steps_used,
+        prompt_version,
+        rubric.get("rubric_score"),
+        str(rubric.get("rubric_label", "n/a")),
+    )
 
 
 def run_g2_analysis_with_progress(
     log_input: str,
     on_step: Callable[[StepTrace], None],
-) -> Tuple[Dict[str, Any], str, str, int]:
+) -> Tuple[Dict[str, Any], str, str, int, str, Optional[float], str]:
     """Run G2 and emit each step as soon as it completes."""
     clean_logs = _validate_input(log_input, "input")
+    prompt_version, prompt_template = _resolve_prompt_version("g2")
+    prompted_logs = _build_prompted_input(prompt_template, clean_logs)
+    on_step(
+        StepTrace(
+            step="PromptVersion",
+            what_it_does="Loads prompt template version for this run.",
+            prompt_preview=_summarize_text(prompt_template, 180),
+            input_summary=f"mode=g2 version={prompt_version}",
+            output_summary="Prompt template resolved successfully.",
+        )
+    )
 
     def _on_step(step: Dict[str, str]):
         on_step(StepTrace(**step))
 
-    executed = run_multiagent_with_trace(clean_logs, on_step=_on_step)
+    executed = run_multiagent_with_trace(prompted_logs, on_step=_on_step)
     stop_reason = str(executed.get("stop_reason", "completed"))
     steps_used = int(executed.get("steps_used", len(executed.get("trace", []))))
-    return executed["result"], Settings.FAST_MODEL_NAME, stop_reason, steps_used
+    final_text = str(executed["result"].get("final_report", ""))
+    rubric = _evaluate_response_rubric(final_text)
+    on_step(
+        StepTrace(
+            step="RubricEvaluation",
+            what_it_does="Scores response quality against rubric checks.",
+            prompt_preview="criteria={evidence,severity,actions,clarity}",
+            input_summary=_summarize_text(final_text),
+            output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}",
+        )
+    )
+    return (
+        executed["result"],
+        Settings.FAST_MODEL_NAME,
+        stop_reason,
+        steps_used,
+        prompt_version,
+        rubric.get("rubric_score"),
+        str(rubric.get("rubric_label", "n/a")),
+    )
 
 
 def run_chat(user_input: str, mode: str = "g1", session_id: Optional[str] = None):
     """Run chat in requested mode with shape-aligned output."""
     clean_input = _validate_input(user_input, "input")
     if mode == "g2":
-        result, trace, model, stop_reason, steps_used = run_g2_analysis(clean_input)
-        return result.get("final_report", ""), trace, model, stop_reason, steps_used
-    response, trace, model, stop_reason, steps_used = run_g1_analysis(clean_input, session_id=session_id)
-    return response, trace, model, stop_reason, steps_used
+        result, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = run_g2_analysis(
+            clean_input
+        )
+        return (
+            result.get("final_report", ""),
+            trace,
+            model,
+            stop_reason,
+            steps_used,
+            prompt_version,
+            rubric_score,
+            rubric_label,
+        )
+    response, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = run_g1_analysis(
+        clean_input,
+        session_id=session_id,
+    )
+    return response, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label
 
 
 def run_workspace_with_progress(
@@ -420,15 +584,25 @@ def run_workspace_with_progress(
     user_input: str,
     on_step: Callable[[StepTrace], None],
     session_id: Optional[str] = None,
-) -> Tuple[str, str, str, int]:
+) -> Tuple[str, str, str, int, str, Optional[float], str]:
     """Run workspace request and emit progress steps for UI streaming."""
     clean_input = _validate_input(user_input, "input")
     normalized_task = (task or "chat").lower()
     normalized_mode = (mode or "g1").lower()
 
     if normalized_mode == "g2":
-        result, model, stop_reason, steps_used = run_g2_analysis_with_progress(clean_input, on_step=on_step)
-        return str(result.get("final_report", "")), model, stop_reason, steps_used
+        result, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
+            run_g2_analysis_with_progress(clean_input, on_step=on_step)
+        )
+        return (
+            str(result.get("final_report", "")),
+            model,
+            stop_reason,
+            steps_used,
+            prompt_version,
+            rubric_score,
+            rubric_label,
+        )
 
     if normalized_task == "analyze":
         return run_g1_analysis_with_progress(clean_input, on_step=on_step, session_id=session_id)

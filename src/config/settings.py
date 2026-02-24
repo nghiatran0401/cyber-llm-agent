@@ -47,6 +47,9 @@ class Settings:
     MEMORY_MAX_SEMANTIC_FACTS = int(os.getenv("MEMORY_MAX_SEMANTIC_FACTS", "80"))
     MEMORY_RECALL_TOP_K = int(os.getenv("MEMORY_RECALL_TOP_K", "3"))
     SESSION_RETENTION_DAYS = int(os.getenv("SESSION_RETENTION_DAYS", "30"))
+    PROMPT_VERSION_G1 = os.getenv("PROMPT_VERSION_G1", "security_analysis_v2.txt")
+    PROMPT_VERSION_G2 = os.getenv("PROMPT_VERSION_G2", "security_analysis_v2.txt")
+    ENABLE_RUBRIC_EVAL = os.getenv("ENABLE_RUBRIC_EVAL", "true").lower() == "true"
 
     # CTI provider configuration
     CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").lower()
@@ -144,6 +147,10 @@ class Settings:
             raise ValueError("MEMORY_RECALL_TOP_K must be greater than 0.")
         if cls.SESSION_RETENTION_DAYS <= 0:
             raise ValueError("SESSION_RETENTION_DAYS must be greater than 0.")
+        if not cls.PROMPT_VERSION_G1.strip():
+            raise ValueError("PROMPT_VERSION_G1 must not be empty.")
+        if not cls.PROMPT_VERSION_G2.strip():
+            raise ValueError("PROMPT_VERSION_G2 must not be empty.")
         if cls.RAG_CHUNK_SIZE <= 0:
             raise ValueError("RAG_CHUNK_SIZE must be greater than 0.")
         if cls.RAG_MAX_RESULTS <= 0:

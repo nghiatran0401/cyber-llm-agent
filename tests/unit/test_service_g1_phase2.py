@@ -24,14 +24,21 @@ def test_g1_adds_structured_and_critic_trace(monkeypatch):
     monkeypatch.setattr("services.api.service.Settings.MAX_AGENT_STEPS", 3)
     monkeypatch.setattr("services.api.service.Settings.MAX_RUNTIME_SECONDS", 60)
 
-    result, trace, _model, stop_reason, steps_used = service.run_g1_analysis("check login anomalies")
+    result, trace, _model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = service.run_g1_analysis(
+        "check login anomalies"
+    )
 
     assert "Repeated failed logins" in result
     assert stop_reason == "completed"
     assert steps_used >= 1
+    assert prompt_version
+    assert rubric_score is not None
+    assert rubric_label in {"strong", "acceptable", "weak", "disabled"}
     step_names = [item.step for item in trace]
     assert "StructuredOutput" in step_names
     assert "CriticReview" in step_names
+    assert "PromptVersion" in step_names
+    assert "RubricEvaluation" in step_names
 
 
 def test_g1_high_risk_without_citations_requires_human(monkeypatch):
@@ -46,7 +53,9 @@ def test_g1_high_risk_without_citations_requires_human(monkeypatch):
     monkeypatch.setattr("services.api.service.Settings.MAX_AGENT_STEPS", 3)
     monkeypatch.setattr("services.api.service.Settings.MAX_RUNTIME_SECONDS", 60)
 
-    result, _trace, _model, stop_reason, _steps_used = service.run_g1_analysis("critical ransomware incident")
+    result, _trace, _model, stop_reason, _steps_used, _prompt_version, _rubric_score, _rubric_label = (
+        service.run_g1_analysis("critical ransomware incident")
+    )
 
     assert stop_reason == "needs_human"
     assert "Critic verdict:" in result

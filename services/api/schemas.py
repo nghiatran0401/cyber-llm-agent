@@ -28,6 +28,9 @@ class ResponseMeta(BaseModel):
     duration_ms: Optional[int] = None
     stop_reason: Optional[Literal["completed", "blocked", "needs_human", "budget_exceeded", "error"]] = None
     steps_used: Optional[int] = None
+    prompt_version: Optional[str] = None
+    rubric_score: Optional[float] = None
+    rubric_label: Optional[Literal["strong", "acceptable", "weak", "disabled", "n/a"]] = None
 
 
 class StepTrace(BaseModel):

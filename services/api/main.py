@@ -94,6 +94,9 @@ def _build_success_response(
     start_time: float,
     stop_reason: str | None = None,
     steps_used: int | None = None,
+    prompt_version: str | None = None,
+    rubric_score: float | None = None,
+    rubric_label: str | None = None,
 ) -> ApiResponse:
     duration_ms = int((perf_counter() - start_time) * 1000)
     return ApiResponse(
@@ -107,6 +110,9 @@ def _build_success_response(
             duration_ms=duration_ms,
             stop_reason=stop_reason,
             steps_used=steps_used,
+            prompt_version=prompt_version,
+            rubric_score=rubric_score,
+            rubric_label=rubric_label,
         ),
         error=None,
     )
@@ -115,23 +121,29 @@ def _build_success_response(
 def _normalize_analysis_result(payload, fallback_steps: int = 1):
     """Support both old and new service return tuple shapes."""
     if isinstance(payload, tuple):
-        if len(payload) == 5:
+        if len(payload) == 8:
             return payload
+        if len(payload) == 5:
+            result, trace, model, stop_reason, steps_used = payload
+            return result, trace, model, stop_reason, steps_used, None, None, None
         if len(payload) == 3:
             result, trace, model = payload
             steps = len(trace) if isinstance(trace, list) and trace else fallback_steps
-            return result, trace, model, "completed", steps
+            return result, trace, model, "completed", steps, None, None, None
     raise TypeError("Unexpected service response shape.")
 
 
 def _normalize_workspace_result(payload):
     """Support both old and new workspace return tuple shapes."""
     if isinstance(payload, tuple):
-        if len(payload) == 4:
+        if len(payload) == 7:
             return payload
+        if len(payload) == 4:
+            result, model, stop_reason, steps_used = payload
+            return result, model, stop_reason, steps_used, None, None, None
         if len(payload) == 2:
             result, model = payload
-            return result, model, "completed", 1
+            return result, model, "completed", 1, None, None, None
     raise TypeError("Unexpected workspace response shape.")
 
 
@@ -205,8 +217,10 @@ def analyze_g1(payload: AnalyzeRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        response, trace, model, stop_reason, steps_used = _normalize_analysis_result(
+        response, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
+            _normalize_analysis_result(
             run_g1_analysis(payload.input, session_id=payload.session_id)
+        )
         )
         return _build_success_response(
             request_id=request_id,
@@ -217,6 +231,9 @@ def analyze_g1(payload: AnalyzeRequest) -> ApiResponse:
             start_time=start_time,
             stop_reason=stop_reason,
             steps_used=steps_used,
+            prompt_version=prompt_version,
+            rubric_score=rubric_score,
+            rubric_label=rubric_label,
         )
     except HTTPException:
         raise
@@ -229,7 +246,9 @@ def analyze_g2(payload: AnalyzeRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        result, trace, model, stop_reason, steps_used = _normalize_analysis_result(run_g2_analysis(payload.input))
+        result, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
+            _normalize_analysis_result(run_g2_analysis(payload.input))
+        )
         return _build_success_response(
             request_id=request_id,
             mode="g2",
@@ -239,6 +258,9 @@ def analyze_g2(payload: AnalyzeRequest) -> ApiResponse:
             start_time=start_time,
             stop_reason=stop_reason,
             steps_used=steps_used,
+            prompt_version=prompt_version,
+            rubric_score=rubric_score,
+            rubric_label=rubric_label,
         )
     except HTTPException:
         raise
@@ -251,8 +273,10 @@ def chat(payload: ChatRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        response, trace, model, stop_reason, steps_used = _normalize_analysis_result(
+        response, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
+            _normalize_analysis_result(
             run_chat(payload.input, mode=payload.mode, session_id=payload.session_id)
+        )
         )
         return _build_success_response(
             request_id=request_id,
@@ -263,6 +287,9 @@ def chat(payload: ChatRequest) -> ApiResponse:
             start_time=start_time,
             stop_reason=stop_reason,
             steps_used=steps_used,
+            prompt_version=prompt_version,
+            rubric_score=rubric_score,
+            rubric_label=rubric_label,
         )
     except HTTPException:
         raise
@@ -284,13 +311,15 @@ def workspace_stream(payload: WorkspaceStreamRequest):
             def _on_step(step: StepTrace):
                 _put_event("trace", step=step.model_dump())
 
-            result, model, stop_reason, steps_used = _normalize_workspace_result(
+            result, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
+                _normalize_workspace_result(
                 run_workspace_with_progress(
                 task=payload.task,
                 mode=payload.mode,
                 user_input=payload.input,
                 on_step=_on_step,
                 session_id=payload.session_id,
+            )
             )
             )
 
@@ -305,6 +334,9 @@ def workspace_stream(payload: WorkspaceStreamRequest):
                     duration_ms=duration_ms,
                     stop_reason=stop_reason,
                     steps_used=steps_used,
+                    prompt_version=prompt_version,
+                    rubric_score=rubric_score,
+                    rubric_label=rubric_label,
                 ).model_dump(),
             )
         except Exception as exc:
@@ -389,12 +421,14 @@ def sandbox_analyze(payload: SandboxAnalyzeRequest) -> ApiResponse:
     start_time = perf_counter()
     try:
         _require_sandbox_enabled()
-        result, trace, model, stop_reason, steps_used = _normalize_analysis_result(
+        result, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
+            _normalize_analysis_result(
             analyze_sandbox_event(
                 event=payload.event,
                 mode=payload.mode,
                 session_id=payload.session_id,
             )
+        )
         )
         return _build_success_response(
             request_id=request_id,
@@ -405,6 +439,9 @@ def sandbox_analyze(payload: SandboxAnalyzeRequest) -> ApiResponse:
             start_time=start_time,
             stop_reason=stop_reason,
             steps_used=steps_used,
+            prompt_version=prompt_version,
+            rubric_score=rubric_score,
+            rubric_label=rubric_label,
         )
     except HTTPException:
         raise

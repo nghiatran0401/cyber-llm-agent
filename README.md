@@ -111,6 +111,11 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
   - `MEMORY_MAX_SEMANTIC_FACTS`
   - `MEMORY_RECALL_TOP_K`
   - `SESSION_RETENTION_DAYS`
+- Prompt version controls:
+  - `PROMPT_VERSION_G1`
+  - `PROMPT_VERSION_G2`
+- Optional rubric evaluation:
+  - `ENABLE_RUBRIC_EVAL`
 - `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
 - `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
 - Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.

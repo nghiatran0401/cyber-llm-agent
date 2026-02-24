@@ -26,7 +26,7 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
     def _fake_run_g1_analysis(user_input: str, session_id=None):
         assert user_input == "test input"
         assert session_id == "s-1"
-        return "mocked response", [], "gpt-4o-mini", "completed", 1
+        return "mocked response", [], "gpt-4o-mini", "completed", 1, "security_analysis_v2.txt", 4.2, "strong"
 
     monkeypatch.setattr("services.api.main.run_g1_analysis", _fake_run_g1_analysis)
 
@@ -42,6 +42,8 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
     assert body["meta"]["api_version"] == "v1"
     assert body["meta"]["stop_reason"] == "completed"
     assert body["meta"]["steps_used"] == 1
+    assert body["meta"]["prompt_version"] == "security_analysis_v2.txt"
+    assert body["meta"]["rubric_label"] == "strong"
 
 
 def test_sandbox_scenarios_endpoint(monkeypatch):

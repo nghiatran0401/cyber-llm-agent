@@ -88,6 +88,43 @@ class AgentEvaluator:
             "results": results,
         }
 
+    def evaluate_rubric(
+        self,
+        response: str,
+        rubric: Dict[str, List[str]] | None = None,
+    ) -> Dict[str, Any]:
+        """Score response quality against lightweight rubric checks."""
+        content = (response or "").lower()
+        criteria = rubric or {
+            "evidence": ["source:", "#chunk-", "indicator", "evidence"],
+            "severity": ["severity", "critical", "high", "medium", "low"],
+            "actions": ["recommended", "contain", "block", "isolate", "monitor", "remediation"],
+            "clarity": ["summary", "threat", "assessment", "next steps"],
+        }
+        checks: Dict[str, bool] = {}
+        score_points = 0
+        for name, keywords in criteria.items():
+            passed = any(keyword in content for keyword in keywords)
+            checks[name] = passed
+            if passed:
+                score_points += 1
+
+        max_points = max(1, len(criteria))
+        rubric_score = round((score_points / max_points) * 5, 2)
+        if rubric_score >= 4.0:
+            label = "strong"
+        elif rubric_score >= 2.5:
+            label = "acceptable"
+        else:
+            label = "weak"
+
+        return {
+            "rubric_score": rubric_score,
+            "rubric_label": label,
+            "checks": checks,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
     @staticmethod
     def _invoke_agent(agent: Any, prompt: str) -> str:
         """Invoke agent across common interfaces and normalize to text."""

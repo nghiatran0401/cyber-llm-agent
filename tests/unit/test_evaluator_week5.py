@@ -50,3 +50,13 @@ def test_run_benchmark_returns_aggregate_metrics():
     assert results["average_precision"] >= 0.5
     assert results["average_recall"] >= 0.5
 
+
+def test_evaluate_rubric_returns_score_and_label():
+    evaluator = AgentEvaluator()
+    result = evaluator.evaluate_rubric(
+        "Severity: high\nSource: AlienVault OTX\nRecommended actions: isolate host and monitor."
+    )
+    assert result["rubric_score"] >= 2.5
+    assert result["rubric_label"] in {"strong", "acceptable", "weak"}
+    assert "checks" in result
+
