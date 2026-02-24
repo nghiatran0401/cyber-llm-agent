@@ -1,28 +1,37 @@
 PYTHON ?= python
 IMAGE ?= cyber-llm-agent:latest
 
-.PHONY: install test lint run-streamlit smoke ci docker-build docker-run
+.PHONY: install install-web test test-web lint run-api run-web smoke ci docker-build docker-run
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 
+install-web:
+	npm --prefix apps/web install
+
 test:
 	pytest -q
 
+test-web:
+	npm --prefix apps/web run test
+
 lint:
-	$(PYTHON) -m py_compile ui/streamlit/app.py src/agents/g1/simple_agent.py src/agents/g2/multiagent_system.py
+	$(PYTHON) -m py_compile src/agents/g1/simple_agent.py src/agents/g2/multiagent_system.py services/api/*.py
 
 ci: lint test smoke
 
-run-streamlit:
-	streamlit run ui/streamlit/app.py --server.address 127.0.0.1 --server.port 8501
+run-api:
+	uvicorn services.api.main:app --host 127.0.0.1 --port 8000 --reload
+
+run-web:
+	npm --prefix apps/web run dev
 
 smoke:
-	$(PYTHON) -m py_compile ui/streamlit/app.py src/agents/g1/*.py src/agents/g2/*.py
+	$(PYTHON) -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
 	pytest -q tests/unit/test_memory_week4.py tests/unit/test_multiagent_week6.py
 
 docker-build:
 	docker build -t $(IMAGE) .
 
 docker-run:
-	docker run --rm -p 8501:8501 --env-file .env $(IMAGE)
+	docker run --rm -p 8000:8000 --env-file .env $(IMAGE)

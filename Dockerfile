@@ -15,9 +15,9 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . .
 
-EXPOSE 8501
+EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl --fail http://127.0.0.1:8501 || exit 1
+  CMD curl --fail http://127.0.0.1:8000/api/v1/health || exit 1
 
-CMD ["streamlit", "run", "ui/streamlit/app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
+CMD ["uvicorn", "services.api.main:app", "--host=0.0.0.0", "--port=8000"]
