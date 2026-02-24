@@ -9,6 +9,7 @@ from src.agents.multiagent_system import (
     incident_responder_node,
     orchestrator_node,
     create_multiagent_workflow,
+    run_multiagent_with_trace,
 )
 
 
@@ -60,4 +61,15 @@ def test_create_multiagent_workflow_runs_end_to_end():
     result = workflow.invoke(create_initial_state("Port scan and failed login activity detected."))
     assert result["final_report"]
     assert len(llm.prompts) >= 4
+
+
+def test_run_multiagent_with_trace_returns_four_steps():
+    llm = _FakeLLM()
+    traced = run_multiagent_with_trace("Failed login and scan patterns detected.", llm=llm)
+
+    assert "result" in traced
+    assert "trace" in traced
+    assert len(traced["trace"]) == 4
+    assert traced["trace"][0]["step"] == "LogAnalyzer"
+    assert traced["trace"][-1]["step"] == "Orchestrator"
 
