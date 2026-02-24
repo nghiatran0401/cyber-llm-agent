@@ -71,11 +71,14 @@ def test_run_multiagent_with_trace_returns_four_steps():
     assert "trace" in traced
     assert "stop_reason" in traced
     assert "steps_used" in traced
-    assert len(traced["trace"]) == 4
+    assert len(traced["trace"]) >= 7
     assert traced["trace"][0]["step"] == "LogAnalyzer"
     assert traced["trace"][-1]["step"] == "Orchestrator"
+    assert any(step["step"] == "WorkerPlanner" for step in traced["trace"])
+    assert any(step["step"] == "WorkerTask" for step in traced["trace"])
+    assert any(step["step"] == "Verifier" for step in traced["trace"])
     assert traced["stop_reason"] == "completed"
-    assert traced["steps_used"] == 4
+    assert traced["steps_used"] == len(traced["trace"])
 
 
 def test_run_multiagent_with_trace_stops_when_step_budget_exceeded(monkeypatch):

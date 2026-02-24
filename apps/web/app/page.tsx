@@ -21,7 +21,16 @@ const G1_MONITOR_STEPS = [
   "StructuredOutput",
   "CriticReview",
 ];
-const G2_MONITOR_STEPS = ["LogAnalyzer", "ThreatPredictor", "IncidentResponder", "Orchestrator"];
+const G2_MONITOR_STEPS = [
+  "LogAnalyzer",
+  "WorkerPlanner",
+  "ThreatPredictor",
+  "WorkerTask",
+  "IncidentResponder",
+  "Verifier",
+  "IncidentResponderRetry",
+  "Orchestrator",
+];
 
 const G1_SYSTEM_PHASES = [
   {
@@ -54,14 +63,14 @@ const G2_SYSTEM_PHASES = [
   {
     id: "reason",
     title: "2) Reason About Risk",
-    desc: "Agent 2 predicts attacker next moves and estimates impact/risk.",
-    stepKeys: ["ThreatPredictor"],
+    desc: "Orchestrator plans worker tasks and Agent 2 predicts attacker next moves.",
+    stepKeys: ["WorkerPlanner", "ThreatPredictor", "WorkerTask"],
   },
   {
     id: "respond",
     title: "3) Build Response Plan",
-    desc: "Agents 3 and 4 propose actions and combine findings into one final report.",
-    stepKeys: ["IncidentResponder", "Orchestrator"],
+    desc: "Responder drafts actions, verifier checks quality, then orchestrator finalizes report.",
+    stepKeys: ["IncidentResponder", "Verifier", "IncidentResponderRetry", "Orchestrator"],
   },
 ];
 

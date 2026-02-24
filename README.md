@@ -105,6 +105,7 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
   - `MAX_AGENT_STEPS`
   - `MAX_TOOL_CALLS`
   - `MAX_RUNTIME_SECONDS`
+  - `MAX_WORKER_TASKS`
 - `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
 - `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
 - Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.

@@ -39,9 +39,10 @@ class Settings:
     VALIDATE_ON_STARTUP = os.getenv("VALIDATE_ON_STARTUP", "true").lower() == "true"
     AGENT_CACHE_TTL_SECONDS = int(os.getenv("AGENT_CACHE_TTL_SECONDS", "3600"))
     AGENT_CACHE_MAX_SIZE = int(os.getenv("AGENT_CACHE_MAX_SIZE", "100"))
-    MAX_AGENT_STEPS = int(os.getenv("MAX_AGENT_STEPS", "6"))
+    MAX_AGENT_STEPS = int(os.getenv("MAX_AGENT_STEPS", "12"))
     MAX_TOOL_CALLS = int(os.getenv("MAX_TOOL_CALLS", "8"))
     MAX_RUNTIME_SECONDS = int(os.getenv("MAX_RUNTIME_SECONDS", "60"))
+    MAX_WORKER_TASKS = int(os.getenv("MAX_WORKER_TASKS", "4"))
 
     # CTI provider configuration
     CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").lower()
@@ -126,6 +127,8 @@ class Settings:
             raise ValueError("MAX_TOOL_CALLS must be greater than 0.")
         if cls.MAX_RUNTIME_SECONDS <= 0:
             raise ValueError("MAX_RUNTIME_SECONDS must be greater than 0.")
+        if cls.MAX_WORKER_TASKS <= 0:
+            raise ValueError("MAX_WORKER_TASKS must be greater than 0.")
         if cls.RAG_CHUNK_SIZE <= 0:
             raise ValueError("RAG_CHUNK_SIZE must be greater than 0.")
         if cls.RAG_MAX_RESULTS <= 0:
