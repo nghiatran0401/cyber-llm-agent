@@ -1,30 +1,61 @@
-# CyberSecurity LLM Agents Project
+# Cyber LLM SOC Assistant
 
-## Project Overview
+Production-oriented AI assistant for security teams. It analyzes logs, predicts likely attack progression, and generates practical incident response recommendations with transparent reasoning.
 
-This project implements an LLM-powered cybersecurity support agent (G1) and multiagent system (G2) that diagnoses issues, detects/predicts cyber attacks, and integrates CTI reports for proactive defense.
+## Why This Exists
 
-**Course**: COS30018 - Intelligent Systems  
-**Duration**: Weeks 3-12 (10 weeks)  
-**Target**: High Distinction (HD)
+Security operations teams face alert fatigue and slow triage. This project helps by:
 
-## Quick Start
+- turning raw logs into structured, actionable findings
+- showing live step-by-step agent reasoning for trust and explainability
+- supporting training workflows with an optional local OWASP sandbox
 
-### Prerequisites
+## Core Capabilities
+
+- **G1 Single Agent**
+  - Tool-enabled analysis with adaptive model routing
+  - Memory/session support for better multi-turn context
+- **G2 Multiagent Workflow**
+  - `LogAnalyzer` -> `ThreatPredictor` -> `IncidentResponder` -> `Orchestrator`
+  - Each step contributes to a final executive-ready summary
+- **Streamlit UI**
+  - 3 views: upload logs, interactive chat, OWASP sandbox
+  - Live trace for both G1 and G2
+
+## Architecture (High Level)
+
+```text
+Input (Logs / Chat / Sandbox Event)
+    -> Agent Runtime (G1 or G2 pipeline)
+    -> Findings + Threat Prediction + Response Plan
+```
+
+## Quick Start (Local)
+
+### 1) Prerequisites
 
 - Python 3.10+
 - OpenAI API key
+- Docker (optional, recommended)
 
-### Setup
+### 2) Configure environment
 
 ```bash
 cp .env.example .env
-# edit .env and set OPENAI_API_KEY
-make install
-make test
+# Update .env values (OPENAI_API_KEY is required)
 ```
 
-### Run the customer UI
+`.env` is the single source of truth for app configuration.
+
+### 3) Install and validate
+
+```bash
+make install
+make test
+make smoke
+```
+
+### 4) Run the app
 
 ```bash
 make run-streamlit
@@ -32,85 +63,51 @@ make run-streamlit
 
 Open `http://127.0.0.1:8501`.
 
-## Project Structure
-
-```
-cyber-llm-agent/
-├── src/
-│   ├── agents/
-│   │   ├── g1/                 # Single-agent modules (base, simple, memory)
-│   │   ├── g2/                 # Multiagent modules (roles, workflow)
-│   │   └── *.py                # Backward-compatible import wrappers
-│   ├── tools/                  # Security tools (log parser, CTI fetch)
-│   ├── sandbox/                # OWASP sandbox event generation/logging
-│   ├── utils/                  # Memory, sessions, evaluation, logging
-│   └── config/                 # Configuration and model routing policy
-├── ui/
-│   ├── streamlit/app.py        # Primary customer-facing UI
-│   └── gradio/app.py           # Alternative UI (optional)
-├── tests/
-│   ├── unit/                   # Unit tests
-│   └── integration/            # Integration tests
-├── data/
-│   └── benchmarks/             # Threat case datasets
-├── prompts/                    # Prompt templates (versioned)
-├── requirements.txt
-├── plan.md
-└── README.md
-```
-
-## Usage
-
-### Running the Single Agent (G1)
+## Run with Docker
 
 ```bash
-python -m src.agents.g1.simple_agent
+make docker-build
+make docker-run
 ```
 
-### Running the Multiagent System (G2)
+The container reads runtime config from `.env` only.
 
-```bash
-python -m src.agents.g2.multiagent_system
+## Configuration Notes
+
+- `ENVIRONMENT=production` forces sandbox off by validation rules.
+- `ENABLE_SANDBOX=true` is for local training/non-production use.
+- Do **not** commit real secrets (`.env` is ignored).
+
+## Quality Gate
+
+CI pipeline (`.github/workflows/ci.yml`) runs:
+
+- compile checks (`make lint`)
+- full tests (`make test`)
+- smoke tests (`make smoke`)
+
+## Repository Layout
+
+```text
+src/
+  agents/
+    g1/              # single-agent modules
+    g2/              # multiagent workflow modules
+  config/            # centralized settings and validation
+  sandbox/           # local OWASP event simulation
+  tools/             # log parser + CTI tools
+  utils/             # memory, session, evaluator, logging
+ui/streamlit/app.py
+tests/
 ```
 
-### Running the UI (manual)
+## Open-Source Readiness
 
-```bash
-streamlit run ui/streamlit/app.py
-```
-
-### Useful commands
-
-```bash
-make lint
-make smoke
-make run-gradio
-```
-
-## Development Workflow
-
-1. **Week 1-2**: Foundations & Setup (Phase 1) ✅
-2. **Week 3-5**: Single Autonomous Agent (G1)
-3. **Week 6-8**: Multiagent System & UI (G2)
-4. **Week 9-10**: Evaluation & Analysis
-5. **Week 11-12**: Documentation & Submission
-
-## Key Features
-
-- **G1 (Single Agent)**: Log analysis, threat detection, CTI integration
-- **G2 (Multiagent)**: Specialized agents (LogAnalyzer, ThreatPredictor, IncidentResponder, Orchestrator)
-- **UI**: Streamlit/Gradio web interface
-- **Deployment**: HuggingFace Spaces (cloud deployment)
-
-## Contributing
-
-See `plan.md` for detailed project plan and development guidelines.
+- Security policy: `SECURITY.md`
+- Contributing guide: `CONTRIBUTING.md`
+- Code of conduct: `CODE_OF_CONDUCT.md`
+- License: `LICENSE` (MIT)
 
 ## License
 
-[Add license information]
-
-## Contact
-
-[Add team contact information]
-
+MIT
