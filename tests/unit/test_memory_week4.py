@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.agents.agent_with_memory import StatefulSecurityAgent
+from src.agents.g1.agent_with_memory import StatefulSecurityAgent
 from src.utils.memory_manager import ConversationMemory
 from src.utils.session_manager import SessionManager
 

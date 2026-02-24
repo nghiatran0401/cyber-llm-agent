@@ -18,9 +18,13 @@ Security operations teams face alert fatigue and slow triage. This project helps
 - **G2 Multiagent Workflow**
   - `LogAnalyzer` -> `ThreatPredictor` -> `IncidentResponder` -> `Orchestrator`
   - Each step contributes to a final executive-ready summary
-- **Streamlit UI**
-  - 3 views: upload logs, interactive chat, OWASP sandbox
-  - Live trace for both G1 and G2
+- **FastAPI Backend**
+  - API endpoints for G1/G2/chat/sandbox workflows
+  - OpenAPI docs for typed integration (`/api/v1/*`)
+- **Next.js Web Frontend**
+  - Next.js + Tailwind + TypeScript app in `apps/web`
+  - Unified ChatGPT-style workspace combining chat + log analysis
+  - OWASP sandbox view with live trace
 
 ## Architecture (High Level)
 
@@ -36,6 +40,7 @@ Input (Logs / Chat / Sandbox Event)
 
 - Python 3.10+
 - OpenAI API key
+- Node.js 20+ (for Next.js frontend)
 - Docker (optional, recommended)
 
 ### 2) Configure environment
@@ -51,17 +56,31 @@ cp .env.example .env
 
 ```bash
 make install
+make install-web
 make test
+make test-web
 make smoke
 ```
 
-### 4) Run the app
+### 4) Run the API service
 
 ```bash
-make run-streamlit
+make run-api
 ```
 
-Open `http://127.0.0.1:8501`.
+Open `http://127.0.0.1:8000/docs` for OpenAPI docs.
+
+### 5) Run the Next.js frontend
+
+```bash
+make install-web
+cp apps/web/.env.local.example apps/web/.env.local
+make run-web
+```
+
+Open `http://127.0.0.1:3000`.
+
+The web app expects the FastAPI backend at `NEXT_PUBLIC_API_BASE_URL` (default `http://127.0.0.1:8000`).
 
 ## Run with Docker
 
@@ -70,7 +89,7 @@ make docker-build
 make docker-run
 ```
 
-The container reads runtime config from `.env` only.
+The container runs the FastAPI backend and reads runtime config from `.env`.
 
 ## Configuration Notes
 
@@ -84,6 +103,7 @@ CI pipeline (`.github/workflows/ci.yml`) runs:
 
 - compile checks (`make lint`)
 - full tests (`make test`)
+- frontend API integration tests (`make test-web`)
 - smoke tests (`make smoke`)
 
 ## Repository Layout
@@ -97,7 +117,8 @@ src/
   sandbox/           # local OWASP event simulation
   tools/             # log parser + CTI tools
   utils/             # memory, session, evaluator, logging
-ui/streamlit/app.py
+services/api/        # FastAPI endpoints wrapping G1/G2
+apps/web/            # Next.js + Tailwind + TypeScript frontend
 tests/
 ```
 

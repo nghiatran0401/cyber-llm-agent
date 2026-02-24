@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(
 
 def test_base_agent_initialization():
     """Test that base agent can be initialized."""
-    from src.agents.base_agent import CyberSecurityAgent
+    from src.agents.g1.base_agent import CyberSecurityAgent
     
     agent = CyberSecurityAgent()
     assert agent is not None
@@ -22,7 +22,7 @@ def test_base_agent_initialization():
 
 def test_base_agent_analyze_log():
     """Test base agent can analyze a log entry."""
-    from src.agents.base_agent import CyberSecurityAgent
+    from src.agents.g1.base_agent import CyberSecurityAgent
     
     agent = CyberSecurityAgent()
     test_log = "Failed login attempt from IP 192.168.1.100 after 5 tries"
@@ -36,29 +36,28 @@ def test_base_agent_analyze_log():
 
 def test_base_agent_empty_log():
     """Test base agent handles empty log gracefully."""
-    from src.agents.base_agent import CyberSecurityAgent
+    from src.agents.g1.base_agent import CyberSecurityAgent
     
     agent = CyberSecurityAgent()
     result = agent.analyze_log("")
     assert "Error" in result or "empty" in result.lower()
 
 
-@patch('src.agents.simple_agent.ChatOpenAI')
+@patch('src.agents.g1.simple_agent.ChatOpenAI')
 def test_simple_agent_creation(mock_chat_openai):
     """Test simple agent can be created (mocked)."""
-    from src.agents.simple_agent import create_simple_agent
+    from src.agents.g1.simple_agent import create_simple_agent
     
     # Mock the LLM
     mock_llm_instance = MagicMock()
     mock_chat_openai.return_value = mock_llm_instance
     
     # Mock the agent creation process
-    with patch('src.agents.simple_agent.create_react_agent') as mock_create_agent:
-        with patch('src.agents.simple_agent.AgentExecutor') as mock_executor:
+    with patch('src.agents.g1.simple_agent.create_agent') as mock_create_agent:
+        with patch('src.agents.g1.simple_agent.Settings.validate') as mock_validate:
             mock_agent = MagicMock()
             mock_create_agent.return_value = mock_agent
-            mock_executor_instance = MagicMock()
-            mock_executor.return_value = mock_executor_instance
+            mock_validate.return_value = True
             
             agent = create_simple_agent(verbose=False)
             assert agent is not None
@@ -66,7 +65,7 @@ def test_simple_agent_creation(mock_chat_openai):
 
 def test_simple_agent_with_real_api():
     """Test simple agent with real API (requires OPENAI_API_KEY)."""
-    from src.agents.simple_agent import create_simple_agent
+    from src.agents.g1.simple_agent import create_simple_agent
     
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY not set")
@@ -86,7 +85,7 @@ def test_simple_agent_with_real_api():
 
 def test_agent_tool_integration():
     """Test that agent can use tools."""
-    from src.agents.simple_agent import create_simple_agent
+    from src.agents.g1.simple_agent import create_simple_agent
     from pathlib import Path
     
     if not os.getenv("OPENAI_API_KEY"):
@@ -113,7 +112,7 @@ def test_agent_tool_integration():
 
 def test_agent_cti_fetch():
     """Test agent can fetch CTI intelligence."""
-    from src.agents.simple_agent import create_simple_agent
+    from src.agents.g1.simple_agent import create_simple_agent
     
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY not set")

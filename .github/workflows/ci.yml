@@ -21,6 +21,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -30,6 +35,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          npm --prefix apps/web install
 
       - name: Compile checks
         run: make lint
@@ -39,3 +45,6 @@ jobs:
 
       - name: Smoke checks
         run: make smoke
+
+      - name: Frontend API integration tests
+        run: make test-web

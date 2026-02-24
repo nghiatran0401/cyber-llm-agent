@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.agents.multiagent_system import (
+from src.agents.g2.multiagent_system import (
     create_initial_state,
     log_analyzer_node,
     threat_predictor_node,
