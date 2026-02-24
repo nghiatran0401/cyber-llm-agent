@@ -56,8 +56,12 @@ class Settings:
             raise ValueError(
                 f"ENVIRONMENT must be one of {sorted(allowed_envs)}; got '{cls.ENVIRONMENT}'."
             )
+        if cls.ENVIRONMENT == "production" and cls.ENABLE_SANDBOX:
+            raise ValueError("ENABLE_SANDBOX must be false when ENVIRONMENT=production.")
         if not cls.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is required. Set it in .env file.")
+        if not cls.FAST_MODEL_NAME or not cls.STRONG_MODEL_NAME:
+            raise ValueError("FAST_MODEL_NAME and STRONG_MODEL_NAME must be configured.")
         if not (0.0 <= cls.TEMPERATURE <= 1.0):
             raise ValueError("TEMPERATURE must be between 0.0 and 1.0.")
         if cls.MAX_TOKENS <= 0:
