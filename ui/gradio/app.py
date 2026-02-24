@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import gradio as gr
 
-from src.agents.agent_with_memory import create_agent_with_memory
-from src.agents.multiagent_system import create_initial_state, create_multiagent_workflow
+from src.agents.g1.agent_with_memory import create_agent_with_memory
+from src.agents.g2.multiagent_system import create_initial_state, create_multiagent_workflow
 
 
 def _single_agent_analysis(logs_text: str) -> str:
