@@ -40,8 +40,23 @@ def parse_system_log(log_file_path: str) -> str:
             return "No log file found at the specified path."
         
         relevant_logs = []
-        security_keywords = ['failed', 'error', 'unauthorized', 'denied', 'attack', 
-                           'suspicious', 'breach', 'malware', 'intrusion', 'scan']
+        security_keywords = [
+            'failed',
+            'error',
+            'unauthorized',
+            'denied',
+            'attack',
+            'suspicious',
+            'breach',
+            'malware',
+            'intrusion',
+            'scan',
+            'xss',
+            'sql injection',
+            'sqli',
+            'brute force',
+            'credential stuffing',
+        ]
         
         with open(log_path, 'r', encoding='utf-8') as f:
             for line_num, line in enumerate(f, 1):
