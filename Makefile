@@ -1,7 +1,7 @@
 PYTHON ?= python
 IMAGE ?= cyber-llm-agent:latest
 
-.PHONY: install install-web test test-web lint run-api run-web smoke ci docker-build docker-run
+.PHONY: install install-web test test-web lint run-api run-web smoke smoke-checklist ci docker-build docker-run
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -29,6 +29,9 @@ run-web:
 smoke:
 	$(PYTHON) -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
 	pytest -q tests/unit/test_memory_week4.py tests/unit/test_multiagent_week6.py
+
+smoke-checklist:
+	$(PYTHON) scripts/smoke_checklist.py
 
 docker-build:
 	docker build -t $(IMAGE) .

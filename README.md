@@ -20,6 +20,8 @@ Security operations teams face alert fatigue and slow triage. This project helps
   - Each step contributes to a final executive-ready summary
 - **FastAPI Backend**
   - API endpoints for G1/G2/chat/sandbox workflows
+  - Optional API key auth + rate limiting middleware
+  - Health (`/api/v1/health`) and readiness (`/api/v1/ready`) probes
   - OpenAPI docs for typed integration (`/api/v1/*`)
 - **Next.js Web Frontend**
   - Next.js + Tailwind + TypeScript app in `apps/web`
@@ -60,6 +62,7 @@ make install-web
 make test
 make test-web
 make smoke
+make smoke-checklist
 ```
 
 ### 4) Run the API service
@@ -96,12 +99,26 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 - `ENVIRONMENT=production` forces sandbox off by validation rules.
 - `ENABLE_SANDBOX=true` is for local training/non-production use.
 - Sandbox API routes return `403` when sandbox is disabled.
+- API key protection can be enabled with `API_AUTH_ENABLED=true` and `API_AUTH_KEY=<secret>`.
+- Basic rate limiting can be enabled with `API_RATE_LIMIT_ENABLED=true`.
+- Agent run-loop safety caps are controlled by:
+  - `MAX_AGENT_STEPS`
+  - `MAX_TOOL_CALLS`
+  - `MAX_RUNTIME_SECONDS`
 - `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
 - `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
+- Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.
 - CTI tool input supports:
   - threat-type queries (example: `ransomware`)
   - IOC queries (example: `ioc:ip:1.2.3.4`, `ioc:domain:example.com`, `ioc:url:https://bad.example`, `ioc:hash:<sha256>`)
 - Do **not** commit real secrets (`.env` is ignored).
+
+### Local RAG quick check
+
+1. Add one or more `.md`/`.txt` knowledge files under `data/knowledge/`.
+2. Set `ENABLE_RAG=true` in `.env`.
+3. Ask a G1/G2 question containing known terms from those files.
+4. Confirm the answer includes retrieval citations from the `RAGRetriever` tool output.
 
 ## OTX Rollout Guidance
 
@@ -118,6 +135,12 @@ CI pipeline (`.github/workflows/ci.yml`) runs:
 - full tests (`make test`)
 - frontend API integration tests (`make test-web`)
 - smoke tests (`make smoke`)
+
+For one-command endpoint checklist validation (auth/rate-limit/RAG + core API routes), run:
+
+```bash
+make smoke-checklist
+```
 
 ## Repository Layout
 

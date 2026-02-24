@@ -49,6 +49,7 @@ logs/
 data/sessions/*.json
 data/logs/*.log
 data/logs/*.jsonl
+data/knowledge/rag_index.json
 !data/logs/sample_logs.txt
 !data/logs/.gitkeep
 

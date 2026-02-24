@@ -4,6 +4,7 @@ from typing import Any
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from src.tools.security_tools import log_parser, cti_fetch
+from src.tools.rag_tools import rag_retriever
 from src.config.settings import Settings
 from src.utils.logger import setup_logger
 
@@ -26,6 +27,7 @@ Evidence policy:
 - If you use CTIFetch, preserve provenance explicitly by including this exact line in your final answer:
   Source: <provider from CTIFetch output>
 - Do not paraphrase or omit the Source line when CTIFetch was used.
+- If you use RAGRetriever, include a citations section exactly as returned by the tool.
 
 Always be thorough and provide actionable security recommendations."""
     return prompt
@@ -39,6 +41,8 @@ def _create_tool_agent(model_name: str, verbose: bool = True):
         openai_api_key=Settings.OPENAI_API_KEY,
     )
     tools = [log_parser, cti_fetch]
+    if Settings.ENABLE_RAG:
+        tools.append(rag_retriever)
     return create_agent(
         model=llm,
         tools=tools,

@@ -30,6 +30,19 @@ class Settings:
     ENABLE_SANDBOX = os.getenv("ENABLE_SANDBOX", "false").lower() == "true"
     ALLOWED_LOG_EXTENSIONS = {".txt", ".log", ".json", ".jsonl"}
 
+    # API security and startup controls
+    API_AUTH_ENABLED = os.getenv("API_AUTH_ENABLED", "false").lower() == "true"
+    API_AUTH_KEY = os.getenv("API_AUTH_KEY", "")
+    API_RATE_LIMIT_ENABLED = os.getenv("API_RATE_LIMIT_ENABLED", "false").lower() == "true"
+    API_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("API_RATE_LIMIT_WINDOW_SECONDS", "60"))
+    API_RATE_LIMIT_MAX_REQUESTS = int(os.getenv("API_RATE_LIMIT_MAX_REQUESTS", "60"))
+    VALIDATE_ON_STARTUP = os.getenv("VALIDATE_ON_STARTUP", "true").lower() == "true"
+    AGENT_CACHE_TTL_SECONDS = int(os.getenv("AGENT_CACHE_TTL_SECONDS", "3600"))
+    AGENT_CACHE_MAX_SIZE = int(os.getenv("AGENT_CACHE_MAX_SIZE", "100"))
+    MAX_AGENT_STEPS = int(os.getenv("MAX_AGENT_STEPS", "6"))
+    MAX_TOOL_CALLS = int(os.getenv("MAX_TOOL_CALLS", "8"))
+    MAX_RUNTIME_SECONDS = int(os.getenv("MAX_RUNTIME_SECONDS", "60"))
+
     # CTI provider configuration
     CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").lower()
     OTX_API_KEY = os.getenv("OTX_API_KEY", "")
@@ -40,6 +53,11 @@ class Settings:
     CTI_MAX_RESPONSE_CHARS = int(os.getenv("CTI_MAX_RESPONSE_CHARS", "3000"))
     CTI_TOP_RESULTS = int(os.getenv("CTI_TOP_RESULTS", "5"))
 
+    # RAG (basic local knowledge retrieval)
+    ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() == "true"
+    RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "180"))
+    RAG_MAX_RESULTS = int(os.getenv("RAG_MAX_RESULTS", "3"))
+
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
     DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
@@ -47,6 +65,7 @@ class Settings:
     SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", DATA_DIR / "sessions"))
     BENCHMARKS_DIR = DATA_DIR / "benchmarks"
     CTI_FEEDS_DIR = DATA_DIR / "cti_feeds"
+    KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", DATA_DIR / "knowledge"))
     
     # Ensure directories exist
     @classmethod
@@ -57,6 +76,7 @@ class Settings:
         cls.SESSIONS_DIR.mkdir(exist_ok=True)
         cls.BENCHMARKS_DIR.mkdir(exist_ok=True)
         cls.CTI_FEEDS_DIR.mkdir(exist_ok=True)
+        cls.KNOWLEDGE_DIR.mkdir(exist_ok=True)
     
     @classmethod
     def validate(cls):
@@ -90,6 +110,26 @@ class Settings:
             raise ValueError("CTI_MAX_RESPONSE_CHARS must be greater than 0.")
         if cls.CTI_TOP_RESULTS <= 0:
             raise ValueError("CTI_TOP_RESULTS must be greater than 0.")
+        if cls.API_RATE_LIMIT_WINDOW_SECONDS <= 0:
+            raise ValueError("API_RATE_LIMIT_WINDOW_SECONDS must be greater than 0.")
+        if cls.API_RATE_LIMIT_MAX_REQUESTS <= 0:
+            raise ValueError("API_RATE_LIMIT_MAX_REQUESTS must be greater than 0.")
+        if cls.API_AUTH_ENABLED and not cls.API_AUTH_KEY:
+            raise ValueError("API_AUTH_KEY is required when API_AUTH_ENABLED=true.")
+        if cls.AGENT_CACHE_TTL_SECONDS <= 0:
+            raise ValueError("AGENT_CACHE_TTL_SECONDS must be greater than 0.")
+        if cls.AGENT_CACHE_MAX_SIZE <= 0:
+            raise ValueError("AGENT_CACHE_MAX_SIZE must be greater than 0.")
+        if cls.MAX_AGENT_STEPS <= 0:
+            raise ValueError("MAX_AGENT_STEPS must be greater than 0.")
+        if cls.MAX_TOOL_CALLS <= 0:
+            raise ValueError("MAX_TOOL_CALLS must be greater than 0.")
+        if cls.MAX_RUNTIME_SECONDS <= 0:
+            raise ValueError("MAX_RUNTIME_SECONDS must be greater than 0.")
+        if cls.RAG_CHUNK_SIZE <= 0:
+            raise ValueError("RAG_CHUNK_SIZE must be greater than 0.")
+        if cls.RAG_MAX_RESULTS <= 0:
+            raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
         return True
 
     @classmethod

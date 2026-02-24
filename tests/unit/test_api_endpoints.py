@@ -26,7 +26,7 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
     def _fake_run_g1_analysis(user_input: str, session_id=None):
         assert user_input == "test input"
         assert session_id == "s-1"
-        return "mocked response", [], "gpt-4o-mini"
+        return "mocked response", [], "gpt-4o-mini", "completed", 1
 
     monkeypatch.setattr("services.api.main.run_g1_analysis", _fake_run_g1_analysis)
 
@@ -40,6 +40,8 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
     assert body["result"] == "mocked response"
     assert body["meta"]["mode"] == "g1"
     assert body["meta"]["api_version"] == "v1"
+    assert body["meta"]["stop_reason"] == "completed"
+    assert body["meta"]["steps_used"] == 1
 
 
 def test_sandbox_scenarios_endpoint(monkeypatch):
@@ -89,7 +91,7 @@ def test_workspace_stream_emits_trace_and_final(monkeypatch):
                 },
             )()
         )
-        return "final answer", "gpt-4o-mini"
+        return "final answer", "gpt-4o-mini", "completed", 2
 
     monkeypatch.setattr("services.api.main.run_workspace_with_progress", _fake_run_workspace_with_progress)
 
@@ -107,3 +109,35 @@ def test_workspace_stream_emits_trace_and_final(monkeypatch):
     assert any(event["type"] == "trace" for event in events)
     assert any(event["type"] == "final" and event["result"] == "final answer" for event in events)
     assert any(event["type"] == "done" for event in events)
+    final_event = next(event for event in events if event.get("type") == "final")
+    assert final_event["meta"]["stop_reason"] == "completed"
+    assert final_event["meta"]["steps_used"] == 2
+
+
+def test_auth_middleware_rejects_missing_key(monkeypatch):
+    client = TestClient(app)
+    monkeypatch.setattr("services.api.main.Settings.API_AUTH_ENABLED", True)
+    monkeypatch.setattr("services.api.main.Settings.API_AUTH_KEY", "top-secret")
+
+    response = client.post("/api/v1/analyze/g1", json={"input": "hello"})
+    assert response.status_code == 401
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "HTTP_401"
+
+
+def test_rate_limit_middleware_returns_429(monkeypatch):
+    client = TestClient(app)
+    monkeypatch.setattr("services.api.main.Settings.API_AUTH_ENABLED", False)
+    monkeypatch.setattr("services.api.main.Settings.API_RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr("services.api.main.Settings.API_RATE_LIMIT_WINDOW_SECONDS", 60)
+    monkeypatch.setattr("services.api.main.Settings.API_RATE_LIMIT_MAX_REQUESTS", 1)
+    monkeypatch.setattr("services.api.main.run_g1_analysis", lambda *_args, **_kwargs: ("ok", [], "gpt-4o-mini"))
+    from services.api.main import _RATE_BUCKETS
+    _RATE_BUCKETS.clear()
+
+    first = client.post("/api/v1/analyze/g1", json={"input": "hello"})
+    second = client.post("/api/v1/analyze/g1", json={"input": "hello again"})
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.headers.get("Retry-After")

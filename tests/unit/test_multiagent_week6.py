@@ -69,7 +69,21 @@ def test_run_multiagent_with_trace_returns_four_steps():
 
     assert "result" in traced
     assert "trace" in traced
+    assert "stop_reason" in traced
+    assert "steps_used" in traced
     assert len(traced["trace"]) == 4
     assert traced["trace"][0]["step"] == "LogAnalyzer"
     assert traced["trace"][-1]["step"] == "Orchestrator"
+    assert traced["stop_reason"] == "completed"
+    assert traced["steps_used"] == 4
+
+
+def test_run_multiagent_with_trace_stops_when_step_budget_exceeded(monkeypatch):
+    llm = _FakeLLM()
+    monkeypatch.setattr("src.agents.g2.multiagent_system.Settings.MAX_AGENT_STEPS", 2)
+    traced = run_multiagent_with_trace("Failed login and scan patterns detected.", llm=llm)
+
+    assert traced["stop_reason"] == "budget_exceeded"
+    assert traced["steps_used"] == 2
+    assert len(traced["trace"]) == 2
 

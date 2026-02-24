@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ErrorInfo(BaseModel):
@@ -25,6 +26,8 @@ class ResponseMeta(BaseModel):
     mode: Optional[Literal["g1", "g2"]] = None
     model: Optional[str] = None
     duration_ms: Optional[int] = None
+    stop_reason: Optional[Literal["completed", "blocked", "needs_human", "budget_exceeded", "error"]] = None
+    steps_used: Optional[int] = None
 
 
 class StepTrace(BaseModel):
@@ -66,7 +69,7 @@ class WorkspaceStreamRequest(BaseModel):
 class SandboxSimulateRequest(BaseModel):
     """Request to generate a sandbox event."""
 
-    scenario: str
+    scenario: Literal["sqli", "xss", "bruteforce"]
     vulnerable_mode: bool = False
     source_ip: str = "127.0.0.1"
     append_to_live_log: bool = True
@@ -79,6 +82,14 @@ class SandboxAnalyzeRequest(BaseModel):
     mode: Literal["g1", "g2"] = "g1"
     session_id: Optional[str] = None
     include_trace: bool = True
+
+    @model_validator(mode="after")
+    def validate_event_payload(self):
+        if len(self.event) > 32:
+            raise ValueError("event has too many keys (max=32).")
+        if len(json.dumps(self.event, ensure_ascii=True)) > 10_000:
+            raise ValueError("event payload is too large (max=10,000 chars).")
+        return self
 
 
 class ApiResponse(BaseModel):

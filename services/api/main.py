@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+import os
+from collections import defaultdict, deque
+from contextlib import asynccontextmanager
 from queue import Empty, Queue
+from threading import Lock
 from threading import Thread
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -35,11 +39,22 @@ from .service import (
     simulate_sandbox_event,
 )
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    if Settings.VALIDATE_ON_STARTUP and "PYTEST_CURRENT_TEST" not in os.environ:
+        Settings.validate()
+    yield
+
+
 app = FastAPI(
     title="Cyber LLM Agent API",
     version="0.1.0",
     description="HTTP API wrapper for G1/G2 cybersecurity agent workflows.",
+    lifespan=_lifespan,
 )
+
+_RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
+_RATE_LOCK = Lock()
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +70,21 @@ def _require_sandbox_enabled() -> None:
         raise HTTPException(status_code=403, detail="Sandbox is disabled for this environment.")
 
 
+def _check_rate_limit(client_key: str) -> tuple[bool, int]:
+    now = perf_counter()
+    window = Settings.API_RATE_LIMIT_WINDOW_SECONDS
+    max_requests = Settings.API_RATE_LIMIT_MAX_REQUESTS
+    with _RATE_LOCK:
+        bucket = _RATE_BUCKETS[client_key]
+        while bucket and (now - bucket[0]) > window:
+            bucket.popleft()
+        if len(bucket) >= max_requests:
+            retry_after = int(window - (now - bucket[0])) if bucket else window
+            return False, max(1, retry_after)
+        bucket.append(now)
+    return True, 0
+
+
 def _build_success_response(
     request_id: str,
     mode: str | None,
@@ -62,6 +92,8 @@ def _build_success_response(
     result,
     trace,
     start_time: float,
+    stop_reason: str | None = None,
+    steps_used: int | None = None,
 ) -> ApiResponse:
     duration_ms = int((perf_counter() - start_time) * 1000)
     return ApiResponse(
@@ -73,9 +105,34 @@ def _build_success_response(
             mode=mode,
             model=model,
             duration_ms=duration_ms,
+            stop_reason=stop_reason,
+            steps_used=steps_used,
         ),
         error=None,
     )
+
+
+def _normalize_analysis_result(payload, fallback_steps: int = 1):
+    """Support both old and new service return tuple shapes."""
+    if isinstance(payload, tuple):
+        if len(payload) == 5:
+            return payload
+        if len(payload) == 3:
+            result, trace, model = payload
+            steps = len(trace) if isinstance(trace, list) and trace else fallback_steps
+            return result, trace, model, "completed", steps
+    raise TypeError("Unexpected service response shape.")
+
+
+def _normalize_workspace_result(payload):
+    """Support both old and new workspace return tuple shapes."""
+    if isinstance(payload, tuple):
+        if len(payload) == 4:
+            return payload
+        if len(payload) == 2:
+            result, model = payload
+            return result, model, "completed", 1
+    raise TypeError("Unexpected workspace response shape.")
 
 
 @app.get("/api/v1/health", response_model=ApiResponse)
@@ -94,12 +151,63 @@ def health() -> ApiResponse:
     )
 
 
+@app.middleware("http")
+async def request_guardrails(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/v1") and path != "/api/v1/health":
+        if Settings.API_AUTH_ENABLED:
+            provided = request.headers.get("x-api-key", "")
+            if provided != Settings.API_AUTH_KEY:
+                response = ApiResponse(
+                    ok=False,
+                    result=None,
+                    trace=[],
+                    meta=ResponseMeta(request_id=str(uuid4()), mode=None, model=None, duration_ms=None),
+                    error=ErrorInfo(code="HTTP_401", message="Unauthorized: invalid API key."),
+                )
+                return JSONResponse(status_code=401, content=response.model_dump())
+        if Settings.API_RATE_LIMIT_ENABLED:
+            client_key = (
+                request.headers.get("x-api-key") or (request.client.host if request.client else "unknown")
+            )
+            allowed, retry_after = _check_rate_limit(client_key=client_key)
+            if not allowed:
+                response = ApiResponse(
+                    ok=False,
+                    result=None,
+                    trace=[],
+                    meta=ResponseMeta(request_id=str(uuid4()), mode=None, model=None, duration_ms=None),
+                    error=ErrorInfo(code="HTTP_429", message="Rate limit exceeded. Try again shortly."),
+                )
+                return JSONResponse(
+                    status_code=429,
+                    content=response.model_dump(),
+                    headers={"Retry-After": str(retry_after)},
+                )
+    return await call_next(request)
+
+
+@app.get("/api/v1/ready", response_model=ApiResponse)
+def ready() -> ApiResponse:
+    request_id = str(uuid4())
+    Settings.validate()
+    return ApiResponse(
+        ok=True,
+        result={"status": "ready"},
+        trace=[],
+        meta=ResponseMeta(request_id=request_id, mode=None, model=None, duration_ms=0),
+        error=None,
+    )
+
+
 @app.post("/api/v1/analyze/g1", response_model=ApiResponse)
 def analyze_g1(payload: AnalyzeRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        response, trace, model = run_g1_analysis(payload.input, session_id=payload.session_id)
+        response, trace, model, stop_reason, steps_used = _normalize_analysis_result(
+            run_g1_analysis(payload.input, session_id=payload.session_id)
+        )
         return _build_success_response(
             request_id=request_id,
             mode="g1",
@@ -107,6 +215,8 @@ def analyze_g1(payload: AnalyzeRequest) -> ApiResponse:
             result=response,
             trace=trace if payload.include_trace else [],
             start_time=start_time,
+            stop_reason=stop_reason,
+            steps_used=steps_used,
         )
     except HTTPException:
         raise
@@ -119,7 +229,7 @@ def analyze_g2(payload: AnalyzeRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        result, trace, model = run_g2_analysis(payload.input)
+        result, trace, model, stop_reason, steps_used = _normalize_analysis_result(run_g2_analysis(payload.input))
         return _build_success_response(
             request_id=request_id,
             mode="g2",
@@ -127,6 +237,8 @@ def analyze_g2(payload: AnalyzeRequest) -> ApiResponse:
             result=result,
             trace=trace if payload.include_trace else [],
             start_time=start_time,
+            stop_reason=stop_reason,
+            steps_used=steps_used,
         )
     except HTTPException:
         raise
@@ -139,7 +251,9 @@ def chat(payload: ChatRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        response, trace, model = run_chat(payload.input, mode=payload.mode, session_id=payload.session_id)
+        response, trace, model, stop_reason, steps_used = _normalize_analysis_result(
+            run_chat(payload.input, mode=payload.mode, session_id=payload.session_id)
+        )
         return _build_success_response(
             request_id=request_id,
             mode=payload.mode,
@@ -147,6 +261,8 @@ def chat(payload: ChatRequest) -> ApiResponse:
             result=response,
             trace=trace if payload.include_trace else [],
             start_time=start_time,
+            stop_reason=stop_reason,
+            steps_used=steps_used,
         )
     except HTTPException:
         raise
@@ -168,12 +284,14 @@ def workspace_stream(payload: WorkspaceStreamRequest):
             def _on_step(step: StepTrace):
                 _put_event("trace", step=step.model_dump())
 
-            result, model = run_workspace_with_progress(
+            result, model, stop_reason, steps_used = _normalize_workspace_result(
+                run_workspace_with_progress(
                 task=payload.task,
                 mode=payload.mode,
                 user_input=payload.input,
                 on_step=_on_step,
                 session_id=payload.session_id,
+            )
             )
 
             duration_ms = int((perf_counter() - start_time) * 1000)
@@ -185,6 +303,8 @@ def workspace_stream(payload: WorkspaceStreamRequest):
                     mode=payload.mode,
                     model=model,
                     duration_ms=duration_ms,
+                    stop_reason=stop_reason,
+                    steps_used=steps_used,
                 ).model_dump(),
             )
         except Exception as exc:
@@ -269,10 +389,12 @@ def sandbox_analyze(payload: SandboxAnalyzeRequest) -> ApiResponse:
     start_time = perf_counter()
     try:
         _require_sandbox_enabled()
-        result, trace, model = analyze_sandbox_event(
-            event=payload.event,
-            mode=payload.mode,
-            session_id=payload.session_id,
+        result, trace, model, stop_reason, steps_used = _normalize_analysis_result(
+            analyze_sandbox_event(
+                event=payload.event,
+                mode=payload.mode,
+                session_id=payload.session_id,
+            )
         )
         return _build_success_response(
             request_id=request_id,
@@ -281,6 +403,8 @@ def sandbox_analyze(payload: SandboxAnalyzeRequest) -> ApiResponse:
             result=result,
             trace=trace if payload.include_trace else [],
             start_time=start_time,
+            stop_reason=stop_reason,
+            steps_used=steps_used,
         )
     except HTTPException:
         raise
@@ -299,3 +423,16 @@ async def http_exception_handler(_, exc: HTTPException):
         error=ErrorInfo(code=f"HTTP_{exc.status_code}", message=str(exc.detail)),
     )
     return JSONResponse(status_code=exc.status_code, content=response.model_dump())
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_, exc: Exception):
+    request_id = str(uuid4())
+    response = ApiResponse(
+        ok=False,
+        result=None,
+        trace=[],
+        meta=ResponseMeta(request_id=request_id, mode=None, model=None, duration_ms=None),
+        error=ErrorInfo(code="HTTP_500", message="Internal server error."),
+    )
+    return JSONResponse(status_code=500, content=response.model_dump())
