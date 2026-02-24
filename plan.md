@@ -2592,12 +2592,12 @@ submission.zip
 
 ### Risk Register (OWASP Sandbox Extension)
 
-| Risk | Impact | Mitigation |
-| ---- | ------ | ---------- |
-| Scope creep from building a full-featured sandbox platform | Delays core G1/G2 milestones | Strict 3-scenario cap and weekly checkpoint reviews |
-| Accidental exposure of vulnerable routes | Security and ethical risk | Localhost/container only, feature flags, no public vulnerable deployment |
-| Low-quality or inconsistent logs | Poor agent analysis quality | Enforce structured log schema and schema validation tests |
-| Demo instability during live run | Demo failure risk | Keep replayable fixture logs and fallback scripted demo flow |
+| Risk                                                       | Impact                       | Mitigation                                                               |
+| ---------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------ |
+| Scope creep from building a full-featured sandbox platform | Delays core G1/G2 milestones | Strict 3-scenario cap and weekly checkpoint reviews                      |
+| Accidental exposure of vulnerable routes                   | Security and ethical risk    | Localhost/container only, feature flags, no public vulnerable deployment |
+| Low-quality or inconsistent logs                           | Poor agent analysis quality  | Enforce structured log schema and schema validation tests                |
+| Demo instability during live run                           | Demo failure risk            | Keep replayable fixture logs and fallback scripted demo flow             |
 
 ---
 
