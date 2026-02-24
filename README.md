@@ -8,49 +8,29 @@ This project implements an LLM-powered cybersecurity support agent (G1) and mult
 **Duration**: Weeks 3-12 (10 weeks)  
 **Target**: High Distinction (HD)
 
-## Setup
+## Quick Start
 
 ### Prerequisites
 
-- Python 3.10+ (Python 3.13.2 recommended)
-- Conda environment (ml)
+- Python 3.10+
 - OpenAI API key
-- Git & GitHub account
 
-### Installation
+### Setup
 
-1. **Clone repository** (if applicable)
-   ```bash
-   git clone <your-repo-url>
-   cd ai-agent
-   ```
+```bash
+cp .env.example .env
+# edit .env and set OPENAI_API_KEY
+make install
+make test
+```
 
-2. **Activate conda environment**
-   ```bash
-   conda activate ml
-   ```
+### Run the customer UI
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+make run-streamlit
+```
 
-4. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your API keys
-   ```
-
-5. **Verify installation**
-   ```bash
-   python -c "from langchain_openai import ChatOpenAI; print('LangChain OK')"
-   python -c "import streamlit; print('Streamlit OK')"
-   ```
-
-6. **Run tests** (when available)
-   ```bash
-   pytest tests/
-   ```
+Open `http://127.0.0.1:8501`.
 
 ## Project Structure
 
@@ -93,10 +73,18 @@ python -m src.agents.g1.simple_agent
 python -m src.agents.g2.multiagent_system
 ```
 
-### Running the UI
+### Running the UI (manual)
 
 ```bash
 streamlit run ui/streamlit/app.py
+```
+
+### Useful commands
+
+```bash
+make lint
+make smoke
+make run-gradio
 ```
 
 ## Development Workflow
