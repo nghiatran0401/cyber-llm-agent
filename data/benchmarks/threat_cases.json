@@ -1,0 +1,46 @@
+{
+  "test_cases": [
+    {
+      "id": "case_001",
+      "name": "Brute Force Login Pattern",
+      "log": "Failed SSH login from 203.0.113.9 repeated 14 times in 2 minutes.",
+      "expected_keywords": ["brute force", "high", "failed login", "block ip"],
+      "unexpected_keywords": ["normal traffic"]
+    },
+    {
+      "id": "case_002",
+      "name": "Ransomware Indicator",
+      "log": "Mass file rename events and high entropy extensions detected on shared drive.",
+      "expected_keywords": ["ransomware", "critical", "isolate", "backup"],
+      "unexpected_keywords": ["safe"]
+    },
+    {
+      "id": "case_003",
+      "name": "DDoS Traffic Spike",
+      "log": "Inbound HTTP requests jumped to 9 million per minute from botnet-like IP range.",
+      "expected_keywords": ["ddos", "high", "rate limiting", "mitigation"],
+      "unexpected_keywords": ["low risk"]
+    },
+    {
+      "id": "case_004",
+      "name": "Phishing Campaign",
+      "log": "Multiple users clicked lookalike SSO link from spoofed sender domain.",
+      "expected_keywords": ["phishing", "medium", "mfa", "email filter"],
+      "unexpected_keywords": ["benign"]
+    },
+    {
+      "id": "case_005",
+      "name": "Port Scan Recon",
+      "log": "Sequential connection attempts observed across ports 22, 80, 443, 3389 from one host.",
+      "expected_keywords": ["port scan", "reconnaissance", "monitor", "firewall"],
+      "unexpected_keywords": ["user typo"]
+    },
+    {
+      "id": "case_006",
+      "name": "Privilege Escalation Suspicion",
+      "log": "Service account granted admin role outside approved change window.",
+      "expected_keywords": ["privilege escalation", "investigate", "audit", "high"],
+      "unexpected_keywords": ["expected change"]
+    }
+  ]
+}
