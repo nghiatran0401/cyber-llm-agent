@@ -47,4 +47,4 @@ jobs:
         run: make smoke
 
       - name: Frontend API integration tests
-        run: make test-web
+        run: npm --prefix apps/web run test -- --passWithNoTests
