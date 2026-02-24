@@ -14,7 +14,13 @@ type WorkspaceMessage = {
   content: string;
 };
 
-const G1_MONITOR_STEPS = ["InputPreparation", "RoutingPolicy", "SingleAgentExecution"];
+const G1_MONITOR_STEPS = [
+  "InputPreparation",
+  "RoutingPolicy",
+  "SingleAgentExecution",
+  "StructuredOutput",
+  "CriticReview",
+];
 const G2_MONITOR_STEPS = ["LogAnalyzer", "ThreatPredictor", "IncidentResponder", "Orchestrator"];
 
 const G1_SYSTEM_PHASES = [
@@ -33,8 +39,8 @@ const G1_SYSTEM_PHASES = [
   {
     id: "respond",
     title: "3) Build Response Plan",
-    desc: "Generate practical actions and combine findings into a clear final answer.",
-    stepKeys: ["SingleAgentExecution"],
+    desc: "Generate actions, structure evidence, and run a critic check before final answer.",
+    stepKeys: ["SingleAgentExecution", "StructuredOutput", "CriticReview"],
   },
 ];
 

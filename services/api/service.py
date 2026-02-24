@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -23,6 +25,7 @@ _HUMAN_NEEDED_SIGNALS = (
     "cannot determine",
     "unable to determine",
 )
+_SEVERITY_ORDER = ("critical", "high", "medium", "low")
 
 
 def _summarize_text(text: str, max_len: int = 220) -> str:
@@ -58,6 +61,78 @@ def _infer_stop_reason(response_text: str) -> str:
     if not content.strip():
         return "blocked"
     return "completed"
+
+
+def _extract_bullets(section_name: str, text: str) -> List[str]:
+    pattern = re.compile(rf"{re.escape(section_name)}\s*:?\s*(.*?)(?:\n\s*\n|$)", re.IGNORECASE | re.DOTALL)
+    match = pattern.search(text or "")
+    if not match:
+        return []
+    block = match.group(1)
+    bullets = []
+    for line in block.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("- ", "* ")):
+            bullets.append(stripped[2:].strip())
+    return [bullet for bullet in bullets if bullet]
+
+
+def _infer_severity(response_text: str) -> str:
+    lower = (response_text or "").lower()
+    for severity in _SEVERITY_ORDER:
+        if severity in lower:
+            return severity
+    return "unknown"
+
+
+def _extract_citations(response_text: str) -> List[str]:
+    citations: List[str] = []
+    for raw_line in (response_text or "").splitlines():
+        line = raw_line.strip()
+        if line.lower().startswith("source:"):
+            citations.append(line)
+        elif "#chunk-" in line:
+            citations.append(line.lstrip("- ").strip())
+    deduped: List[str] = []
+    for citation in citations:
+        if citation not in deduped:
+            deduped.append(citation)
+    return deduped
+
+
+def _build_structured_g1_report(response_text: str) -> Dict[str, Any]:
+    findings = _extract_bullets("findings", response_text)
+    actions = _extract_bullets("recommended actions", response_text) or _extract_bullets(
+        "recommended action", response_text
+    )
+    if not findings:
+        findings = [_summarize_text(response_text, 320)]
+    confidence = "low"
+    lower = (response_text or "").lower()
+    if "confidence: high" in lower:
+        confidence = "high"
+    elif "confidence: medium" in lower:
+        confidence = "medium"
+    return {
+        "severity": _infer_severity(response_text),
+        "findings": findings,
+        "recommended_actions": actions,
+        "confidence": confidence,
+        "citations": _extract_citations(response_text),
+    }
+
+
+def _critic_validate_structured_output(structured: Dict[str, Any], high_risk: bool) -> tuple[bool, str]:
+    findings = structured.get("findings") or []
+    actions = structured.get("recommended_actions") or []
+    citations = structured.get("citations") or []
+    if not findings:
+        return False, "Missing findings in structured output."
+    if high_risk and not actions:
+        return False, "High-risk response missing recommended actions."
+    if high_risk and not citations:
+        return False, "High-risk response missing evidence citations."
+    return True, "Structured output passed critic checks."
 
 
 def _run_single_agent_loop(agent: Any, user_input: str) -> tuple[str, str, int]:
@@ -174,6 +249,13 @@ def run_g1_analysis(
 
     agent = _get_or_create_memory_agent(session_id)
     response, stop_reason, steps_used = _run_single_agent_loop(agent, clean_input)
+    structured = _build_structured_g1_report(response)
+    critic_ok, critic_message = _critic_validate_structured_output(structured, high_risk=high_risk)
+    if not critic_ok:
+        response = _enforce_response_boundaries(
+            f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence."
+        )
+        stop_reason = "needs_human"
     trace.append(
         StepTrace(
             step="SingleAgentExecution",
@@ -190,6 +272,24 @@ def run_g1_analysis(
             prompt_preview=f"max_steps={Settings.MAX_AGENT_STEPS}, max_runtime_s={Settings.MAX_RUNTIME_SECONDS}",
             input_summary=f"steps_used={steps_used}",
             output_summary=f"stop_reason={stop_reason}",
+        )
+    )
+    trace.append(
+        StepTrace(
+            step="StructuredOutput",
+            what_it_does="Builds evidence-first structured report from model output.",
+            prompt_preview="schema={severity, findings, recommended_actions, confidence, citations}",
+            input_summary=_summarize_text(response),
+            output_summary=_summarize_text(json.dumps(structured, ensure_ascii=True)),
+        )
+    )
+    trace.append(
+        StepTrace(
+            step="CriticReview",
+            what_it_does="Validates structured output quality and evidence requirements.",
+            prompt_preview=f"high_risk={high_risk}",
+            input_summary=_summarize_text(json.dumps(structured, ensure_ascii=True)),
+            output_summary=f"pass={critic_ok}; reason={critic_message}",
         )
     )
     return response, trace, selected_model, stop_reason, steps_used
@@ -228,6 +328,13 @@ def run_g1_analysis_with_progress(
 
     agent = _get_or_create_memory_agent(session_id)
     response, stop_reason, steps_used = _run_single_agent_loop(agent, clean_input)
+    structured = _build_structured_g1_report(response)
+    critic_ok, critic_message = _critic_validate_structured_output(structured, high_risk=high_risk)
+    if not critic_ok:
+        response = _enforce_response_boundaries(
+            f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence."
+        )
+        stop_reason = "needs_human"
     step3 = StepTrace(
         step="SingleAgentExecution",
         what_it_does="Runs a memory-enabled agent with tools.",
@@ -243,6 +350,24 @@ def run_g1_analysis_with_progress(
             prompt_preview=f"max_steps={Settings.MAX_AGENT_STEPS}, max_runtime_s={Settings.MAX_RUNTIME_SECONDS}",
             input_summary=f"steps_used={steps_used}",
             output_summary=f"stop_reason={stop_reason}",
+        )
+    )
+    on_step(
+        StepTrace(
+            step="StructuredOutput",
+            what_it_does="Builds evidence-first structured report from model output.",
+            prompt_preview="schema={severity, findings, recommended_actions, confidence, citations}",
+            input_summary=_summarize_text(response),
+            output_summary=_summarize_text(json.dumps(structured, ensure_ascii=True)),
+        )
+    )
+    on_step(
+        StepTrace(
+            step="CriticReview",
+            what_it_does="Validates structured output quality and evidence requirements.",
+            prompt_preview=f"high_risk={high_risk}",
+            input_summary=_summarize_text(json.dumps(structured, ensure_ascii=True)),
+            output_summary=f"pass={critic_ok}; reason={critic_message}",
         )
     )
     return response, selected_model, stop_reason, steps_used
