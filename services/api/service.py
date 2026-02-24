@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.agents.g1.agent_with_memory import create_agent_with_memory
 from src.agents.g2.multiagent_system import run_multiagent_with_trace
@@ -103,6 +103,50 @@ def run_g1_analysis(user_input: str, session_id: Optional[str] = None) -> Tuple[
     return response, trace, selected_model
 
 
+def run_g1_analysis_with_progress(
+    user_input: str,
+    on_step: Callable[[StepTrace], None],
+    session_id: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Run G1 with progressive step callbacks."""
+    clean_input = _validate_input(user_input, "input")
+    strong = Settings.should_use_strong_model(clean_input)
+    high_risk = Settings.is_high_risk_task(clean_input)
+    selected_model = Settings.STRONG_MODEL_NAME if strong else Settings.FAST_MODEL_NAME
+
+    step1 = StepTrace(
+        step="InputPreparation",
+        what_it_does="Validates and prepares request for G1 execution.",
+        prompt_preview=_summarize_text(clean_input),
+        input_summary=_summarize_text(clean_input),
+        output_summary="Input accepted and formatted.",
+    )
+    on_step(step1)
+
+    step2 = StepTrace(
+        step="RoutingPolicy",
+        what_it_does="Chooses fast or strong model and evidence policy.",
+        prompt_preview=_summarize_text(
+            f"routing=auto strong={strong} high_risk={high_risk} model={selected_model}"
+        ),
+        input_summary=f"strong={strong}, high_risk={high_risk}",
+        output_summary=f"Selected model: {selected_model}",
+    )
+    on_step(step2)
+
+    agent = _get_or_create_memory_agent(session_id)
+    response = agent.run(clean_input)
+    step3 = StepTrace(
+        step="SingleAgentExecution",
+        what_it_does="Runs a memory-enabled agent with tools.",
+        prompt_preview=_summarize_text(clean_input),
+        input_summary=_summarize_text(clean_input),
+        output_summary=_summarize_text(response),
+    )
+    on_step(step3)
+    return response, selected_model
+
+
 def run_g2_analysis(log_input: str) -> Tuple[Dict[str, Any], List[StepTrace], str]:
     """Run G2 workflow and return full structured result, trace, and model."""
     clean_logs = _validate_input(log_input, "input")
@@ -110,6 +154,20 @@ def run_g2_analysis(log_input: str) -> Tuple[Dict[str, Any], List[StepTrace], st
     result = executed["result"]
     trace = [StepTrace(**step) for step in executed["trace"]]
     return result, trace, Settings.FAST_MODEL_NAME
+
+
+def run_g2_analysis_with_progress(
+    log_input: str,
+    on_step: Callable[[StepTrace], None],
+) -> Tuple[Dict[str, Any], str]:
+    """Run G2 and emit each step as soon as it completes."""
+    clean_logs = _validate_input(log_input, "input")
+
+    def _on_step(step: Dict[str, str]):
+        on_step(StepTrace(**step))
+
+    executed = run_multiagent_with_trace(clean_logs, on_step=_on_step)
+    return executed["result"], Settings.FAST_MODEL_NAME
 
 
 def run_chat(user_input: str, mode: str = "g1", session_id: Optional[str] = None):
@@ -120,6 +178,28 @@ def run_chat(user_input: str, mode: str = "g1", session_id: Optional[str] = None
         return result.get("final_report", ""), trace, model
     response, trace, model = run_g1_analysis(clean_input, session_id=session_id)
     return response, trace, model
+
+
+def run_workspace_with_progress(
+    *,
+    task: str,
+    mode: str,
+    user_input: str,
+    on_step: Callable[[StepTrace], None],
+    session_id: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Run workspace request and emit progress steps for UI streaming."""
+    clean_input = _validate_input(user_input, "input")
+    normalized_task = (task or "chat").lower()
+    normalized_mode = (mode or "g1").lower()
+
+    if normalized_mode == "g2":
+        result, model = run_g2_analysis_with_progress(clean_input, on_step=on_step)
+        return str(result.get("final_report", "")), model
+
+    if normalized_task == "analyze":
+        return run_g1_analysis_with_progress(clean_input, on_step=on_step, session_id=session_id)
+    return run_g1_analysis_with_progress(clean_input, on_step=on_step, session_id=session_id)
 
 
 def simulate_sandbox_event(

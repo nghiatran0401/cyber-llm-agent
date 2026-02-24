@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
+from queue import Empty, Queue
+from threading import Thread
 from time import perf_counter
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.config.settings import Settings
 
@@ -19,6 +22,8 @@ from .schemas import (
     ResponseMeta,
     SandboxAnalyzeRequest,
     SandboxSimulateRequest,
+    StepTrace,
+    WorkspaceStreamRequest,
 )
 from .service import (
     analyze_sandbox_event,
@@ -26,6 +31,7 @@ from .service import (
     run_chat,
     run_g1_analysis,
     run_g2_analysis,
+    run_workspace_with_progress,
     simulate_sandbox_event,
 )
 
@@ -135,6 +141,69 @@ def chat(payload: ChatRequest) -> ApiResponse:
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/workspace/stream")
+def workspace_stream(payload: WorkspaceStreamRequest):
+    """Stream progress events for workspace requests (SSE)."""
+    request_id = str(uuid4())
+    event_queue: Queue[dict] = Queue()
+    start_time = perf_counter()
+
+    def _put_event(event_type: str, **data):
+        event_queue.put({"type": event_type, **data})
+
+    def _runner():
+        try:
+            def _on_step(step: StepTrace):
+                _put_event("trace", step=step.model_dump())
+
+            result, model = run_workspace_with_progress(
+                task=payload.task,
+                mode=payload.mode,
+                user_input=payload.input,
+                on_step=_on_step,
+                session_id=payload.session_id,
+            )
+
+            duration_ms = int((perf_counter() - start_time) * 1000)
+            _put_event(
+                "final",
+                result=result,
+                meta=ResponseMeta(
+                    request_id=request_id,
+                    mode=payload.mode,
+                    model=model,
+                    duration_ms=duration_ms,
+                ).model_dump(),
+            )
+        except Exception as exc:
+            _put_event("error", error={"code": "STREAM_ERROR", "message": str(exc)})
+        finally:
+            _put_event("done")
+
+    Thread(target=_runner, daemon=True).start()
+
+    def _event_stream():
+        while True:
+            try:
+                event = event_queue.get(timeout=30)
+            except Empty:
+                yield "data: {\"type\":\"heartbeat\"}\n\n"
+                continue
+            yield f"data: {json.dumps(event)}\n\n"
+            if event.get("type") == "done":
+                break
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/v1/sandbox/simulate", response_model=ApiResponse)

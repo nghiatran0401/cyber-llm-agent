@@ -54,6 +54,15 @@ class ChatRequest(BaseModel):
     include_trace: bool = True
 
 
+class WorkspaceStreamRequest(BaseModel):
+    """Request for streaming workspace execution updates."""
+
+    task: Literal["chat", "analyze"] = "chat"
+    mode: Literal["g1", "g2"] = "g1"
+    input: str = Field(min_length=1, max_length=50_000)
+    session_id: Optional[str] = None
+
+
 class SandboxSimulateRequest(BaseModel):
     """Request to generate a sandbox event."""
 
