@@ -109,6 +109,10 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 - `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
 - `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
 - Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.
+- RAG retrieval supports `lexical`, `semantic`, and `hybrid` modes:
+  - `RAG_RETRIEVAL_MODE=hybrid`
+  - `RAG_EMBEDDING_DIMS=96`
+  - `RAG_SEMANTIC_CANDIDATES=8`
 - CTI tool input supports:
   - threat-type queries (example: `ransomware`)
   - IOC queries (example: `ioc:ip:1.2.3.4`, `ioc:domain:example.com`, `ioc:url:https://bad.example`, `ioc:hash:<sha256>`)
@@ -119,7 +123,7 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 1. Add one or more `.md`/`.txt` knowledge files under `data/knowledge/`.
 2. Set `ENABLE_RAG=true` in `.env`.
 3. Ask a G1/G2 question containing known terms from those files.
-4. Confirm the answer includes retrieval citations from the `RAGRetriever` tool output.
+4. Confirm the answer includes retrieval citations and scored matches from the `RAGRetriever` tool output.
 
 ## OTX Rollout Guidance
 

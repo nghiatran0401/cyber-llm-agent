@@ -58,6 +58,9 @@ class Settings:
     ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() == "true"
     RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "180"))
     RAG_MAX_RESULTS = int(os.getenv("RAG_MAX_RESULTS", "3"))
+    RAG_RETRIEVAL_MODE = os.getenv("RAG_RETRIEVAL_MODE", "hybrid").lower()
+    RAG_EMBEDDING_DIMS = int(os.getenv("RAG_EMBEDDING_DIMS", "96"))
+    RAG_SEMANTIC_CANDIDATES = int(os.getenv("RAG_SEMANTIC_CANDIDATES", "8"))
 
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
@@ -133,6 +136,12 @@ class Settings:
             raise ValueError("RAG_CHUNK_SIZE must be greater than 0.")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
+        if cls.RAG_RETRIEVAL_MODE not in {"lexical", "semantic", "hybrid"}:
+            raise ValueError("RAG_RETRIEVAL_MODE must be one of {'lexical','semantic','hybrid'}.")
+        if cls.RAG_EMBEDDING_DIMS <= 0:
+            raise ValueError("RAG_EMBEDDING_DIMS must be greater than 0.")
+        if cls.RAG_SEMANTIC_CANDIDATES <= 0:
+            raise ValueError("RAG_SEMANTIC_CANDIDATES must be greater than 0.")
         return True
 
     @classmethod
