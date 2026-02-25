@@ -1,0 +1,39 @@
+{
+  "test_cases": [
+    {
+      "id": "lab_case_001",
+      "name": "SQL injection style login bypass",
+      "log": "timestamp=2026-02-25T03:40:00Z ip=127.0.0.1 method=POST path=/lab/login status=200 scenario=sqliLogin risk=SQLi payload=' OR '1'='1",
+      "expected_keywords": ["injection", "sql", "high", "validate input", "parameterized"],
+      "unexpected_keywords": ["safe", "benign"]
+    },
+    {
+      "id": "lab_case_002",
+      "name": "Reflected XSS search payload",
+      "log": "timestamp=2026-02-25T03:41:00Z ip=127.0.0.1 method=GET path=/lab/search status=200 scenario=reflectedXss risk=XSS payload=<script>alert(1)</script>",
+      "expected_keywords": ["xss", "sanitize", "output encoding", "csp", "high"],
+      "unexpected_keywords": ["no action", "normal traffic"]
+    },
+    {
+      "id": "lab_case_003",
+      "name": "IDOR access to another profile",
+      "log": "timestamp=2026-02-25T03:42:00Z ip=127.0.0.1 method=GET path=/lab/api/profile/1002?viewer=1001 status=200 scenario=idorProfile risk=IDOR payload=viewer=1001 target=1002",
+      "expected_keywords": ["access control", "idor", "authorization", "least privilege", "investigate"],
+      "unexpected_keywords": ["allowed behavior", "safe"]
+    },
+    {
+      "id": "lab_case_004",
+      "name": "Path traversal payload in download endpoint",
+      "log": "timestamp=2026-02-25T03:43:00Z ip=127.0.0.1 method=GET path=/lab/download?file=../../.env status=200 scenario=pathTraversalDownload risk=PathTraversal payload=../../.env",
+      "expected_keywords": ["path traversal", "sanitize", "allowlist", "high", "block"],
+      "unexpected_keywords": ["benign", "ignore"]
+    },
+    {
+      "id": "lab_case_005",
+      "name": "Unsafe config import with prototype payload",
+      "log": "timestamp=2026-02-25T03:44:00Z ip=127.0.0.1 method=POST path=/lab/import-config status=200 scenario=unsafeDeserializer risk=UnsafeDeserialization payload={\"__proto__\":{\"isAdmin\":true}}",
+      "expected_keywords": ["integrity", "deserialization", "prototype pollution", "validate schema", "medium"],
+      "unexpected_keywords": ["secure by default", "no issue"]
+    }
+  ]
+}

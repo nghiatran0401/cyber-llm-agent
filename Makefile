@@ -1,13 +1,16 @@
 PYTHON ?= python
 IMAGE ?= cyber-llm-agent:latest
 
-.PHONY: install install-web test test-web benchmark benchmark-report lint run-api run-web smoke smoke-checklist ci docker-build docker-run
+.PHONY: install install-web install-lab test test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci docker-build docker-run
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 
 install-web:
 	npm --prefix apps/web install
+
+install-lab:
+	npm --prefix apps/vuln-lab install
 
 test:
 	pytest -q
@@ -31,6 +34,9 @@ run-api:
 
 run-web:
 	npm --prefix apps/web run dev
+
+run-lab:
+	npm --prefix apps/vuln-lab run dev
 
 smoke:
 	$(PYTHON) -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py

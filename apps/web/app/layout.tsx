@@ -20,13 +20,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </div>
             <nav className="flex gap-2 text-sm">
               <Link className="btn-secondary" href="/">
-                Workspace
-              </Link>
-              <Link className="btn-secondary" href="/dashboard">
-                Dashboard
+                Chatbot
               </Link>
               <Link className="btn-secondary" href="/sandbox">
-                Sandbox
+                Simulator
               </Link>
             </nav>
           </header>

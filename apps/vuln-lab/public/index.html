@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Northwind Apparel</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container nav">
+        <a class="brand" href="/">Northwind Apparel</a>
+        <nav>
+          <a href="#shop">Shop</a>
+          <a href="#journal">Journal</a>
+          <a href="#account">Account</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <p class="eyebrow">Spring Collection</p>
+        <h1>Modern essentials for work, weekends, and travel.</h1>
+        <p>Comfort-first fits, premium fabrics, and fast delivery in major cities.</p>
+      </section>
+
+      <section id="shop" class="card">
+        <div class="section-head">
+          <h2>Shop</h2>
+          <form id="searchForm" class="inline-form search-form" role="search">
+            <div class="search-input-wrap">
+              <span class="search-icon" aria-hidden="true">⌕</span>
+              <input
+                id="searchInput"
+                name="q"
+                placeholder="Search by style, category, or badge"
+                autocomplete="off"
+              />
+              <button id="clearSearchBtn" class="clear-search-btn" type="button" aria-label="Clear search">
+                Clear
+              </button>
+            </div>
+            <button type="submit">Search</button>
+          </form>
+        </div>
+        <div class="quick-filters" aria-label="Quick filters">
+          <button class="quick-filter-btn" data-query="Shirts" type="button">Shirts</button>
+          <button class="quick-filter-btn" data-query="Outerwear" type="button">Outerwear</button>
+          <button class="quick-filter-btn" data-query="Best Seller" type="button">Best Seller</button>
+          <button class="quick-filter-btn" data-query="Limited" type="button">Limited</button>
+        </div>
+        <p id="searchSummary" class="muted" aria-live="polite"></p>
+        <div id="productGrid" class="product-grid"></div>
+      </section>
+
+      <section id="journal" class="card">
+        <h2>Style Journal</h2>
+        <article>
+          <h3 id="postTitle"></h3>
+          <p class="muted" id="postMeta"></p>
+          <p id="postContent"></p>
+        </article>
+
+        <div class="comment-box">
+          <h3>Community Notes</h3>
+          <form id="commentForm">
+            <textarea id="commentInput" name="message" rows="3" placeholder="Share your tip"></textarea>
+            <button type="submit">Post Comment</button>
+          </form>
+          <ul id="commentList" class="comment-list"></ul>
+        </div>
+      </section>
+
+      <section id="account" class="card split">
+        <div>
+          <h2>Account Login</h2>
+          <form id="loginForm">
+            <label>Email or username <input id="loginUsername" name="username" autocomplete="username" /></label>
+            <label>Password <input id="loginPassword" name="password" type="text" autocomplete="current-password" /></label>
+            <button type="submit">Sign In</button>
+          </form>
+          <p id="loginStatus" class="muted"></p>
+        </div>
+
+        <div>
+          <h2>Profile Lookup</h2>
+          <form id="profileForm">
+            <label>Viewer ID <input id="viewerIdInput" value="1001" /></label>
+            <label>Customer ID <input id="targetIdInput" value="1001" /></label>
+            <button type="submit">Load Profile</button>
+          </form>
+          <pre id="profileResult">{}</pre>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Support Tools</h2>
+        <div class="tool-links">
+          <a href="/lab/admin?role=user&debug=false" target="_blank" rel="noreferrer">Open support console</a>
+          <a href="/lab/download?file=lookbook-2026.pdf" target="_blank" rel="noreferrer">Download lookbook PDF</a>
+          <a href="/lab/component/version" target="_blank" rel="noreferrer">Component inventory</a>
+          <a href="/lab/token" target="_blank" rel="noreferrer">Issue session token</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="/lab.js"></script>
+  </body>
+</html>

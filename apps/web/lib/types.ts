@@ -97,3 +97,41 @@ export interface OwaspMitreMapping {
   owasp: string;
   mitre: string[];
 }
+
+export interface LabScenario {
+  id: string;
+  name: string;
+  endpoint: string;
+  method: "GET" | "POST";
+  samplePayload: string;
+  riskHint: string;
+}
+
+export interface LabSystemLogEntry {
+  timestamp: string;
+  requestId: string;
+  method: string;
+  path: string;
+  status: number;
+  latencyMs: number;
+  ip: string;
+  userAgent: string;
+  attackDetected?: boolean;
+  scenarioId?: string;
+  riskHint?: string;
+  payloadSnippet?: string;
+  message?: string;
+  owaspCategory?: string;
+}
+
+export interface LabSimulationResult {
+  scenarioId: string;
+  scenarioName: string;
+  endpoint: string;
+  method: string;
+  expectedRiskHint: string;
+  owaspCategory: string;
+  mitreTechniques: string[];
+  status: number;
+  responsePreview: string;
+}

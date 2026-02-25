@@ -87,6 +87,24 @@ Open `http://127.0.0.1:3000`.
 
 The web app expects the FastAPI backend at `NEXT_PUBLIC_API_BASE_URL` (default `http://127.0.0.1:8000`).
 
+### 6) Run the OWASP vulnerable lab + plain dashboard
+
+```bash
+make install-lab
+make run-lab
+```
+
+Open:
+
+- `http://127.0.0.1:3100` for vulnerable pages
+- `http://127.0.0.1:3100/dashboard` for live telemetry/detections
+
+Replay a repeatable demo flow (with API + lab running):
+
+```bash
+python scripts/run_lab_demo.py
+```
+
 ## Run with Docker
 
 ```bash
@@ -173,6 +191,7 @@ make smoke-checklist
 Canonical benchmark dataset:
 
 - `data/benchmarks/threat_cases.json`
+- `data/benchmarks/threat_cases_lab.json` (OWASP lab simulation cases)
 
 Run benchmark locally (CI-safe deterministic mode):
 
@@ -229,6 +248,7 @@ src/
   utils/             # memory, session, evaluator, logging
 services/api/        # FastAPI endpoints wrapping G1/G2
 apps/web/            # Next.js + Tailwind + TypeScript frontend
+apps/vuln-lab/       # Old-school HTML/CSS/JS vulnerable learning lab + dashboard
 tests/
 ```
 

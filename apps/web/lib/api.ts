@@ -2,6 +2,9 @@ import {
   AgentMode,
   ApiResponse,
   G2Result,
+  LabScenario,
+  LabSimulationResult,
+  LabSystemLogEntry,
   LiveLogEnvelope,
   OwaspMitreMapping,
   RecentDetectionEnvelope,
@@ -21,6 +24,7 @@ type StreamHandlers = {
 };
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+const LAB_BASE_URL = (process.env.NEXT_PUBLIC_LAB_BASE_URL || "http://127.0.0.1:3100").replace(/\/$/, "");
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
 function buildHeaders(init?: HeadersInit): Headers {
@@ -49,6 +53,23 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<ApiResp
   if (!response.ok || !payload?.ok) {
     const message = payload?.error?.message || `Request failed with status ${response.status}`;
     throw new Error(message);
+  }
+  return payload;
+}
+
+async function requestLabJson<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; result: T }> {
+  const response = await fetch(`${LAB_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+    cache: "no-store",
+  });
+
+  const payload = (await response.json()) as { ok: boolean; result: T; error?: string };
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.error || `Lab request failed with status ${response.status}`);
   }
   return payload;
 }
@@ -191,6 +212,24 @@ export async function getRecentDetections(limit = 25): Promise<ApiResponse<Recen
 
 export async function getOwaspMitreMap(): Promise<ApiResponse<Record<string, OwaspMitreMapping>>> {
   return requestJson<Record<string, OwaspMitreMapping>>("/api/v1/knowledge/owasp-mitre-map", {
+    method: "GET",
+  });
+}
+
+export async function getLabScenarios(): Promise<{ ok: boolean; result: LabScenario[] }> {
+  return requestLabJson<LabScenario[]>("/api/dashboard/scenarios", {
+    method: "GET",
+  });
+}
+
+export async function simulateLabScenario(scenarioId: string): Promise<{ ok: boolean; result: LabSimulationResult }> {
+  return requestLabJson<LabSimulationResult>(`/api/dashboard/simulate/${encodeURIComponent(scenarioId)}`, {
+    method: "POST",
+  });
+}
+
+export async function getLabSystemLogs(limit = 80): Promise<{ ok: boolean; result: LabSystemLogEntry[] }> {
+  return requestLabJson<LabSystemLogEntry[]>(`/api/dashboard/system-logs?limit=${limit}`, {
     method: "GET",
   });
 }

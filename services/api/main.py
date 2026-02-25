@@ -7,13 +7,14 @@ import os
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from queue import Empty, Queue
 from threading import Lock
 from threading import Thread
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -73,6 +74,36 @@ _METRICS_STATE = {
     "by_mode": defaultdict(int),
     "by_stop_reason": defaultdict(int),
     "recent_runs": deque(maxlen=200),
+}
+_OWASP_MITRE_MAP = {
+    "A01_BrokenAccessControl": {
+        "owasp": "A01:2021 Broken Access Control",
+        "mitre": ["T1190", "T1068"],
+    },
+    "A02_CryptographicFailures": {
+        "owasp": "A02:2021 Cryptographic Failures",
+        "mitre": ["T1557", "T1040"],
+    },
+    "A03_Injection": {
+        "owasp": "A03:2021 Injection",
+        "mitre": ["T1190", "T1059"],
+    },
+    "A05_SecurityMisconfiguration": {
+        "owasp": "A05:2021 Security Misconfiguration",
+        "mitre": ["T1190", "T1580"],
+    },
+    "A06_VulnerableComponents": {
+        "owasp": "A06:2021 Vulnerable and Outdated Components",
+        "mitre": ["T1195", "T1588"],
+    },
+    "A07_IdentificationAuthFailures": {
+        "owasp": "A07:2021 Identification and Authentication Failures",
+        "mitre": ["T1110", "T1078"],
+    },
+    "A08_SoftwareDataIntegrityFailures": {
+        "owasp": "A08:2021 Software and Data Integrity Failures",
+        "mitre": ["T1553", "T1195"],
+    },
 }
 logger = setup_logger(__name__)
 
@@ -326,6 +357,25 @@ def _normalize_workspace_result(payload):
     raise TypeError("Unexpected workspace response shape.")
 
 
+def _tail_jsonl(path: Path, limit: int) -> list[dict]:
+    if not path.exists():
+        return []
+    with open(path, encoding="utf-8") as handle:
+        lines = [line.strip() for line in handle.readlines() if line.strip()]
+    selected = lines[-limit:]
+    result: list[dict] = []
+    for line in reversed(selected):
+        try:
+            payload = json.loads(line)
+            if isinstance(payload, dict):
+                result.append(payload)
+            else:
+                result.append({"raw": payload})
+        except json.JSONDecodeError:
+            result.append({"raw": line})
+    return result
+
+
 @app.get("/api/v1/health", response_model=ApiResponse)
 def health() -> ApiResponse:
     request_id = str(uuid4())
@@ -486,6 +536,80 @@ def metrics_dashboard() -> ApiResponse:
             },
             "recent_runs": recent_runs,
         },
+        trace=[],
+        meta=ResponseMeta(request_id=request_id, run_id=request_id, mode=None, model=None, duration_ms=0),
+        error=None,
+    )
+
+
+@app.get("/api/v1/sandbox/live-log", response_model=ApiResponse)
+def sandbox_live_log(
+    tail: int = Query(default=50, ge=1, le=200),
+    source: str = Query(default="live_web_logs"),
+) -> ApiResponse:
+    request_id = str(uuid4())
+    _require_sandbox_enabled()
+    source_map = {
+        "live_web_logs": Settings.LOGS_DIR / "live_web_logs.jsonl",
+        "vuln_lab_events": Settings.LOGS_DIR / "vuln_lab_events.jsonl",
+        "vuln_lab_detections": Settings.LOGS_DIR / "vuln_lab_detections.jsonl",
+    }
+    if source not in source_map:
+        raise HTTPException(status_code=400, detail=f"Unknown source '{source}'.")
+    path = source_map[source]
+    return ApiResponse(
+        ok=True,
+        result={
+            "source": source,
+            "path": str(path),
+            "items": _tail_jsonl(path, tail),
+        },
+        trace=[],
+        meta=ResponseMeta(request_id=request_id, run_id=request_id, mode=None, model=None, duration_ms=0),
+        error=None,
+    )
+
+
+@app.get("/api/v1/detections/recent", response_model=ApiResponse)
+def detections_recent(limit: int = Query(default=25, ge=1, le=100)) -> ApiResponse:
+    request_id = str(uuid4())
+    with _METRICS_LOCK:
+        recent_runs = list(_METRICS_STATE["recent_runs"])
+    filtered = []
+    for run in recent_runs:
+        endpoint = str(run.get("endpoint", ""))
+        if endpoint in {"/api/v1/analyze/g1", "/api/v1/analyze/g2", "/api/v1/sandbox/analyze"}:
+            filtered.append(
+                {
+                    "timestamp": run.get("timestamp"),
+                    "run_id": run.get("run_id"),
+                    "endpoint": endpoint,
+                    "mode": run.get("mode"),
+                    "success": run.get("success"),
+                    "stop_reason": run.get("stop_reason"),
+                    "duration_ms": run.get("duration_ms"),
+                    "total_tokens_est": run.get("total_tokens_est"),
+                    "tool_calls": run.get("tool_calls"),
+                    "tool_fail": run.get("tool_fail"),
+                }
+            )
+        if len(filtered) >= limit:
+            break
+    return ApiResponse(
+        ok=True,
+        result={"items": filtered, "count": len(filtered)},
+        trace=[],
+        meta=ResponseMeta(request_id=request_id, run_id=request_id, mode=None, model=None, duration_ms=0),
+        error=None,
+    )
+
+
+@app.get("/api/v1/knowledge/owasp-mitre-map", response_model=ApiResponse)
+def owasp_mitre_map() -> ApiResponse:
+    request_id = str(uuid4())
+    return ApiResponse(
+        ok=True,
+        result=_OWASP_MITRE_MAP,
         trace=[],
         meta=ResponseMeta(request_id=request_id, run_id=request_id, mode=None, model=None, duration_ms=0),
         error=None,
