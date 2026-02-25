@@ -65,13 +65,11 @@ class Settings:
     CTI_MAX_RESPONSE_CHARS = int(os.getenv("CTI_MAX_RESPONSE_CHARS", "3000"))
     CTI_TOP_RESULTS = int(os.getenv("CTI_TOP_RESULTS", "5"))
 
-    # RAG (basic local knowledge retrieval)
+    # RAG (LangChain + Pinecone)
     ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() == "true"
-    RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "180"))
     RAG_MAX_RESULTS = int(os.getenv("RAG_MAX_RESULTS", "3"))
-    RAG_RETRIEVAL_MODE = os.getenv("RAG_RETRIEVAL_MODE", "hybrid").lower()
-    RAG_EMBEDDING_DIMS = int(os.getenv("RAG_EMBEDDING_DIMS", "96"))
-    RAG_SEMANTIC_CANDIDATES = int(os.getenv("RAG_SEMANTIC_CANDIDATES", "8"))
+    PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
+    PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "cyber-llm-knowledge")
 
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
@@ -155,18 +153,13 @@ class Settings:
             raise ValueError("PROMPT_VERSION_G1 must not be empty.")
         if not cls.PROMPT_VERSION_G2.strip():
             raise ValueError("PROMPT_VERSION_G2 must not be empty.")
-        if cls.MIN_EVIDENCE_FOR_HIGH_RISK < 0:
-            raise ValueError("MIN_EVIDENCE_FOR_HIGH_RISK must be greater than or equal to 0.")
-        if cls.RAG_CHUNK_SIZE <= 0:
-            raise ValueError("RAG_CHUNK_SIZE must be greater than 0.")
+        if cls.ENABLE_RAG:
+            if not cls.PINECONE_API_KEY:
+                raise ValueError("PINECONE_API_KEY is required when ENABLE_RAG=true.")
+            if not cls.PINECONE_INDEX_NAME:
+                raise ValueError("PINECONE_INDEX_NAME is required when ENABLE_RAG=true.")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
-        if cls.RAG_RETRIEVAL_MODE not in {"lexical", "semantic", "hybrid"}:
-            raise ValueError("RAG_RETRIEVAL_MODE must be one of {'lexical','semantic','hybrid'}.")
-        if cls.RAG_EMBEDDING_DIMS <= 0:
-            raise ValueError("RAG_EMBEDDING_DIMS must be greater than 0.")
-        if cls.RAG_SEMANTIC_CANDIDATES <= 0:
-            raise ValueError("RAG_SEMANTIC_CANDIDATES must be greater than 0.")
         return True
 
     @classmethod
@@ -177,54 +170,11 @@ class Settings:
         return cls.ENABLE_SANDBOX
 
     @classmethod
-    def is_high_risk_task(cls, task_text: str) -> bool:
-        """Return True when task likely needs evidence-first tool use."""
-        if not task_text:
+    def sandbox_enabled(cls) -> bool:
+        """Allow sandbox only in non-production environments."""
+        if cls.ENVIRONMENT == "production":
             return False
-
-        high_risk_keywords = (
-            "incident",
-            "compromise",
-            "breach",
-            "forensics",
-            "malware",
-            "ransomware",
-            "phishing",
-            "containment",
-            "remediation",
-            "critical",
-            "exploit",
-            "zero-day",
-            "ioc",
-            "siem",
-            "edr",
-            "block this ip",
-            "quarantine",
-            "production",
-        )
-        task_lower = task_text.lower()
-        return any(keyword in task_lower for keyword in high_risk_keywords)
-
-    @classmethod
-    def should_use_strong_model(cls, task_text: str) -> bool:
-        """Choose strong model for high-risk or complex prompts."""
-        if not cls.AUTO_MODEL_ROUTING:
-            return False
-        if cls.is_high_risk_task(task_text):
-            return True
-
-        task_lower = (task_text or "").lower()
-        complexity_hints = (
-            "step-by-step",
-            "multi-step",
-            "investigate",
-            "root cause",
-            "correlate",
-            "compare",
-            "summarize all",
-            "across",
-        )
-        return any(hint in task_lower for hint in complexity_hints)
+        return cls.ENABLE_SANDBOX
 
 
 # Initialize directories on import

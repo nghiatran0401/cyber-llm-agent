@@ -3,8 +3,10 @@
 from typing import Any
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
-from src.tools.security_tools import log_parser, cti_fetch
+from src.tools.log_parser_tool import log_parser
+from src.tools.cti_tool import cti_fetch
 from src.tools.rag_tools import rag_retriever
+from src.agents.g1.routing import is_high_risk_intent
 from src.config.settings import Settings
 from src.utils.logger import setup_logger
 from src.utils.prompt_templates import load_prompt_template
@@ -42,9 +44,10 @@ def create_simple_agent(verbose: bool = True, task_hint: str = ""):
     except ValueError as e:
         logger.error(f"Configuration error: {e}")
         raise
-
-    selected_model = Settings.STRONG_MODEL_NAME if Settings.should_use_strong_model(task_hint) else Settings.FAST_MODEL_NAME
-    logger.info("Creating simple agent with model: %s", selected_model)
+        
+    is_high_risk = is_high_risk_intent(task_hint)
+    selected_model = Settings.STRONG_MODEL_NAME if is_high_risk else Settings.FAST_MODEL_NAME
+    logger.info("Creating simple agent with model: %s (high_risk=%s)", selected_model, is_high_risk)
 
     try:
         agent = _create_tool_agent(selected_model, verbose=verbose)
@@ -86,20 +89,22 @@ class AdaptiveSecurityAgent:
         return str(payload)
 
     def invoke(self, payload: Any):
-        """Invoke with auto-routing to fast/strong model."""
+        """Invoke with auto-routing to fast/strong model via Semantic Router."""
         user_text = self._extract_user_text(payload)
-        use_strong = Settings.should_use_strong_model(user_text)
-        high_risk = Settings.is_high_risk_task(user_text)
+        
+        # Use Semantic Router to determine intent
+        is_high_risk = is_high_risk_intent(user_text)
 
-        selected_agent = self.strong_agent if use_strong else self.fast_agent
-        selected_model = self.strong_model if use_strong else self.fast_model
+        selected_agent = self.strong_agent if is_high_risk else self.fast_agent
+        selected_model = self.strong_model if is_high_risk else self.fast_model
+        
         logger.info(
             "Routing request to %s model (high_risk=%s)",
             selected_model,
-            high_risk,
+            is_high_risk,
         )
 
-        if Settings.TOOL_MANDATORY_FOR_HIGH_RISK and high_risk:
+        if Settings.TOOL_MANDATORY_FOR_HIGH_RISK and is_high_risk:
             policy_prefix = (
                 load_prompt_template("g1/high_risk_policy_prefix.txt")
                 + "\n\n"

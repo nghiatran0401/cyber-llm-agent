@@ -3,6 +3,13 @@ langchain>=0.1.0
 langchain-openai>=0.0.5
 langchain-community>=0.0.20
 langgraph>=0.0.20
+langchain-pinecone>=0.2.0
+langchain-text-splitters>=0.3.2
+pinecone-client>=6.0.0
+
+# Log Parsing & Routing Upgrades
+pygrok>=1.0.0
+semantic-router>=0.1.12
 
 # LLM Providers
 openai>=1.0.0
