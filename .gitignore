@@ -50,6 +50,9 @@ data/sessions/*.json
 data/logs/*.log
 data/logs/*.jsonl
 data/knowledge/rag_index.json
+data/benchmarks/results/*.json
+data/benchmarks/results/*.md
+!data/benchmarks/results/.gitkeep
 !data/logs/sample_logs.txt
 !data/logs/.gitkeep
 

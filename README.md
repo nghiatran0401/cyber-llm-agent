@@ -61,6 +61,8 @@ make install
 make install-web
 make test
 make test-web
+make benchmark
+make benchmark-report
 make smoke
 make smoke-checklist
 ```
@@ -156,6 +158,7 @@ CI pipeline (`.github/workflows/ci.yml`) runs:
 
 - compile checks (`make lint`)
 - full tests (`make test`)
+- benchmark evaluation (`make benchmark`)
 - frontend API integration tests (`make test-web`)
 - smoke tests (`make smoke`)
 
@@ -164,6 +167,54 @@ For one-command endpoint checklist validation (auth/rate-limit/RAG + core API ro
 ```bash
 make smoke-checklist
 ```
+
+## Benchmark Evaluation
+
+Canonical benchmark dataset:
+
+- `data/benchmarks/threat_cases.json`
+
+Run benchmark locally (CI-safe deterministic mode):
+
+```bash
+make benchmark
+make benchmark-report
+```
+
+Artifacts are written to:
+
+- `data/benchmarks/results/latest.json`
+- `data/benchmarks/results/latest.md`
+- timestamped files under `data/benchmarks/results/`
+
+### Real-LLM staging benchmark run
+
+Use this for assignment/demo evidence with real model calls:
+
+```bash
+BENCHMARK_MODE=real-llm \
+BENCHMARK_AGENT_MODE=g1 \
+BENCHMARK_PROVIDER=openai \
+make benchmark
+```
+
+For G2:
+
+```bash
+BENCHMARK_MODE=real-llm \
+BENCHMARK_AGENT_MODE=g2 \
+BENCHMARK_PROVIDER=openai \
+make benchmark
+```
+
+Required environment:
+
+- `OPENAI_API_KEY`
+- `OTX_API_KEY`
+
+Reference methodology and evidence guidance:
+
+- `docs/benchmark-evaluation.md`
 
 ## Repository Layout
 

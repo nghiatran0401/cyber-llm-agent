@@ -43,6 +43,13 @@ jobs:
       - name: Run full test suite
         run: make test
 
+      - name: Benchmark evaluation
+        env:
+          BENCHMARK_MODE: offline
+          BENCHMARK_AGENT_MODE: g1
+          BENCHMARK_PROVIDER: openai
+        run: make benchmark
+
       - name: Smoke checks
         run: make smoke
 
