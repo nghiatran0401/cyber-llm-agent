@@ -1,4 +1,4 @@
-"""Week 7 tests for OWASP sandbox event generation."""
+"""Tests for OWASP sandbox event generation."""
 
 import json
 

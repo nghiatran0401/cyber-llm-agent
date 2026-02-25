@@ -1,4 +1,4 @@
-"""Unit tests for Week 6 multiagent nodes and workflow."""
+"""Unit tests for multiagent nodes and workflow."""
 
 import pytest
 

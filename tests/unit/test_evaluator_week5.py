@@ -1,4 +1,4 @@
-"""Unit tests for Week 5 evaluator metrics."""
+"""Unit tests for evaluator metrics."""
 
 from src.utils.evaluator import AgentEvaluator
 

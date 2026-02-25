@@ -1,4 +1,4 @@
-"""Week 4 unit tests for memory and session behavior."""
+"""Unit tests for memory and session behavior."""
 
 from pathlib import Path
 import json
@@ -69,7 +69,7 @@ def test_stateful_agent_persists_memory_to_disk(tmp_path: Path):
     agent = StatefulSecurityAgent(
         memory_type="buffer",
         max_messages=4,
-        session_id="week4_test",
+        session_id="memory_test",
         backend_agent=fake_backend,
         verbose=False,
     )
@@ -79,7 +79,7 @@ def test_stateful_agent_persists_memory_to_disk(tmp_path: Path):
 
     assert "messages" in result
     assert len(fake_backend.calls) == 1
-    saved = agent.session_manager.load_session("week4_test")
+    saved = agent.session_manager.load_session("memory_test")
     assert saved["messages"]
     assert saved["messages"][-1]["content"] == "simulated-response"
     assert "episodic_memories" in saved

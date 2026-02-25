@@ -1,4 +1,4 @@
-"""Unit tests for Week 6 state validation helpers."""
+"""Unit tests for state validation helpers."""
 
 import pytest
 

@@ -1,4 +1,4 @@
-"""Week 5 scenario-driven tests (offline safe)."""
+"""Scenario-driven tests (offline safe)."""
 
 from src.utils.evaluator import AgentEvaluator
 
@@ -23,7 +23,7 @@ class _FakeScenarioAgent:
         return "No clear threat."
 
 
-def test_week5_benchmark_suite_runs_with_six_cases():
+def test_benchmark_suite_runs_with_six_cases():
     cases = [
         {"id": "1", "name": "brute", "prompt": "Failed SSH login repeated.", "expected_keywords": ["brute force", "high"]},
         {"id": "2", "name": "ransom", "prompt": "Mass rename events and entropy.", "expected_keywords": ["ransomware", "critical"]},

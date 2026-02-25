@@ -1,4 +1,4 @@
-"""Evaluation helpers for Week 5 benchmark and refinement."""
+"""Evaluation helpers for benchmark and refinement."""
 
 from __future__ import annotations
 
