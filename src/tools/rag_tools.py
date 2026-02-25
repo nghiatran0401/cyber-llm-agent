@@ -71,7 +71,9 @@ def ingest_knowledge_base() -> str:
     sources = [
         path
         for path in Settings.KNOWLEDGE_DIR.rglob("*")
-        if path.is_file() and path.suffix.lower() in _ALLOWED_SUFFIXES
+        if path.is_file()
+        and path.suffix.lower() in _ALLOWED_SUFFIXES
+        and path.resolve() != _RAG_INDEX_PATH.resolve()
     ]
     chunks: List[dict[str, object]] = []
     for source in sources:

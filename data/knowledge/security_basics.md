@@ -1,7 +1,5 @@
 # Security Knowledge Base (Starter)
 
-This is a local knowledge seed file for basic retrieval-augmented generation (RAG) tests.
-
 ## Brute Force Indicators
 
 - Many failed login attempts in a short window
@@ -13,7 +11,6 @@ Recommended immediate actions:
 - Temporarily block source IP addresses with repeated failures
 - Enforce MFA for exposed users
 - Reset potentially compromised credentials
-- Check authentication logs for lateral movement indicators
 
 ## SQL Injection Indicators
 
@@ -38,3 +35,8 @@ Recommended immediate actions:
 - Apply output encoding by context
 - Add/strengthen Content Security Policy
 - Sanitize user-supplied HTML/JS-bearing fields
+
+## Source/Reference
+
+- OWASP Top 10
+- OWASP Cheat Sheet Series
