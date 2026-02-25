@@ -1,0 +1,6 @@
+txn_id,timestamp_local,city,merchant_name,mcc,amount_vnd,entry_mode,token_id,cryptogram_valid
+TXN-1001,2026-01-13 14:32:01,Ho Chi Minh City,QuickMart District 1,5411,195000,NFC,DPAN_57ab0b46f95f1217,true
+TXN-1002,2026-01-13 14:32:35,Hanoi,QuickMart Hoan Kiem,5411,210000,NFC,DPAN_57ab0b46f95f1217,true
+TXN-1003,2026-01-13 14:33:10,Da Nang,QuickMart Hai Chau,5411,175000,NFC,DPAN_57ab0b46f95f1217,true
+TXN-1004,2026-01-13 14:33:55,Ho Chi Minh City,QuickMart Tan Binh,5411,99000,NFC,DPAN_57ab0b46f95f1217,true
+TXN-1005,2026-01-13 14:34:30,Hanoi,QuickMart Cau Giay,5411,220000,NFC,DPAN_57ab0b46f95f1217,true

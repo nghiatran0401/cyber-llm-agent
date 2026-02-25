@@ -1,0 +1,80 @@
+{"timestamp": "2026-01-13T00:30:00Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:30:35Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:31:10Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.200", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:31:45Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.201", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:32:20Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:32:55Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:33:30Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.200", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:34:05Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.91", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:34:40Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.91", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:35:15Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:35:50Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.91", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:36:25Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.91", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:37:00Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:37:35Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.200", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:38:10Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.90", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:38:45Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.90", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:39:20Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.200", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:39:55Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.91", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:40:30Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.90", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:41:05Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.200", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:41:40Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:42:15Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:42:50Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.200", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:43:25Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:44:00Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.200", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:44:35Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.200", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:45:10Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:45:45Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.201", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:46:20Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.200", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:46:55Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.91", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:47:30Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.201", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:48:05Z", "username": "customer10@vietcombank.example", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:48:40Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:49:15Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.200", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:49:50Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.201", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:50:25Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.91", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:51:00Z", "username": "vu.g@yahoo.com", "src_ip": "198.51.100.90", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:51:35Z", "username": "customer10@vietcombank.example", "src_ip": "203.0.113.200", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:52:10Z", "username": "vu.g@yahoo.com", "src_ip": "198.51.100.90", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:52:45Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.91", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:53:20Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.201", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:53:55Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.201", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:54:30Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:55:05Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:55:40Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.91", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:56:15Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:56:50Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:57:25Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.200", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:58:00Z", "username": "customer10@vietcombank.example", "src_ip": "203.0.113.200", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T00:58:35Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.91", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T00:59:10Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.90", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T00:59:45Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T01:00:20Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.201", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:00:55Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.200", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:01:30Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:02:05Z", "username": "vu.g@yahoo.com", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T01:02:40Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:03:15Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.90", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T01:03:50Z", "username": "pham.d@enterprise.vn", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:04:25Z", "username": "vu.g@yahoo.com", "src_ip": "198.51.100.91", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:05:00Z", "username": "vu.g@yahoo.com", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:05:35Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.91", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T01:06:10Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.200", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:06:45Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.200", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:07:20Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.201", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T01:07:55Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.90", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:08:30Z", "username": "nguyen.van.a@gmail.com", "src_ip": "203.0.113.201", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T01:09:05Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.200", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "SUCCESS", "reason": "mfa_passed"}
+{"timestamp": "2026-01-13T01:09:40Z", "username": "customer10@vietcombank.example", "src_ip": "203.0.113.200", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T01:10:15Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.91", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:10:50Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.91", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T01:11:25Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T01:12:00Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.200", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T01:12:35Z", "username": "vu.g@yahoo.com", "src_ip": "198.51.100.91", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T01:13:10Z", "username": "customer10@vietcombank.example", "src_ip": "203.0.113.200", "user_agent": "python-requests/2.31", "result": "FAIL", "reason": "account_locked"}
+{"timestamp": "2026-01-13T01:13:45Z", "username": "customer10@vietcombank.example", "src_ip": "203.0.113.201", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:14:20Z", "username": "pham.d@enterprise.vn", "src_ip": "203.0.113.200", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T01:14:55Z", "username": "customer10@vietcombank.example", "src_ip": "198.51.100.90", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "mfa_required"}
+{"timestamp": "2026-01-13T01:15:30Z", "username": "vu.g@yahoo.com", "src_ip": "198.51.100.91", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "result": "FAIL", "reason": "invalid_password"}
+{"timestamp": "2026-01-13T01:16:05Z", "username": "nguyen.van.a@gmail.com", "src_ip": "198.51.100.90", "user_agent": "Go-http-client/1.1", "result": "FAIL", "reason": "invalid_password"}

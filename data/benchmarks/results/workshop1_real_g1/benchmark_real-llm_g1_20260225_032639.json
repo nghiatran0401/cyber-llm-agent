@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-02-25T03:26:39.633016+00:00",
+  "total_tests": 4,
+  "average_precision": 0.9167,
+  "average_recall": 0.5917,
+  "average_f1_score": 0.7079,
+  "average_latency_seconds": 6.0465,
+  "results": [
+    {
+      "test_id": "wk1_case_001",
+      "test_name": "Phishing Email with SPF/DMARC Failure",
+      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nEmail gateway flagged message from security@vietcombank-secure.example with SPF fail, DKIM none, DMARC fail. User-facing subject requests urgent account verification in 24 hours.\n\nAnswer concisely and include concrete actions.",
+      "response": "- Indicators:\n  - Sender: security@vietcombank-secure.example\n  - Email Security Flags: SPF fail, DKIM none, DMARC fail\n  - Subject: Urgent account verification request within 24 hours\n\n- Threat assessment:\n  - **Threat Type:** Phishing Attack\n  - **Severity:** High\n    - **Justification:** The email is flagged with multiple security failures (SPF, DKIM, DMARC) and contains a subject line that is typical of phishing attempts aimed at creating urgency to trick users into providing sensitive information.\n\n- Recommended actions:\n  1. **Immediate Containment:**\n     - Block the sender domain vietcombank-secure.example at the email gateway to prevent further phishing attempts.\n     - Alert users about the phishing attempt and instruct them not to interact with the email.\n     - Implement email filtering rules to automatically quarantine similar messages.\n  2. **Follow-up Steps:**\n     - Conduct a security awareness campaign to educate users on recognizing phishing emails and the importance of verifying sender authenticity.\n     - Review and enhance email security configurations to ensure robust SPF, DKIM, and DMARC policies are enforced.\n     - Monitor for any reports of users interacting with the email and take steps to secure any potentially compromised accounts.\n     - Investigate the source of the phishing email to identify any additional indicators of compromise (IOCs) and update threat intelligence databases accordingly.\n\nThe evidence strongly indicates a phishing attack designed to harvest user credentials or sensitive information. Access to email logs and any user reports of interaction with the email would be beneficial to assess the extent of the threat and take further action if necessary.",
+      "metrics": {
+        "precision": 1.0,
+        "recall": 0.6667,
+        "f1_score": 0.8,
+        "true_positive_keywords": 4,
+        "false_positive_keywords": 0,
+        "missing_expected_keywords": 2,
+        "response_length": 1724,
+        "timestamp": "2026-02-25T03:26:23.674760+00:00",
+        "latency_seconds": 8.2283,
+        "tokens_approx": 243
+      }
+    },
+    {
+      "test_id": "wk1_case_002",
+      "test_name": "Phishing Variant with Lookalike Branding",
+      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nHTML email contains confirm-identity link to vietcombank-secure.example and image asset from cdn-vcb.example. Sender uses no-reply@vietcombank-secure.example with failed sender authentication.\n\nAnswer concisely and include concrete actions.",
+      "response": "- Indicators:\n  - Sender: no-reply@vietcombank-secure.example\n  - Email Content: Contains a \"confirm-identity\" link to vietcombank-secure.example and an image asset from cdn-vcb.example\n  - Email Security Flags: Failed sender authentication\n\n- Threat assessment:\n  - **Threat Type:** Phishing Attack\n  - **Severity:** High\n    - **Justification:** The presence of a \"confirm-identity\" link, failed sender authentication, and the use of a domain that mimics a legitimate organization are classic signs of a phishing attempt aimed at credential harvesting or deploying malware.\n\n- Recommended actions:\n  1. **Immediate Containment:**\n     - Block the domain vietcombank-secure.example and cdn-vcb.example at the email gateway to prevent further phishing attempts.\n     - Notify all users about the phishing attempt and instruct them not to interact with the email or its links.\n     - Implement email filtering rules to automatically quarantine similar messages.\n  2. **Follow-up Steps:**\n     - Conduct a security awareness training session to educate users on recognizing phishing emails and verifying sender authenticity.\n     - Review and enhance email security configurations to enforce strict SPF, DKIM, and DMARC policies.\n     - Monitor for any user reports of interaction with the email and take steps to secure any potentially compromised accounts.\n     - Investigate the source of the phishing email to identify any additional indicators of compromise (IOCs) and update threat intelligence databases accordingly.\n\nThe evidence strongly indicates a phishing attack designed to deceive users into revealing sensitive information. Access to email logs and any user reports of interaction with the email would be beneficial to assess the extent of the threat and take further action if necessary.",
+      "metrics": {
+        "precision": 1.0,
+        "recall": 0.8,
+        "f1_score": 0.8889,
+        "true_positive_keywords": 4,
+        "false_positive_keywords": 0,
+        "missing_expected_keywords": 1,
+        "response_length": 1801,
+        "timestamp": "2026-02-25T03:26:29.083573+00:00",
+        "latency_seconds": 5.4087,
+        "tokens_approx": 248
+      }
+    },
+    {
+      "test_id": "wk1_case_003",
+      "test_name": "Benign Newsletter Control Sample",
+      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nNewsletter from news@vietcombank.example passes SPF, DKIM, DMARC and links to official bank security tips page.\n\nAnswer concisely and include concrete actions.",
+      "response": "- Indicators:\n  - Sender: news@vietcombank.example\n  - Email Security Flags: Passes SPF, DKIM, DMARC\n  - Content: Links to official bank security tips page\n\n- Threat assessment:\n  - **Threat Type:** Legitimate Communication\n  - **Severity:** Low\n    - **Justification:** The email passes all sender authentication checks (SPF, DKIM, DMARC) and links to an official bank page, indicating it is a legitimate communication from the bank.\n\n- Recommended actions:\n  1. **Immediate Containment:**\n     - No immediate containment actions are necessary as the email is legitimate.\n  2. **Follow-up Steps:**\n     - Continue monitoring email security systems to ensure they are effectively distinguishing between legitimate and phishing emails.\n     - Encourage users to remain vigilant and report any suspicious emails, even if they appear to be legitimate, to maintain a strong security posture.\n     - Regularly review and update email security configurations to maintain effectiveness against evolving threats.\n\nThe evidence indicates that this is a legitimate newsletter from the bank, and no immediate security actions are required. However, maintaining user awareness and robust email security practices is essential.",
+      "metrics": {
+        "precision": 0.6667,
+        "recall": 0.5,
+        "f1_score": 0.5714,
+        "true_positive_keywords": 2,
+        "false_positive_keywords": 1,
+        "missing_expected_keywords": 2,
+        "response_length": 1214,
+        "timestamp": "2026-02-25T03:26:34.103480+00:00",
+        "latency_seconds": 5.0198,
+        "tokens_approx": 167
+      }
+    },
+    {
+      "test_id": "wk1_case_004",
+      "test_name": "Suspicious Newly Registered Domains",
+      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nWHOIS for vietcombank-secure.example and vcb-alerts.example shows creation date 2026-01-10 and registrant country mismatch with bank operations. Domains observed in phishing Reply-To and URL fields.\n\nAnswer concisely and include concrete actions.",
+      "response": "- Indicators:\n  - Domains: vietcombank-secure.example and vcb-alerts.example\n  - WHOIS Data: Creation date 2026-01-10, registrant country mismatch with bank operations\n  - Usage: Observed in phishing Reply-To and URL fields\n\n- Threat assessment:\n  - **Threat Type:** Phishing Attack\n  - **Severity:** High\n    - **Justification:** The domains are newly created and used in phishing emails, with a registrant country mismatch indicating they are likely set up specifically for malicious purposes. The use in phishing Reply-To and URL fields further confirms their role in a phishing campaign targeting the bank's customers.\n\n- Recommended actions:\n  1. **Immediate Containment:**\n     - Block the domains vietcombank-secure.example and vcb-alerts.example at the email gateway and firewall to prevent further phishing attempts.\n     - Notify users about the phishing campaign and instruct them not to interact with emails containing these domains.\n     - Implement email filtering rules to automatically quarantine messages with these domains in the Reply-To or URL fields.\n  2. **Follow-up Steps:**\n     - Report the malicious domains to the relevant domain registrars and request their takedown.\n     - Conduct a security awareness campaign to educate users on recognizing phishing emails and the importance of verifying sender authenticity.\n     - Monitor for any user reports of interaction with the phishing emails and take steps to secure any potentially compromised accounts.\n     - Update threat intelligence databases with the identified domains and any additional indicators of compromise (IOCs).\n\nThe evidence strongly indicates a coordinated phishing attack using newly registered domains. Access to email logs and any user reports of interaction with these domains would be beneficial to assess the extent of the threat and take further action if necessary.\n\nCritic verdict: High-risk response missing evidence citations. Please provide more logs, IOC context, or CTI evidence.",
+      "metrics": {
+        "precision": 1.0,
+        "recall": 0.4,
+        "f1_score": 0.5714,
+        "true_positive_keywords": 2,
+        "false_positive_keywords": 0,
+        "missing_expected_keywords": 3,
+        "response_length": 1988,
+        "timestamp": "2026-02-25T03:26:39.632997+00:00",
+        "latency_seconds": 5.5294,
+        "tokens_approx": 277
+      }
+    }
+  ],
+  "benchmark_mode": "real-llm",
+  "agent_mode": "g1",
+  "provider": "openai",
+  "dataset": "/Users/nghiatran/projects/cyber-llm-agent/data/benchmarks/threat_cases_workshop1.json"
+}

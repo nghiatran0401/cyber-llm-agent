@@ -1,0 +1,11 @@
+# breach_posting_excerpt.txt (simulated)
+
+Title: "VN MIXED LOGS - 2026 JAN" (sample excerpt)
+Date Observed: 2026-01-13
+Claimed Source: "infostealer compilation + older breaches"
+Notes:
+- Mix of plaintext and hashed credentials (bcrypt and sha1)
+- Multiple Vietnamese and regional corporate domains
+- Seller advertises as "fresh" and "good for ATO"
+
+(Training note: This is a simulated excerpt. Do not use for offensive activity.)

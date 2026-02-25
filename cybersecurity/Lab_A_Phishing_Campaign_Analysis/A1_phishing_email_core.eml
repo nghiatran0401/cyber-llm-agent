@@ -1,0 +1,27 @@
+Return-Path: <bounce@mailer.suspicious-host.example>
+Received: from mail.suspicious-host.example (mail.suspicious-host.example [203.0.113.10])
+        by mx.bank.example with ESMTPS id 9F3A1B2C3D
+        for <victim.customer@example.com>; Tue, 13 Jan 2026 08:14:23 +0700
+Authentication-Results: mx.bank.example;
+        spf=fail smtp.mailfrom=mailer.suspicious-host.example;
+        dkim=none;
+        dmarc=fail header.from=vietcombank-secure.example
+From: "VCB Security Team" <security@vietcombank-secure.example>
+Reply-To: support@vcb-alerts.example
+To: victim.customer@example.com
+Subject: Action Required: Verify your VCB Digibank account within 24 hours
+Date: Tue, 13 Jan 2026 08:14:18 +0700
+Message-ID: <20260113011418.9F3A1B2C3D@mail.suspicious-host.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+Dear Customer,
+
+We detected a sign-in attempt that requires verification to keep your account secure.
+
+Verify now: https://vietcombank-secure.example/verify?id=VN2026ABC
+
+If you do not verify within 24 hours, your online banking access may be temporarily limited.
+
+Thank you,
+VCB Security Team

@@ -1,0 +1,33 @@
+# dns_whois_core.txt (simulated)
+
+$ dig +short vietcombank-secure.example
+203.0.113.10
+
+$ dig +short cdn-vcb.example
+198.51.100.42
+
+$ dig +short vcb-alerts.example
+203.0.113.11
+
+--- WHOIS (simulated) ---
+Domain Name: VIETCOMBANK-SECURE.EXAMPLE
+Registrar: Example Registrar, Inc.
+Creation Date: 2026-01-10
+Updated Date: 2026-01-11
+Name Server: ns1.fast-dns.example
+Name Server: ns2.fast-dns.example
+Registrant Country: RU
+
+Domain Name: CDN-VCB.EXAMPLE
+Registrar: Example Registrar, Inc.
+Creation Date: 2026-01-10
+Name Server: ns1.fast-dns.example
+Name Server: ns2.fast-dns.example
+Registrant Country: RU
+
+Domain Name: VCB-ALERTS.EXAMPLE
+Registrar: Example Registrar, Inc.
+Creation Date: 2026-01-10
+Name Server: ns1.fast-dns.example
+Name Server: ns2.fast-dns.example
+Registrant Country: RU

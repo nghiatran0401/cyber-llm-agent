@@ -1,0 +1,19 @@
+Case: Suspected GhostTap / NFC Relay
+Case ID: FRAUD-2026-0113-042
+
+Customer Statement (summary):
+- Customer reports phone is in their possession.
+- Customer denies being in multiple cities during the period.
+
+Additional Context:
+- Boarding pass / airport entry scan recorded at 2026-01-13 14:15 local time at SGN (Tan Son Nhat Airport, Ho Chi Minh City).
+- The contactless transactions started at 14:32 local time.
+
+Hypothesis (for students to test):
+- NFC relay attack enabling valid EMV cryptograms across multiple POS terminals.
+
+Artifacts:
+- transactions_core.csv
+- nfc_timing_core.csv
+- authorization_log_core.jsonl
+- airline_checkin_log.csv

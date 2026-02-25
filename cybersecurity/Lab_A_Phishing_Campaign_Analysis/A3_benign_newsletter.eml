@@ -1,0 +1,23 @@
+Return-Path: <news@vietcombank.example>
+Received: from mail.vietcombank.example (mail.vietcombank.example [192.0.2.55])
+        by mx.bank.example with ESMTPS id 3A0C9D7F10
+        for <victim.customer@example.com>; Tue, 13 Jan 2026 10:10:05 +0700
+Authentication-Results: mx.bank.example;
+        spf=pass smtp.mailfrom=vietcombank.example;
+        dkim=pass;
+        dmarc=pass header.from=vietcombank.example
+From: "Vietcombank News" <news@vietcombank.example>
+To: victim.customer@example.com
+Subject: Vietcombank Weekly Update: New Security Tips
+Date: Tue, 13 Jan 2026 10:09:59 +0700
+Message-ID: <20260113030959.3A0C9D7F10@mail.vietcombank.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+Hello,
+
+This week's security tip: Enable multi-factor authentication (MFA) on your account and never share your OTP.
+
+Read more: https://vietcombank.example/security-tips/mfa
+
+You are receiving this email because you subscribed to bank updates.

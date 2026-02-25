@@ -1,0 +1,25 @@
+File: landing_page_source_excerpt.txt
+Purpose: Training-only, sanitized excerpt (do not deploy).
+
+Observed Indicators (high-signal):
+- Phishing host: vietcombank-secure.example
+- External asset host: cdn-vcb.example
+- Attacker contact domain (Reply-To): vcb-alerts.example
+- Credential collection endpoint (server-side): /post.php
+- Data exfiltration observed to: api.telegram.org (see server_outbound_http_core.log)
+
+Excerpt (sanitized):
+-----------------------------------------------------------------
+<html>
+  <head>
+    <link rel="stylesheet" href="https://cdn-vcb.example/css/app.css">
+  </head>
+  <body>
+    <form method="POST" action="/post.php">
+      <input name="user_id" placeholder="User ID" />
+      <input name="password" type="password" placeholder="Password" />
+      <button type="submit">Verify</button>
+    </form>
+  </body>
+</html>
+-----------------------------------------------------------------
