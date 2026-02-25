@@ -116,6 +116,7 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 
 ## Configuration Notes
 
+- Policy gates reference: `docs/policy-gates.md` (kept production guardrails and return behavior)
 - `ENVIRONMENT=production` forces sandbox off by validation rules.
 - `ENABLE_SANDBOX=true` is for local training/non-production use.
 - Sandbox API routes return `403` when sandbox is disabled.

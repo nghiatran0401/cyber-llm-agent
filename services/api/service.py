@@ -13,6 +13,7 @@ from src.config.settings import Settings
 from src.sandbox.owasp_sandbox import append_event_to_live_log, event_to_analysis_text, generate_event, list_scenarios
 from src.utils.evaluator import AgentEvaluator
 from src.utils.prompt_manager import PromptManager
+from src.utils.prompt_templates import render_prompt_template
 
 from .schemas import StepTrace
 
@@ -20,13 +21,6 @@ MAX_INPUT_CHARS = 50_000
 MAX_EVENT_TEXT_CHARS = 10_000
 MAX_EVENT_KEYS = 32
 _AGENT_CACHE: Dict[str, tuple[Any, float]] = {}
-_HUMAN_NEEDED_SIGNALS = (
-    "need more data",
-    "please provide",
-    "insufficient evidence",
-    "cannot determine",
-    "unable to determine",
-)
 _SEVERITY_ORDER = ("critical", "high", "medium", "low")
 _PROMPT_INJECTION_MARKERS = (
     "ignore previous instructions",
@@ -74,15 +68,6 @@ def _enforce_response_boundaries(text: str, max_chars: int = 12000) -> str:
     return content[: max_chars - 3].rstrip() + "..."
 
 
-def _infer_stop_reason(response_text: str) -> str:
-    content = (response_text or "").lower()
-    if any(signal in content for signal in _HUMAN_NEEDED_SIGNALS):
-        return "needs_human"
-    if not content.strip():
-        return "blocked"
-    return "completed"
-
-
 def _sanitize_untrusted_text(text: str) -> str:
     # Strip non-printable control chars and keep deterministic whitespace.
     sanitized = "".join(ch for ch in str(text or "") if ch == "\n" or ch == "\t" or ord(ch) >= 32)
@@ -121,9 +106,8 @@ def _apply_action_gating(
     high_risk: bool,
     evidence_count: int,
 ) -> tuple[str, str]:
-    stop_reason = _infer_stop_reason(response)
     if not high_risk:
-        return response, stop_reason
+        return response, "completed"
 
     if evidence_count < Settings.MIN_EVIDENCE_FOR_HIGH_RISK:
         gated = (
@@ -138,7 +122,7 @@ def _apply_action_gating(
         )
         return _enforce_response_boundaries(gated), "needs_human"
 
-    return response, stop_reason
+    return response, "completed"
 
 
 def _extract_bullets(section_name: str, text: str) -> List[str]:
@@ -228,29 +212,16 @@ def _run_single_agent_loop(agent: Any, user_input: str) -> tuple[str, str, int]:
             break
         steps_used = step_idx + 1
         response = _enforce_response_boundaries(agent.run(current_input))
-        stop_reason = _infer_stop_reason(response)
-        # Phase 1 loop foundation: one complete step exits deterministically.
-        if stop_reason in {"completed", "needs_human", "blocked"}:
-            break
-        current_input = (
-            "Continue the analysis from the latest evidence and provide only net-new findings.\n\n"
-            f"Previous response:\n{response}"
-        )
+        # Single-step deterministic execution; policy gates can still override stop_reason later.
+        stop_reason = "completed"
+        break
 
     return response, stop_reason, steps_used
 
 
 def _resolve_prompt_version(mode: str) -> tuple[str, str]:
     selected = Settings.PROMPT_VERSION_G1 if mode == "g1" else Settings.PROMPT_VERSION_G2
-    try:
-        prompt_template = _PROMPT_MANAGER.load_prompt(selected)
-        return selected, prompt_template
-    except Exception:
-        fallback = "security_analysis_v1.txt"
-        try:
-            return fallback, _PROMPT_MANAGER.load_prompt(fallback)
-        except Exception:
-            return "inline_fallback", "You are a cybersecurity analyst. Provide evidence-first analysis."
+    return selected, _PROMPT_MANAGER.load_prompt(selected)
 
 
 def _build_prompted_input(prompt_template: str, user_input: str) -> str:
@@ -903,7 +874,10 @@ def analyze_sandbox_event(
     event_text = event_to_analysis_text(event)
     if mode == "g2":
         return run_g2_analysis(event_text)
-    prompt = f"Analyze this sandbox security event and recommend actions:\n{event_text}"
+    prompt = render_prompt_template(
+        "service/sandbox_analysis.txt",
+        event_text=event_text,
+    )
     return run_g1_analysis(prompt, session_id=session_id)
 
 
