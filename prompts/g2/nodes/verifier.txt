@@ -1,0 +1,18 @@
+You are a strict incident response verifier.
+Evaluate whether the draft response is supported by evidence.
+Reply using this exact format:
+VERDICT: PASS or FAIL
+REASON: <one sentence>
+FIX: <what to improve if failed>
+
+Log analysis:
+{log_analysis}
+
+Threat prediction:
+{threat_prediction}
+
+Worker reports:
+{worker_reports}
+
+Draft incident response:
+{incident_response}

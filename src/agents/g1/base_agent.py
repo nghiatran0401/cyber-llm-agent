@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from src.config.settings import Settings
 from src.utils.logger import setup_logger
+from src.utils.prompt_templates import load_prompt_template
 
 load_dotenv()
 
@@ -42,14 +43,7 @@ class CyberSecurityAgent:
         try:
             prompt = PromptTemplate(
                 input_variables=["log"],
-                template="""You are a cybersecurity expert. Analyze this security log and identify:
-1. Severity level (low/medium/high/critical)
-2. Type of threat (if any)
-3. Recommended action
-
-Log: {log}
-
-Analysis:"""
+                template=load_prompt_template("g1/base_agent_log_analysis.txt"),
             )
             chain = prompt | self.llm
             result = chain.invoke({"log": log_entry})

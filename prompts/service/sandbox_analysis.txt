@@ -1,0 +1,2 @@
+Analyze this sandbox security event and recommend actions:
+{event_text}

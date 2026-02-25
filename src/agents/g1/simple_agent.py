@@ -7,30 +7,14 @@ from src.tools.security_tools import log_parser, cti_fetch
 from src.tools.rag_tools import rag_retriever
 from src.config.settings import Settings
 from src.utils.logger import setup_logger
+from src.utils.prompt_templates import load_prompt_template
 
 logger = setup_logger(__name__)
 
 
 def _build_system_prompt() -> str:
     """Build system prompt with evidence-first guidance."""
-    prompt = """You are a cybersecurity expert agent. Use the available tools to analyze security logs and fetch threat intelligence.
-
-Your tasks include:
-1. Parsing system logs to identify security threats
-2. Fetching Cyber Threat Intelligence (CTI) for identified threats
-3. Providing recommendations based on your analysis
-
-Evidence policy:
-- Prefer tool outputs over assumptions.
-- If the user asks for incident-level or high-impact actions, gather evidence first before concluding.
-- If evidence is missing, state uncertainty clearly and ask for the required logs or threat context.
-- If you use CTIFetch, preserve provenance explicitly by including this exact line in your final answer:
-  Source: <provider from CTIFetch output>
-- Do not paraphrase or omit the Source line when CTIFetch was used.
-- If you use RAGRetriever, include a citations section exactly as returned by the tool.
-
-Always be thorough and provide actionable security recommendations."""
-    return prompt
+    return load_prompt_template("g1/system_prompt.txt")
 
 
 def _create_tool_agent(model_name: str, verbose: bool = True):
@@ -49,6 +33,26 @@ def _create_tool_agent(model_name: str, verbose: bool = True):
         system_prompt=_build_system_prompt(),
         debug=verbose,
     )
+
+
+def create_simple_agent(verbose: bool = True, task_hint: str = ""):
+    """Create a single tool-enabled agent with model chosen from task hint."""
+    try:
+        Settings.validate()
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        raise
+
+    selected_model = Settings.STRONG_MODEL_NAME if Settings.should_use_strong_model(task_hint) else Settings.FAST_MODEL_NAME
+    logger.info("Creating simple agent with model: %s", selected_model)
+
+    try:
+        agent = _create_tool_agent(selected_model, verbose=verbose)
+        logger.info("Simple tool-enabled agent created successfully.")
+        return agent
+    except Exception as e:
+        logger.error(f"Error creating agent: {e}", exc_info=True)
+        raise
 
 
 class AdaptiveSecurityAgent:
@@ -97,8 +101,8 @@ class AdaptiveSecurityAgent:
 
         if Settings.TOOL_MANDATORY_FOR_HIGH_RISK and high_risk:
             policy_prefix = (
-                "High-risk task mode: use available tools first and base your conclusions on evidence. "
-                "If tool evidence is insufficient, say what data is missing before giving recommendations.\n\n"
+                load_prompt_template("g1/high_risk_policy_prefix.txt")
+                + "\n\n"
             )
             if isinstance(payload, dict) and "messages" in payload and payload["messages"]:
                 updated_payload = dict(payload)
@@ -117,26 +121,6 @@ class AdaptiveSecurityAgent:
             return selected_agent.invoke(policy_prefix + str(payload))
 
         return selected_agent.invoke(payload)
-
-
-def create_simple_agent(verbose: bool = True, task_hint: str = ""):
-    """Create a single tool-enabled agent with model chosen from task hint."""
-    try:
-        Settings.validate()
-    except ValueError as e:
-        logger.error(f"Configuration error: {e}")
-        raise
-
-    selected_model = Settings.STRONG_MODEL_NAME if Settings.should_use_strong_model(task_hint) else Settings.FAST_MODEL_NAME
-    logger.info("Creating simple agent with model: %s", selected_model)
-
-    try:
-        agent = _create_tool_agent(selected_model, verbose=verbose)
-        logger.info("Simple tool-enabled agent created successfully.")
-        return agent
-    except Exception as e:
-        logger.error(f"Error creating agent: {e}", exc_info=True)
-        raise
 
 
 # Test agent

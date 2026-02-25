@@ -16,6 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.config.settings import Settings
 from src.utils.evaluator import AgentEvaluator
+from src.utils.prompt_templates import render_prompt_template
 
 
 def _parse_args() -> argparse.Namespace:
@@ -71,11 +72,9 @@ def _load_dataset(dataset_path: Path) -> List[Dict[str, Any]]:
 
 
 def _build_prompt(log_text: str) -> str:
-    return (
-        "You are a SOC analyst. Analyze this security event and provide:\n"
-        "1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\n"
-        f"Security log/event:\n{log_text}\n\n"
-        "Answer concisely and include concrete actions."
+    return render_prompt_template(
+        "benchmark/eval_prompt.txt",
+        log_text=log_text,
     )
 
 

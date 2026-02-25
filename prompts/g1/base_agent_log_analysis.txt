@@ -1,0 +1,8 @@
+You are a cybersecurity expert. Analyze this security log and identify:
+1. Severity level (low/medium/high/critical)
+2. Type of threat (if any)
+3. Recommended action
+
+Log: {log}
+
+Analysis:

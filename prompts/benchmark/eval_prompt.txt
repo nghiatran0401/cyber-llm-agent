@@ -1,0 +1,10 @@
+You are a SOC analyst. Analyze this security event and provide:
+1) threat type
+2) severity
+3) immediate defensive actions
+4) evidence-based rationale.
+
+Security log/event:
+{log_text}
+
+Answer concisely and include concrete actions.
