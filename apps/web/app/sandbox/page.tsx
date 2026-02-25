@@ -89,7 +89,7 @@ export default function SandboxPage() {
       <section className="panel">
         <h2 className="mb-2 text-xl font-semibold">Educational OWASP sandbox</h2>
         <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
-          Simulate local attack events and analyze them using the migrated Next.js + FastAPI flow.
+          Simulate local attack events and validate G1/G2 response quality against the same backend contract used in Workspace.
         </p>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={onSimulate}>
           <label className="text-sm text-slate-700 dark:text-slate-300">
@@ -125,7 +125,7 @@ export default function SandboxPage() {
             <button type="submit" className="btn" disabled={loading || scenarios.length === 0}>
               {loading ? "Simulating..." : "Simulate attack event"}
             </button>
-            <button type="button" className="btn" disabled={!canAnalyze} onClick={() => void onAnalyze()}>
+            <button type="button" className="btn-secondary" disabled={!canAnalyze} onClick={() => void onAnalyze()}>
               {loading ? "Analyzing..." : "Analyze last event"}
             </button>
           </div>
@@ -136,7 +136,7 @@ export default function SandboxPage() {
       <section className="panel">
         <h3 className="mb-2 text-lg font-semibold">Latest event</h3>
         {event ? (
-          <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-100 p-3 text-sm dark:bg-slate-950">
+          <pre className="code-block">
             {JSON.stringify(event, null, 2)}
           </pre>
         ) : (
@@ -145,28 +145,33 @@ export default function SandboxPage() {
       </section>
 
       <section className="panel">
-        <h3 className="mb-2 text-lg font-semibold">Analysis output</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Analysis output</h3>
+          <span className="status-badge bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            {mode === "g1" ? "G1 format" : "G2 format"}
+          </span>
+        </div>
         {mode === "g1" ? (
-          <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-100 p-3 text-sm dark:bg-slate-950">
+          <pre className="code-block">
             {resultText || "Run analysis to see output."}
           </pre>
         ) : g2Result ? (
-          <div className="space-y-3 text-sm">
-            <div>
+          <div className="grid gap-3 text-sm md:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
               <h4 className="font-medium">Log analysis</h4>
-              <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-100 p-3 dark:bg-slate-950">{g2Result.log_analysis}</pre>
+              <pre className="code-block mt-2">{g2Result.log_analysis}</pre>
             </div>
-            <div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
               <h4 className="font-medium">Threat prediction</h4>
-              <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-100 p-3 dark:bg-slate-950">{g2Result.threat_prediction}</pre>
+              <pre className="code-block mt-2">{g2Result.threat_prediction}</pre>
             </div>
-            <div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
               <h4 className="font-medium">Incident response</h4>
-              <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-100 p-3 dark:bg-slate-950">{g2Result.incident_response}</pre>
+              <pre className="code-block mt-2">{g2Result.incident_response}</pre>
             </div>
-            <div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
               <h4 className="font-medium">Executive summary</h4>
-              <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-100 p-3 dark:bg-slate-950">{g2Result.final_report}</pre>
+              <pre className="code-block mt-2">{g2Result.final_report}</pre>
             </div>
           </div>
         ) : (
@@ -174,7 +179,7 @@ export default function SandboxPage() {
         )}
       </section>
 
-      <section>
+      <section className="panel">
         <h3 className="mb-2 text-lg font-semibold">Execution trace</h3>
         <TracePanel trace={trace} />
       </section>

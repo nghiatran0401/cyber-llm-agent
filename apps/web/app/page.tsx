@@ -5,74 +5,41 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { TracePanel } from "@/components/TracePanel";
+import { deriveMonitorState, PhaseStatus, RunStatus } from "@/lib/monitor-state";
 import { streamWorkspace } from "@/lib/api";
 import { AgentMode, StepTrace } from "@/lib/types";
+type WorkspaceMessage = { id: string; role: "user" | "assistant"; content: string };
 
-type WorkspaceMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-};
-
-const G1_MONITOR_STEPS = [
-  "InputPreparation",
-  "RoutingPolicy",
-  "SingleAgentExecution",
-  "StructuredOutput",
-  "CriticReview",
-];
-const G2_MONITOR_STEPS = [
-  "LogAnalyzer",
-  "WorkerPlanner",
-  "ThreatPredictor",
-  "WorkerTask",
-  "IncidentResponder",
-  "Verifier",
-  "IncidentResponderRetry",
-  "Orchestrator",
-];
-
-const G1_SYSTEM_PHASES = [
-  {
-    id: "collect",
-    title: "1) Understand Input",
-    desc: "Read your message and optional logs, then clean and structure it.",
-    stepKeys: ["InputPreparation"],
-  },
-  {
-    id: "reason",
-    title: "2) Reason About Risk",
-    desc: "Evaluate threat signals, predict attacker behavior, and prioritize severity.",
-    stepKeys: ["RoutingPolicy"],
-  },
-  {
-    id: "respond",
-    title: "3) Build Response Plan",
-    desc: "Generate actions, structure evidence, and run a critic check before final answer.",
-    stepKeys: ["SingleAgentExecution", "StructuredOutput", "CriticReview"],
-  },
-];
-
-const G2_SYSTEM_PHASES = [
-  {
-    id: "collect",
-    title: "1) Understand Input",
-    desc: "Agent 1 scans logs, extracts suspicious patterns, and organizes evidence.",
-    stepKeys: ["LogAnalyzer"],
-  },
-  {
-    id: "reason",
-    title: "2) Reason About Risk",
-    desc: "Orchestrator plans worker tasks and Agent 2 predicts attacker next moves.",
-    stepKeys: ["WorkerPlanner", "ThreatPredictor", "WorkerTask"],
-  },
-  {
-    id: "respond",
-    title: "3) Build Response Plan",
-    desc: "Responder drafts actions, verifier checks quality, then orchestrator finalizes report.",
-    stepKeys: ["IncidentResponder", "Verifier", "IncidentResponderRetry", "Orchestrator"],
-  },
-];
+function getPhaseBadge(status: PhaseStatus): { label: string; className: string } {
+  if (status === "completed") {
+    return {
+      label: "Completed",
+      className: "status-badge bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
+    };
+  }
+  if (status === "running") {
+    return {
+      label: "Running",
+      className: "status-badge bg-cyan-100 text-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-200",
+    };
+  }
+  if (status === "error") {
+    return {
+      label: "Error",
+      className: "status-badge bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300",
+    };
+  }
+  if (status === "skipped") {
+    return {
+      label: "Skipped",
+      className: "status-badge bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+    };
+  }
+  return {
+    label: "Pending",
+    className: "status-badge bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  };
+}
 
 function MarkdownContent({ content }: { content: string }) {
   return (
@@ -92,6 +59,7 @@ export default function WorkspacePage() {
   const [lastResultText, setLastResultText] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [liveStatus, setLiveStatus] = useState("Waiting for request...");
   const [currentStep, setCurrentStep] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -101,24 +69,16 @@ export default function WorkspacePage() {
     return Boolean(draft.trim() || logPayload.trim());
   }, [draft, logPayload, isSubmitting]);
 
-  const expectedSteps = modelMode === "g2" ? G2_MONITOR_STEPS : G1_MONITOR_STEPS;
-  const completedStepNames = useMemo(() => new Set(trace.map((step) => step.step)), [trace]);
-  const activeSystemPhases = modelMode === "g2" ? G2_SYSTEM_PHASES : G1_SYSTEM_PHASES;
-  const phaseProgress = activeSystemPhases.map((phase) => {
-    const doneCount = phase.stepKeys.filter((key) => completedStepNames.has(key)).length;
-    const ratio = doneCount / phase.stepKeys.length;
-    const isActive =
-      isSubmitting &&
-      phase.stepKeys.some((key) => key === currentStep || (completedStepNames.has(key) && ratio < 1));
-    return {
-      ...phase,
-      doneCount,
-      total: phase.stepKeys.length,
-      ratio,
-      isDone: ratio >= 1,
-      isActive,
-    };
-  });
+  const monitor = useMemo(
+    () =>
+      deriveMonitorState({
+        mode: modelMode,
+        trace,
+        currentStep,
+        runStatus,
+      }),
+    [modelMode, trace, currentStep, runStatus],
+  );
 
   async function onUploadLogs(file: File | null) {
     if (!file) {
@@ -157,6 +117,7 @@ export default function WorkspacePage() {
     setTrace([]);
     setLastResultText("");
     setLiveStatus("Submitting request...");
+    setRunStatus("running");
     setCurrentStep("");
     setMessages((prev) => [
       ...prev,
@@ -187,6 +148,7 @@ export default function WorkspacePage() {
             if (eventPayload.type === "final") {
               finalText = eventPayload.result;
               setLiveStatus("Completed.");
+              setRunStatus("completed");
               setCurrentStep("");
               setLastResultText(finalText);
               setMessages((prev) => [
@@ -201,12 +163,23 @@ export default function WorkspacePage() {
             }
             if (eventPayload.type === "error") {
               setError(eventPayload.error.message || "Unexpected request failure.");
+              setRunStatus("error");
+              setLiveStatus("Run failed.");
+              setCurrentStep("");
+            }
+            if (eventPayload.type === "done") {
+              if (!finalText) {
+                setLiveStatus("Run stopped before final output.");
+                setRunStatus("error");
+              }
             }
           },
         },
       );
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unexpected request failure.");
+      setRunStatus("error");
+      setLiveStatus("Run failed.");
     } finally {
       setIsSubmitting(false);
     }
@@ -224,9 +197,12 @@ export default function WorkspacePage() {
     <main className="grid h-[calc(100dvh-120px)] gap-4 overflow-hidden lg:grid-cols-[minmax(0,1fr)_520px]">
       <section className="panel flex h-full flex-col overflow-hidden">
         <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
-          <p className="text-sm font-medium">CyberAI Assistant</p>
+          <div>
+            <p className="text-sm font-semibold">CyberAI Assistant</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">Use chat + logs to produce incident-ready analysis.</p>
+          </div>
           <label className="ml-auto text-xs text-slate-600 dark:text-slate-400">
-            Model
+            Mode
             <select
               className="ml-2 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 shadow-sm focus:border-cyan-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               value={modelMode}
@@ -278,7 +254,7 @@ export default function WorkspacePage() {
               onClick={() => fileInputRef.current?.click()}
               title="Attach log file"
             >
-              📎 Attach
+              Attach logs
             </button>
             <input
               ref={fileInputRef}
@@ -303,7 +279,7 @@ export default function WorkspacePage() {
           />
 
           <div className="flex items-center justify-between">
-            <p />
+            <p className="text-xs text-slate-500 dark:text-slate-400">Ctrl/Cmd + Enter to submit quickly</p>
             <button className="btn" type="submit" disabled={!canSubmit}>
               {isSubmitting ? "Working..." : "Send"}
             </button>
@@ -316,42 +292,48 @@ export default function WorkspacePage() {
         <section className="panel">
           <h2 className="mb-2 text-base font-semibold">Live Monitor</h2>
           <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
-            Big-picture view of how the system works under the hood.
+            Big-picture view of backend workflow state in real time.
           </p>
 
           <div className="mb-3 rounded-md border border-slate-300 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/60">
             <div className="mb-2 flex items-center justify-between text-xs">
               <p className="font-medium text-slate-700 dark:text-slate-300">Overall run progress</p>
               <p className="text-slate-600 dark:text-slate-400">
-                {trace.length}/{expectedSteps.length} steps
+                {monitor.requiredCompletedCount}/{monitor.requiredTotalCount} required steps
               </p>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-slate-300 dark:bg-slate-800">
               <div
                 className="h-full rounded-full bg-cyan-500 transition-all"
-                style={{ width: `${Math.min(100, Math.max((trace.length / expectedSteps.length) * 100, isSubmitting ? 6 : 0))}%` }}
+                style={{
+                  width: `${Math.min(100, Math.max(monitor.percentage, isSubmitting ? 6 : 0))}%`,
+                }}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            {phaseProgress.map((phase) => {
-              const badge = phase.isDone ? "Done" : phase.isActive ? "Running" : "Waiting";
+            {monitor.phases.map((phase) => {
+              const badge = getPhaseBadge(phase.status);
               return (
                 <div
                   key={phase.id}
                   className={`rounded-md border p-3 ${
-                    phase.isDone
+                    phase.status === "completed"
                       ? "border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
-                      : phase.isActive
+                      : phase.status === "running"
                         ? "border-cyan-300 bg-cyan-50 dark:border-cyan-900 dark:bg-cyan-950/30"
+                        : phase.status === "error"
+                          ? "border-rose-300 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30"
+                          : phase.status === "skipped"
+                            ? "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
                         : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
                   }`}
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">{phase.title}</p>
-                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      {badge}
+                    <span className={badge.className}>
+                      {badge.label}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400">{phase.desc}</p>
@@ -369,10 +351,18 @@ export default function WorkspacePage() {
               {liveStatus}
             </p>
           </div>
+          {monitor.unknownSteps.length > 0 ? (
+            <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              Unknown server steps received: {monitor.unknownSteps.join(", ")}
+            </p>
+          ) : null}
         </section>
         <section className="panel">
           <h2 className="mb-2 text-sm font-semibold">Technical Trace</h2>
           <TracePanel trace={trace} />
+          {!trace.length && lastResultText ? (
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Run output is available even if no trace was emitted.</p>
+          ) : null}
         </section>
       </aside>
     </main>
