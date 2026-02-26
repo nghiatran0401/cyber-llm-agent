@@ -1,4 +1,10 @@
-"""G2 multiagent workflow implementations."""
+"""
+Purpose: Exports for G2 multiagent workflow modules
+What it does:
+- Re-exports role configuration and registry objects
+- Re-exports shared state and trace type definitions
+- Re-exports workflow builders and runner entry points
+"""
 
 from src.agents.g2.multiagent_config import (
     AgentRole,

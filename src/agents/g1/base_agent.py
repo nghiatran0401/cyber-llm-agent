@@ -61,16 +61,3 @@ class CyberSecurityAgent:
             logger.error(error_msg, exc_info=True)
             return f"Error: {error_msg}"
 
-
-# Test
-if __name__ == "__main__":
-    try:
-        agent = CyberSecurityAgent()
-        test_log = "Failed login attempt from IP 192.168.1.100 after 5 tries"
-        print(f"\nInput: {test_log}")
-        print("\nAnalysis:")
-        result = agent.analyze_log(test_log)
-        print(result)
-    except Exception as e:
-        print(f"Error: {e}")
-        print("Make sure OPENAI_API_KEY is set in your .env file")

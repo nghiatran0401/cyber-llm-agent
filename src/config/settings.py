@@ -20,7 +20,6 @@ class Settings:
     FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", MODEL_NAME)
     STRONG_MODEL_NAME = os.getenv("STRONG_MODEL_NAME", "gpt-4o")
     AUTO_MODEL_ROUTING = os.getenv("AUTO_MODEL_ROUTING", "true").lower() == "true"
-    TOOL_MANDATORY_FOR_HIGH_RISK = os.getenv("TOOL_MANDATORY_FOR_HIGH_RISK", "true").lower() == "true"
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
 

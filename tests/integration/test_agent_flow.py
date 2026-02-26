@@ -43,18 +43,18 @@ def test_base_agent_empty_log():
     assert "Error" in result or "empty" in result.lower()
 
 
-@patch('src.agents.g1.simple_agent.ChatOpenAI')
+@patch('src.agents.g1.adaptive_agent.ChatOpenAI')
 def test_simple_agent_creation(mock_chat_openai):
     """Test simple agent can be created (mocked)."""
-    from src.agents.g1.simple_agent import create_simple_agent
+    from src.agents.g1.adaptive_agent import create_simple_agent
     
     # Mock the LLM
     mock_llm_instance = MagicMock()
     mock_chat_openai.return_value = mock_llm_instance
     
     # Mock the agent creation process
-    with patch('src.agents.g1.simple_agent.create_agent') as mock_create_agent:
-        with patch('src.agents.g1.simple_agent.Settings.validate') as mock_validate:
+    with patch('src.agents.g1.adaptive_agent.create_agent') as mock_create_agent:
+        with patch('src.agents.g1.adaptive_agent.Settings.validate') as mock_validate:
             mock_agent = MagicMock()
             mock_create_agent.return_value = mock_agent
             mock_validate.return_value = True
@@ -65,7 +65,7 @@ def test_simple_agent_creation(mock_chat_openai):
 
 def test_simple_agent_with_real_api():
     """Test simple agent with real API (requires OPENAI_API_KEY)."""
-    from src.agents.g1.simple_agent import create_simple_agent
+    from src.agents.g1.adaptive_agent import create_simple_agent
     
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY not set")
@@ -85,7 +85,7 @@ def test_simple_agent_with_real_api():
 
 def test_agent_tool_integration():
     """Test that agent can use tools."""
-    from src.agents.g1.simple_agent import create_simple_agent
+    from src.agents.g1.adaptive_agent import create_simple_agent
     from pathlib import Path
     
     if not os.getenv("OPENAI_API_KEY"):
@@ -112,7 +112,7 @@ def test_agent_tool_integration():
 
 def test_agent_cti_fetch():
     """Test agent can fetch CTI intelligence."""
-    from src.agents.g1.simple_agent import create_simple_agent
+    from src.agents.g1.adaptive_agent import create_simple_agent
     
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY not set")

@@ -1,9 +1,15 @@
-"""Memory-enabled cybersecurity agent wrapper."""
+"""
+Purpose: Memory and session wrapper for adaptive agent
+What it does:
+- Wraps the adaptive security agent with conversation memory
+- Persists and restores state by session ID
+- Injects memory context into prompts before invocation
+"""
 
 from typing import Any, Optional
 from uuid import uuid4
 
-from src.agents.g1.simple_agent import AdaptiveSecurityAgent
+from src.agents.g1.adaptive_agent import AdaptiveSecurityAgent
 from src.utils.memory_manager import ConversationMemory
 from src.utils.session_manager import SessionManager
 from src.utils.logger import setup_logger

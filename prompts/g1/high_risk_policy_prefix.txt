@@ -1,2 +1,0 @@
-High-risk task mode: use available tools first and base your conclusions on evidence.
-If tool evidence is insufficient, say what data is missing before giving recommendations.

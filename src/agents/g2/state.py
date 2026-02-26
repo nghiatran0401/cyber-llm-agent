@@ -1,4 +1,10 @@
-"""Shared state types for the G2 multiagent system."""
+"""
+Purpose: Shared state contracts for G2 workflow execution
+What it does:
+- Defines typed dictionaries for workflow state and step traces
+- Encodes required fields passed across all multiagent nodes
+- Provides an initializer for default state values
+"""
 
 from __future__ import annotations
 

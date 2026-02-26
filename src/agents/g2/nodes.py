@@ -1,4 +1,10 @@
-"""Individual agent node functions for the G2 multiagent pipeline."""
+"""
+Purpose: Node execution logic for G2 multiagent pipeline
+What it does:
+- Defines per-role node handlers for analysis and response steps
+- Runs worker planning, worker tasks, and verification logic
+- Normalizes LLM invocation and enriches state with evidence
+"""
 
 from __future__ import annotations
 

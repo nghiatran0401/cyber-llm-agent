@@ -1,4 +1,10 @@
-"""LangGraph workflow builder for the G2 multiagent pipeline."""
+"""
+Purpose: Build and compile the G2 LangGraph workflow
+What it does:
+- Creates a default LLM instance from project settings
+- Assembles node sequence and edges for multiagent execution
+- Returns a compiled workflow ready for invocation
+"""
 
 from __future__ import annotations
 

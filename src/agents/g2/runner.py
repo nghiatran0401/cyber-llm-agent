@@ -1,4 +1,10 @@
-"""Public runner functions for the G2 multiagent pipeline."""
+"""
+Purpose: Runtime entry points for G2 multiagent execution
+What it does:
+- Exposes a one-call assessment helper for the workflow
+- Runs a traced sequential execution for UI step visibility
+- Enforces runtime and step budgets with stop reasons
+"""
 
 from __future__ import annotations
 

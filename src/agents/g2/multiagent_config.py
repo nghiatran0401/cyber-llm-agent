@@ -1,4 +1,10 @@
-"""Role definitions for the multiagent system."""
+"""
+Purpose: Role configuration for the G2 multiagent system
+What it does:
+- Defines the AgentRole data model for specialist agents
+- Loads role-specific system prompts from template files
+- Registers named roles for lookup by workflow components
+"""
 
 from dataclasses import dataclass
 from typing import Dict, List

@@ -1,13 +1,9 @@
 """
-multiagent_system.py — re-export shim for backward compatibility.
-
-The multiagent system has been split into dedicated modules:
-  - src/agents/g2/state.py   → AgentState, MultiagentStepTrace, create_initial_state
-  - src/agents/g2/nodes.py   → Individual agent node functions
-  - src/agents/g2/graph.py   → LangGraph workflow builder
-  - src/agents/g2/runner.py  → Public runner functions
-
-Import directly from those files for new code.
+Purpose: Backward-compatible re-export shim for G2
+What it does:
+- Re-exports the split multiagent workflow interfaces
+- Preserves legacy import paths for existing callers
+- Directs new code to dedicated state, graph, and runner modules
 """
 
 from .graph import create_multiagent_workflow
