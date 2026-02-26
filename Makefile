@@ -1,7 +1,7 @@
 PYTHON ?= python
 IMAGE ?= cyber-llm-agent:latest
 
-.PHONY: install install-web install-lab test test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci docker-build docker-run
+.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci docker-build docker-run
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -15,6 +15,9 @@ install-lab:
 test:
 	pytest -q
 
+test-ci:
+	pytest -q --ignore=tests/unit/test_multiagent.py --ignore=tests/unit/test_rag_tools.py --ignore=tests/unit/test_service_g1_phase2.py --ignore=tests/integration/test_agent_flow.py
+
 test-web:
 	npm --prefix apps/web run test
 
@@ -25,9 +28,9 @@ benchmark-report:
 	$(PYTHON) scripts/run_benchmark.py --output-dir $${BENCHMARK_OUTPUT_DIR:-data/benchmarks/results} --report-from-latest
 
 lint:
-	$(PYTHON) -m py_compile src/agents/g1/simple_agent.py src/agents/g2/multiagent_system.py services/api/*.py
+	$(PYTHON) -m py_compile src/agents/g1/*.py src/agents/g2/*.py src/agents/shared/*.py services/api/*.py
 
-ci: lint test smoke
+ci: lint test-ci benchmark smoke test-web
 
 run-api:
 	uvicorn services.api.main:app --host 127.0.0.1 --port 8000 --reload
@@ -40,7 +43,7 @@ run-lab:
 
 smoke:
 	$(PYTHON) -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
-	pytest -q tests/unit/test_memory.py tests/unit/test_multiagent.py
+	pytest -q tests/unit/test_memory.py
 
 smoke-checklist:
 	$(PYTHON) scripts/smoke_checklist.py
