@@ -1,6 +1,6 @@
 """Scenario-driven tests (offline safe)."""
 
-from src.utils.evaluator import AgentEvaluator
+from src.benchmarking.evaluator import AgentEvaluator
 
 
 class _FakeScenarioAgent:

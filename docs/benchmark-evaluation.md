@@ -23,7 +23,7 @@ This document defines how benchmark evaluation is executed and how results shoul
 ### 1) Offline mode (default, CI-safe)
 
 - Command: `make benchmark`
-- Uses deterministic offline adapter in `scripts/run_benchmark.py`
+- Uses deterministic offline adapter in `src/benchmarking/agents.py`
 - Purpose: benchmark pipeline presence and artifact generation
 
 ### 2) Real-LLM mode (staging/manual)
@@ -40,7 +40,7 @@ This document defines how benchmark evaluation is executed and how results shoul
 
 ## Metrics
 
-Computed by `src/utils/evaluator.py`:
+Computed by `src/benchmarking/evaluator.py`:
 
 - `precision`
 - `recall`

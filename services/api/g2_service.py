@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.agents.g2.multiagent_system import run_multiagent_with_trace
 from src.config.settings import Settings
-from src.utils.evaluator import AgentEvaluator
+from src.benchmarking.evaluator import AgentEvaluator
 from src.utils.prompt_manager import PromptManager
 
 from .guardrails import (

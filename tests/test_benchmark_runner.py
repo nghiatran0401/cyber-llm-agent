@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from scripts import run_benchmark
-from src.utils.evaluator import AgentEvaluator
+from src.benchmarking.evaluator import AgentEvaluator
 
 
 def test_load_dataset_reads_test_cases(tmp_path: Path):

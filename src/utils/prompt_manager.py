@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.config.settings import Settings
-from src.utils.evaluator import AgentEvaluator
+from src.benchmarking.evaluator import AgentEvaluator
 
 
 class PromptManager:

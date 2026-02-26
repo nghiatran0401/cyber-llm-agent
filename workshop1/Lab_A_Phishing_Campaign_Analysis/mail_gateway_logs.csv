@@ -1,4 +1,0 @@
-timestamp,message_id,from,to,subject,spf,dkim,dmarc,url_count,url_domains,verdict,action
-2026-01-13 08:14:23,<20260113011418.9F3A1B2C3D@mail.suspicious-host.example>,security@vietcombank-secure.example,victim.customer@example.com,Action Required: Verify your VCB Digibank account within 24 hours,fail,none,fail,1,vietcombank-secure.example,phish,delivered
-2026-01-13 09:02:11,<20260113020206.7C2D4A8B1E@mail.suspicious-host.example>,no-reply@vietcombank-secure.example,victim.customer@example.com,[VCB] Unusual Activity Detected - Confirm Your Identity,fail,none,fail,2,vietcombank-secure.example;cdn-vcb.example,phish,quarantined
-2026-01-13 10:10:05,<20260113030959.3A0C9D7F10@mail.vietcombank.example>,news@vietcombank.example,victim.customer@example.com,Vietcombank Weekly Update: New Security Tips,pass,pass,pass,1,vietcombank.example,benign,delivered

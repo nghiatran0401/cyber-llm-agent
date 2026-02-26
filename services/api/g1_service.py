@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.agents.g1.agent_with_memory import create_agent_with_memory
 from src.config.settings import Settings
-from src.utils.evaluator import AgentEvaluator
+from src.benchmarking.evaluator import AgentEvaluator
 from src.utils.prompt_manager import PromptManager
 
 from .guardrails import (

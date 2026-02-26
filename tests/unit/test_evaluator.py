@@ -1,6 +1,6 @@
 """Unit tests for evaluator metrics."""
 
-from src.utils.evaluator import AgentEvaluator
+from src.benchmarking.evaluator import AgentEvaluator
 
 
 class _InvokeOnlyAgent:

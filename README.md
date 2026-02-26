@@ -99,12 +99,6 @@ Open:
 - `http://127.0.0.1:3100` for vulnerable pages
 - `http://127.0.0.1:3100/dashboard` for live telemetry/detections
 
-Replay a repeatable demo flow (with API + lab running):
-
-```bash
-python scripts/run_lab_demo.py
-```
-
 ## Run with Docker
 
 ```bash

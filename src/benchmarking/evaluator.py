@@ -148,4 +148,3 @@ class AgentEvaluator:
             return str(result)
 
         raise TypeError("Agent must provide run() or invoke().")
-
