@@ -40,7 +40,7 @@ run-lab:
 
 smoke:
 	$(PYTHON) -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
-	pytest -q tests/unit/test_memory_week4.py tests/unit/test_multiagent_week6.py
+	pytest -q tests/unit/test_memory.py tests/unit/test_multiagent.py
 
 smoke-checklist:
 	$(PYTHON) scripts/smoke_checklist.py
