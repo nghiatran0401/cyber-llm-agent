@@ -169,11 +169,22 @@ class Settings:
         return cls.ENABLE_SANDBOX
 
     @classmethod
-    def sandbox_enabled(cls) -> bool:
-        """Allow sandbox only in non-production environments."""
-        if cls.ENVIRONMENT == "production":
+    def is_high_risk_task(cls, user_text: str) -> bool:
+        """Return whether the input is high risk using semantic intent routing."""
+        try:
+            from src.agents.shared.intent_routing import is_high_risk_intent
+
+            return bool(is_high_risk_intent(user_text))
+        except Exception:
+            # Keep API execution resilient if router dependencies fail to import.
             return False
-        return cls.ENABLE_SANDBOX
+
+    @classmethod
+    def should_use_strong_model(cls, user_text: str) -> bool:
+        """Route strong model for high-risk tasks when auto-routing is enabled."""
+        if not cls.AUTO_MODEL_ROUTING:
+            return False
+        return cls.is_high_risk_task(user_text)
 
 
 # Initialize directories on import
