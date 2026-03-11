@@ -7,7 +7,7 @@ class _FakeAgent:
     def __init__(self, response: str):
         self._response = response
 
-    def run(self, _input: str) -> str:
+    def run(self, _input: str, **_kwargs) -> str:
         return self._response
 
 

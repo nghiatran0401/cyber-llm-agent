@@ -27,6 +27,7 @@ from .response_parser import (
     critic_validate_structured_output,
     summarize_text,
 )
+from .react_runtime import build_step_trace, normalize_stop_reason, resolve_stop_reason
 from .schemas import StepTrace
 
 _AGENT_CACHE: Dict[str, tuple[Any, float]] = {}
@@ -120,6 +121,24 @@ def _run_single_agent_loop(
     return response, stop_reason, steps_used
 
 
+def _trace_step(
+    *,
+    step: str,
+    what_it_does: str,
+    prompt_preview: str,
+    input_summary: str,
+    output_summary: str,
+) -> StepTrace:
+    """Small wrapper so all G1 traces are emitted in one consistent shape."""
+    return build_step_trace(
+        step=step,
+        what_it_does=what_it_does,
+        prompt_preview=prompt_preview,
+        input_summary=input_summary,
+        output_summary=output_summary,
+    )
+
+
 def run_g1_analysis(
     user_input: str,
     session_id: Optional[str] = None,
@@ -133,18 +152,18 @@ def run_g1_analysis(
     injection_detected = Settings.ENABLE_PROMPT_INJECTION_GUARD and detect_prompt_injection(clean_input)
 
     trace: List[StepTrace] = [
-        StepTrace(step="InputPreparation", what_it_does="Validates and prepares request for G1 execution.",
-                  prompt_preview=summarize_text(prompted_input), input_summary=summarize_text(clean_input),
-                  output_summary="Input accepted and formatted."),
-        StepTrace(step="RoutingPolicy", what_it_does="Chooses fast or strong model and evidence policy.",
-                  prompt_preview=summarize_text(f"high_risk={high_risk} model={selected_model}"),
-                  input_summary=f"high_risk={high_risk}", output_summary=f"Selected model: {selected_model}"),
-        StepTrace(step="PromptVersion", what_it_does="Loads prompt template version for this run.",
-                  prompt_preview=summarize_text(prompt_template, 180), input_summary=f"mode=g1 version={prompt_version}",
-                  output_summary="Prompt template resolved successfully."),
-        StepTrace(step="SafetyGuard", what_it_does="Detects prompt-injection patterns before execution.",
-                  prompt_preview="prompt_injection_guard=enabled", input_summary=summarize_text(clean_input),
-                  output_summary=f"injection_detected={injection_detected}"),
+        _trace_step(step="InputPreparation", what_it_does="Validates and prepares request for G1 execution.",
+                    prompt_preview=summarize_text(prompted_input), input_summary=summarize_text(clean_input),
+                    output_summary="Input accepted and formatted."),
+        _trace_step(step="RoutingPolicy", what_it_does="Chooses fast or strong model and evidence policy.",
+                    prompt_preview=summarize_text(f"high_risk={high_risk} model={selected_model}"),
+                    input_summary=f"high_risk={high_risk}", output_summary=f"Selected model: {selected_model}"),
+        _trace_step(step="PromptVersion", what_it_does="Loads prompt template version for this run.",
+                    prompt_preview=summarize_text(prompt_template, 180), input_summary=f"mode=g1 version={prompt_version}",
+                    output_summary="Prompt template resolved successfully."),
+        _trace_step(step="SafetyGuard", what_it_does="Detects prompt-injection patterns before execution.",
+                    prompt_preview="prompt_injection_guard=enabled", input_summary=summarize_text(clean_input),
+                    output_summary=f"injection_detected={injection_detected}"),
     ]
 
     if injection_detected:
@@ -157,42 +176,44 @@ def run_g1_analysis(
     response, stop_reason, steps_used = _run_single_agent_loop(
         agent, prompted_input, clean_input
     )
+    stop_reason = normalize_stop_reason(stop_reason, default="completed")
     structured = build_structured_g1_report(response)
     critic_ok, critic_message = critic_validate_structured_output(structured, high_risk=high_risk)
     if not critic_ok:
-        response = enforce_response_boundaries(f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence.")
-        stop_reason = "needs_human"
-        evidence_count = count_evidence_markers(response)
-    else:
-        evidence_count = count_evidence_markers(response)
-        response, stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
+        response = enforce_response_boundaries(
+            f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence."
+        )
+        stop_reason = resolve_stop_reason(stop_reason, "needs_human")
+    evidence_count = count_evidence_markers(response)
+    response, gated_stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
+    stop_reason = resolve_stop_reason(stop_reason, gated_stop_reason)
     policy_ok, policy_status = apply_output_policy_guard(response)
     if not policy_ok:
         response = "Output policy blocked this response due to potentially unsafe content. Please narrow the request to defensive security analysis."
-        stop_reason = "needs_human"
+        stop_reason = resolve_stop_reason(stop_reason, "needs_human")
 
     trace += [
-        StepTrace(step="SingleAgentExecution", what_it_does="Runs a memory-enabled agent with tools.",
-                  prompt_preview=summarize_text(prompted_input), input_summary=summarize_text(clean_input),
-                  output_summary=summarize_text(response)),
-        StepTrace(step="RunControl", what_it_does="Tracks loop stop condition and bounded execution state.",
-                  prompt_preview=f"max_steps={Settings.MAX_AGENT_STEPS}", input_summary=f"steps_used={steps_used}",
-                  output_summary=f"stop_reason={stop_reason}"),
-        StepTrace(step="StructuredOutput", what_it_does="Builds evidence-first structured report from model output.",
-                  prompt_preview="schema={severity,findings,recommended_actions,confidence,citations}",
-                  input_summary=summarize_text(response), output_summary=summarize_text(json.dumps(structured, ensure_ascii=True))),
-        StepTrace(step="CriticReview", what_it_does="Validates structured output quality and evidence requirements.",
-                  prompt_preview=f"high_risk={high_risk}", input_summary=summarize_text(json.dumps(structured, ensure_ascii=True)),
-                  output_summary=f"pass={critic_ok}; reason={critic_message}"),
-        StepTrace(step="PolicyGuard", what_it_does="Applies output-policy and high-risk action gates.",
-                  prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
-                  input_summary=f"high_risk={high_risk}, evidence_count={evidence_count}",
-                  output_summary=f"policy={policy_status}, stop_reason={stop_reason}"),
+        _trace_step(step="SingleAgentExecution", what_it_does="Runs a memory-enabled agent with tools.",
+                    prompt_preview=summarize_text(prompted_input), input_summary=summarize_text(clean_input),
+                    output_summary=summarize_text(response)),
+        _trace_step(step="RunControl", what_it_does="Tracks loop stop condition and bounded execution state.",
+                    prompt_preview=f"max_steps={Settings.MAX_AGENT_STEPS}", input_summary=f"steps_used={steps_used}",
+                    output_summary=f"stop_reason={stop_reason}"),
+        _trace_step(step="StructuredOutput", what_it_does="Builds evidence-first structured report from model output.",
+                    prompt_preview="schema={severity,findings,recommended_actions,confidence,citations}",
+                    input_summary=summarize_text(response), output_summary=summarize_text(json.dumps(structured, ensure_ascii=True))),
+        _trace_step(step="CriticReview", what_it_does="Validates structured output quality and evidence requirements.",
+                    prompt_preview=f"high_risk={high_risk}", input_summary=summarize_text(json.dumps(structured, ensure_ascii=True)),
+                    output_summary=f"pass={critic_ok}; reason={critic_message}"),
+        _trace_step(step="PolicyGuard", what_it_does="Applies output-policy and high-risk action gates.",
+                    prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
+                    input_summary=f"high_risk={high_risk}, evidence_count={evidence_count}",
+                    output_summary=f"policy={policy_status}, stop_reason={stop_reason}"),
     ]
     rubric = _evaluate_response_rubric(response)
-    trace.append(StepTrace(step="RubricEvaluation", what_it_does="Scores response quality against rubric checks.",
-                           prompt_preview="criteria={evidence,severity,actions,clarity}", input_summary=summarize_text(response),
-                           output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}"))
+    trace.append(_trace_step(step="RubricEvaluation", what_it_does="Scores response quality against rubric checks.",
+                             prompt_preview="criteria={evidence,severity,actions,clarity}", input_summary=summarize_text(response),
+                             output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}"))
     return (response, trace, selected_model, stop_reason, steps_used, prompt_version, rubric.get("rubric_score"), str(rubric.get("rubric_label", "n/a")))
 
 
@@ -209,18 +230,18 @@ def run_g1_analysis_with_progress(
     selected_model = Settings.STRONG_MODEL_NAME if Settings.should_use_strong_model(clean_input) else Settings.FAST_MODEL_NAME
     injection_detected = Settings.ENABLE_PROMPT_INJECTION_GUARD and detect_prompt_injection(clean_input)
 
-    on_step(StepTrace(step="InputPreparation", what_it_does="Validates and prepares request for G1 execution.",
-                      prompt_preview=summarize_text(prompted_input), input_summary=summarize_text(clean_input),
-                      output_summary="Input accepted and formatted."))
-    on_step(StepTrace(step="RoutingPolicy", what_it_does="Chooses fast or strong model.",
-                      prompt_preview=summarize_text(f"high_risk={high_risk} model={selected_model}"),
-                      input_summary=f"high_risk={high_risk}", output_summary=f"Selected model: {selected_model}"))
-    on_step(StepTrace(step="PromptVersion", what_it_does="Loads prompt template version for this run.",
-                      prompt_preview=summarize_text(prompt_template, 180), input_summary=f"mode=g1 version={prompt_version}",
-                      output_summary="Prompt template resolved successfully."))
-    on_step(StepTrace(step="SafetyGuard", what_it_does="Detects prompt-injection patterns before execution.",
-                      prompt_preview="prompt_injection_guard=enabled", input_summary=summarize_text(clean_input),
-                      output_summary=f"injection_detected={injection_detected}"))
+    on_step(_trace_step(step="InputPreparation", what_it_does="Validates and prepares request for G1 execution.",
+                        prompt_preview=summarize_text(prompted_input), input_summary=summarize_text(clean_input),
+                        output_summary="Input accepted and formatted."))
+    on_step(_trace_step(step="RoutingPolicy", what_it_does="Chooses fast or strong model.",
+                        prompt_preview=summarize_text(f"high_risk={high_risk} model={selected_model}"),
+                        input_summary=f"high_risk={high_risk}", output_summary=f"Selected model: {selected_model}"))
+    on_step(_trace_step(step="PromptVersion", what_it_does="Loads prompt template version for this run.",
+                        prompt_preview=summarize_text(prompt_template, 180), input_summary=f"mode=g1 version={prompt_version}",
+                        output_summary="Prompt template resolved successfully."))
+    on_step(_trace_step(step="SafetyGuard", what_it_does="Detects prompt-injection patterns before execution.",
+                        prompt_preview="prompt_injection_guard=enabled", input_summary=summarize_text(clean_input),
+                        output_summary=f"injection_detected={injection_detected}"))
 
     if injection_detected:
         return ("Potential prompt-injection content detected. Please remove control-instruction text and retry.",
@@ -230,34 +251,43 @@ def run_g1_analysis_with_progress(
     response, stop_reason, steps_used = _run_single_agent_loop(
         agent, prompted_input, clean_input
     )
+    stop_reason = normalize_stop_reason(stop_reason, default="completed")
     structured = build_structured_g1_report(response)
     critic_ok, critic_message = critic_validate_structured_output(structured, high_risk=high_risk)
     if not critic_ok:
-        response = enforce_response_boundaries(f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence.")
-        stop_reason = "needs_human"
-        evidence_count = count_evidence_markers(response)
-    else:
-        evidence_count = count_evidence_markers(response)
-        response, stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
+        response = enforce_response_boundaries(
+            f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence."
+        )
+        stop_reason = resolve_stop_reason(stop_reason, "needs_human")
+    evidence_count = count_evidence_markers(response)
+    response, gated_stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
+    stop_reason = resolve_stop_reason(stop_reason, gated_stop_reason)
     policy_ok, policy_status = apply_output_policy_guard(response)
     if not policy_ok:
         response = "Output policy blocked this response due to potentially unsafe content. Please narrow the request to defensive security analysis."
-        stop_reason = "needs_human"
+        stop_reason = resolve_stop_reason(stop_reason, "needs_human")
 
-    on_step(StepTrace(step="SingleAgentExecution", what_it_does="Runs a memory-enabled agent with tools.",
-                      prompt_preview=summarize_text(prompted_input), input_summary=summarize_text(clean_input),
-                      output_summary=summarize_text(response)))
-    on_step(StepTrace(step="RunControl", what_it_does="Tracks loop stop condition.",
-                      prompt_preview=f"max_steps={Settings.MAX_AGENT_STEPS}", input_summary=f"steps_used={steps_used}",
-                      output_summary=f"stop_reason={stop_reason}"))
-    on_step(StepTrace(step="PolicyGuard", what_it_does="Applies output-policy and high-risk action gates.",
-                      prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
-                      input_summary=f"high_risk={high_risk}, evidence_count={evidence_count}",
-                      output_summary=f"policy={policy_status}, stop_reason={stop_reason}"))
+    # Keep streamed trace aligned with non-stream path so monitor phases remain consistent.
+    on_step(_trace_step(step="SingleAgentExecution", what_it_does="Runs a memory-enabled agent with tools.",
+                        prompt_preview=summarize_text(prompted_input), input_summary=summarize_text(clean_input),
+                        output_summary=summarize_text(response)))
+    on_step(_trace_step(step="RunControl", what_it_does="Tracks loop stop condition.",
+                        prompt_preview=f"max_steps={Settings.MAX_AGENT_STEPS}", input_summary=f"steps_used={steps_used}",
+                        output_summary=f"stop_reason={stop_reason}"))
+    on_step(_trace_step(step="StructuredOutput", what_it_does="Builds evidence-first structured report from model output.",
+                        prompt_preview="schema={severity,findings,recommended_actions,confidence,citations}",
+                        input_summary=summarize_text(response), output_summary=summarize_text(json.dumps(structured, ensure_ascii=True))))
+    on_step(_trace_step(step="CriticReview", what_it_does="Validates structured output quality and evidence requirements.",
+                        prompt_preview=f"high_risk={high_risk}", input_summary=summarize_text(json.dumps(structured, ensure_ascii=True)),
+                        output_summary=f"pass={critic_ok}; reason={critic_message}"))
+    on_step(_trace_step(step="PolicyGuard", what_it_does="Applies output-policy and high-risk action gates.",
+                        prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
+                        input_summary=f"high_risk={high_risk}, evidence_count={evidence_count}",
+                        output_summary=f"policy={policy_status}, stop_reason={stop_reason}"))
     rubric = _evaluate_response_rubric(response)
-    on_step(StepTrace(step="RubricEvaluation", what_it_does="Scores response quality against rubric checks.",
-                      prompt_preview="criteria={evidence,severity,actions,clarity}", input_summary=summarize_text(response),
-                      output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}"))
+    on_step(_trace_step(step="RubricEvaluation", what_it_does="Scores response quality against rubric checks.",
+                        prompt_preview="criteria={evidence,severity,actions,clarity}", input_summary=summarize_text(response),
+                        output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}"))
     return (response, selected_model, stop_reason, steps_used, prompt_version, rubric.get("rubric_score"), str(rubric.get("rubric_label", "n/a")))
 
 

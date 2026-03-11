@@ -83,6 +83,6 @@ All tool outputs are JSON strings with this shape:
 2. Import `build_tool_result`, `serialize_tool_result` from `_tool_envelope.py`
 3. Wrap all return paths in `serialize_tool_result(build_tool_result(...))`
 4. Create a `langchain_core.tools.Tool` object
-5. Add the tool to the agent's tool list in `src/agents/g1/adaptive_agent.py`
+5. Add the tool to the agent's tool list in `src/agents/g1/g1_agent.py` (see `create_g1_agent` / `_create_tool_agent`)
 6. Document in `docs/tool-contracts.md`
 7. Add happy-path + unhappy-path tests to `tests/unit/test_tools.py`
