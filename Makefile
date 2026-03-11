@@ -16,7 +16,8 @@ test:
 	pytest -q
 
 test-ci:
-	pytest -q --ignore=tests/unit/test_multiagent.py --ignore=tests/unit/test_rag_tools.py --ignore=tests/unit/test_service_g1_phase2.py --ignore=tests/integration/test_agent_flow.py
+	# Week-8/9 ReAct stabilization: re-enable core G1/G2 ReAct tests first.
+	pytest -q --ignore=tests/unit/test_rag_tools.py --ignore=tests/integration/test_agent_flow.py
 
 test-web:
 	npm --prefix apps/web run test
