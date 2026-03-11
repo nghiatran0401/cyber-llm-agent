@@ -79,6 +79,13 @@ def test_run_multiagent_with_trace_returns_four_steps():
     assert any(step["step"] == "Verifier" for step in traced["trace"])
     assert traced["stop_reason"] == "completed"
     assert traced["steps_used"] == len(traced["trace"])
+    # P0 trace integrity: each emitted step should include required trace fields.
+    for item in traced["trace"]:
+        assert item["step"]
+        assert item["what_it_does"]
+        assert "prompt_preview" in item
+        assert "input_summary" in item
+        assert "output_summary" in item
 
 
 def test_run_multiagent_with_trace_stops_when_step_budget_exceeded(monkeypatch):
