@@ -1,71 +1,113 @@
-# Person 2 Onboarding - ReAct Owner
+# Person 2 Onboarding - ReAct Owner (Clarified Tasks)
 
-## 1) Project Context (plain English)
+## 1) Role Mission
 
-ReAct means the agent should:
+Own the ReAct behavior end-to-end so agent execution is deterministic, auditable, and efficient.
 
-- think about next step
-- call tools when needed
-- read tool output
-- continue until final answer
+ReAct loop in this project:
 
-In this project, G1 is closest to ReAct behavior. G2 is a more structured pipeline, but still needs clear reasoning trace.
+1. `thought` (what to do next)
+2. `action` (tool call or direct answer step)
+3. `observation` (tool result handling)
+4. `final` (stop with clear reason)
 
-## 2) Current Status (frank)
+## 2) In-Scope vs Out-of-Scope
 
-Current maturity for your track: **6.0/10**
+In-scope:
 
-What this means:
+- ReAct schema and loop controller rules in G1 and G2 runtimes.
+- Trace contract from backend emission to frontend display.
+- Stop-reason policy and confidence output format.
+- ReAct-related tests, CI stability, and quality metrics.
 
-- Agent loops and traces exist.
-- But the ReAct contract is not explicit enough yet.
-- Some behavior is still string-heavy and less deterministic than it should be.
+Out-of-scope:
 
-Main reality today:
+- New infrastructure stack design (Person 1).
+- Retrieval ranking design (Person 3).
+- Memory model design (Person 4).
+- New tool business logic (Person 5).
 
-- Trace quality is useful, but not fully standardized end-to-end.
-- Loop control exists, but needs tighter policy and clearer stop reasons.
-- Important tests for this area are currently not fully active in CI.
+## 3) Current Status
 
-## 3) What Is Already Implemented
+Current maturity: **6.0/10**
 
-- G1 single-agent runner with bounded execution path.
-- G2 runner with step trace emission.
-- Workspace stream endpoint for live trace updates.
-- Frontend components for trace and monitor state.
-- Safety gates integrated around execution output.
+Known gaps:
 
-## 4) What Must Improve
+- Step schema is not strict enough across all paths.
+- Stop reasons can be inconsistent between runs.
+- Some tool calls are unnecessary.
+- ReAct tests are not consistently active in CI.
 
-- Define strict ReAct step schema (`thought/action/observation/final`).
-- Make loop stop reasons deterministic and auditable.
-- Reduce unnecessary tool calls.
-- Ensure trace fields are consistent from backend to UI.
-- Re-enable and stabilize ReAct-related tests.
+## 4) Priority Backlog (Clear Work Items)
 
-## 5) Your 4-Week Plan
+## P0 (must finish first)
 
-### Week 1
+- Define single ReAct step schema used by all runners.
+  - Deliverable: shared schema + validation in runtime path.
+  - Acceptance: no step emitted without required fields (`type`, `content`, `ts`, `step_id`).
+- Enforce deterministic stop reasons.
+  - Deliverable: normalized stop reason enum.
+  - Acceptance: every completed run has exactly one valid stop reason.
+- Re-enable core ReAct tests in CI.
+  - Deliverable: passing tests for loop integrity and stop-policy behavior.
+  - Acceptance: CI gate fails on schema or stop-reason regressions.
 
-- Finalize ReAct schema and trace contract.
-- Add/repair tests for loop step integrity and stop reasons.
+## P1 (finish after P0)
 
-### Week 2
+- Add loop budget policy (max steps, max tool calls, timeout budget).
+  - Deliverable: centralized loop guard config.
+  - Acceptance: run terminates predictably when limits are reached.
+- Reduce wasteful tool calls.
+  - Deliverable: simple pre-call checks and dedupe policy.
+  - Acceptance: measurable drop in redundant calls on benchmark set.
+- Align backend trace payload and frontend rendering.
+  - Deliverable: contract table and field mapping.
+  - Acceptance: trace panel shows all required fields without fallback parsing.
 
-- Implement stronger loop controller policy (steps/tools/time budgets).
-- Standardize confidence + stop reason outputs.
+## P2 (hardening/reporting)
 
-### Week 3
+- Edge-case handling (tool failure, empty observation, malformed result).
+  - Deliverable: retry/abort rules documented and tested.
+  - Acceptance: no silent failure path in loop execution.
+- Publish ReAct quality report.
+  - Deliverable: weekly metrics (`completion_rate`, `avg_steps`, `tool_call_precision`, `stop_reason_distribution`).
+  - Acceptance: report is reproducible from benchmark script.
 
-- Integrate cleanly with RAG, memory, and tooling contracts.
-- Improve trace readability and consistency in UI.
+## 5) 4-Week Execution Plan
 
-### Week 4
+Week 1:
 
-- Hardening and edge-case fixes.
-- Publish ReAct quality report (precision, over-calling, completion quality).
+- Lock schema + stop-reason enum.
+- Repair/add CI tests for step integrity.
 
-## 6) First Files To Read
+Week 2:
+
+- Implement budget controller (steps/tools/time).
+- Add deterministic termination behavior.
+
+Week 3:
+
+- Contract alignment with RAG, memory, tooling owners.
+- Frontend trace consistency fixes.
+
+Week 4:
+
+- Hardening for failure cases.
+- Final quality report and handoff notes.
+
+## 6) Handoff Dependencies
+
+You need from Person 3/4/5:
+
+- stable response envelopes for retrieval/memory/tool outputs
+- error-code conventions for failed actions
+
+You provide to Person 1:
+
+- CI test list and pass criteria for ReAct gates
+- schema version and migration notes
+
+## 7) First Files To Read
 
 - `src/agents/g1/adaptive_agent.py`
 - `src/agents/g1/agent_with_memory.py`
@@ -75,9 +117,10 @@ Main reality today:
 - `apps/web/components/TracePanel.tsx`
 - `apps/web/lib/monitor-state.ts`
 
-## 7) How You Know You Are Succeeding
+## 8) Definition of Done (for Person 2)
 
-- ReAct trace is predictable and easy to explain.
-- Fewer wasteful tool calls.
-- Stop reasons are always meaningful.
-- UI and backend agree on step semantics.
+- ReAct schema is validated in all main execution paths.
+- Stop reasons are deterministic and queryable.
+- ReAct test suite is active and stable in CI.
+- Trace shown in UI matches backend payload contract.
+- Benchmarks show reduced redundant tool usage.
