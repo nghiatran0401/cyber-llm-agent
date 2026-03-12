@@ -50,6 +50,7 @@ data/sessions/*.json
 data/logs/*.log
 data/logs/*.jsonl
 data/knowledge/rag_index.json
+data/chroma_db/
 data/benchmarks/results/*.json
 data/benchmarks/results/*.md
 !data/benchmarks/results/.gitkeep
