@@ -101,3 +101,72 @@ def test_session_manager_prunes_expired_sessions(tmp_path: Path, monkeypatch):
     manager.prune_expired_sessions()
     assert not old_file.exists()
 
+# --- Week 1 additions ---
+
+def test_load_state_rejects_invalid_role():
+    memory = ConversationMemory(memory_type="buffer", max_messages=4)
+    import pytest
+    with pytest.raises(ValueError, match="invalid role"):
+        memory.load_state(messages=[{"role": "bot", "content": "hi"}])
+
+
+def test_load_state_rejects_missing_keys():
+    memory = ConversationMemory(memory_type="buffer", max_messages=4)
+    import pytest
+    with pytest.raises(ValueError, match="missing required keys"):
+        memory.load_state(messages=[{"role": "user"}])
+
+
+def test_load_state_skips_malformed_episodic_entries():
+    memory = ConversationMemory(memory_type="buffer", max_messages=4)
+    memory.load_state(
+        messages=[],
+        episodic_memories=[{"summary": "valid episode"}, "not a dict", {"no_summary": True}],
+    )
+    assert len(memory.episodic_memories) == 1
+    assert memory.episodic_memories[0]["summary"] == "valid episode"
+
+
+def test_session_manager_atomic_write_survives_on_reload(tmp_path: Path):
+    manager = SessionManager(session_dir=tmp_path)
+    manager.save_session("safe_write", {"messages": [{"role": "user", "content": "hello"}]})
+    restored = manager.load_session("safe_write")
+    assert restored["messages"][0]["content"] == "hello"
+
+
+def test_session_manager_handles_corrupt_file(tmp_path: Path):
+    corrupt_file = tmp_path / "bad_session.json"
+    corrupt_file.write_text("{ this is not valid JSON >>>", encoding="utf-8")
+    manager = SessionManager(session_dir=tmp_path)
+    result = manager.load_session("bad_session")
+    assert result == {}
+    # Corrupt file should be renamed, not silently deleted
+    assert (tmp_path / "bad_session.corrupt.json").exists()
+
+
+def test_deterministic_replay_multi_turn():
+    """Loading and replaying the same state must produce identical results."""
+    memory = ConversationMemory(memory_type="summary", max_messages=4, max_summary_chars=300)
+    turns = [
+        ("user", "What is a SQL injection?"),
+        ("assistant", "SQL injection inserts malicious SQL via input fields."),
+        ("user", "How do I prevent it?"),
+        ("assistant", "Use parameterised queries and input validation."),
+        ("user", "Any tools to scan for it?"),
+        ("assistant", "Severity: high\nSource: OWASP\nRecommended Actions:\n- Use sqlmap"),
+    ]
+    for role, content in turns:
+        memory.add_turn(role, content)
+
+    state = memory.get_state()
+
+    memory2 = ConversationMemory(memory_type="summary", max_messages=4, max_summary_chars=300)
+    memory2.load_state(
+        messages=state["messages"],
+        running_summary=state["running_summary"],
+        episodic_memories=state["episodic_memories"],
+        semantic_facts=state["semantic_facts"],
+    )
+
+    assert memory2.messages == memory.messages
+    assert memory2.running_summary == memory.running_summary

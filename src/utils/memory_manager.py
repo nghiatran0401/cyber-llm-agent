@@ -41,6 +41,8 @@ class ConversationMemory:
         self.messages.append({"role": role, "content": content})
         self._enforce_limits()
 
+    # In ConversationMemory.load_state — replace the method body
+
     def load_state(
         self,
         messages: List[Dict[str, str]],
@@ -48,10 +50,28 @@ class ConversationMemory:
         episodic_memories: List[Dict[str, str]] | None = None,
         semantic_facts: List[str] | None = None,
     ):
-        """Restore memory state from persisted data."""
-        self.messages = list(messages or [])
-        self.running_summary = running_summary or ""
-        self.episodic_memories = list(episodic_memories or [])
+        """Restore memory state from persisted data with contract validation."""
+        validated_messages = []
+        for i, msg in enumerate(messages or []):
+            if not isinstance(msg, dict):
+                raise ValueError(f"messages[{i}] must be a dict, got {type(msg).__name__}")
+            if "role" not in msg or "content" not in msg:
+                raise ValueError(f"messages[{i}] missing required keys 'role' and/or 'content'")
+            if msg["role"] not in {"user", "assistant", "system"}:
+                raise ValueError(f"messages[{i}] has invalid role '{msg['role']}'")
+            validated_messages.append({"role": str(msg["role"]), "content": str(msg["content"])})
+
+        validated_episodic = []
+        for i, ep in enumerate(episodic_memories or []):
+            if not isinstance(ep, dict):
+                continue  # skip malformed episodes rather than crashing
+            if "summary" not in ep:
+                continue
+            validated_episodic.append(ep)
+
+        self.messages = validated_messages
+        self.running_summary = str(running_summary or "")[:self.max_summary_chars]
+        self.episodic_memories = validated_episodic
         self.semantic_facts = [str(item).strip() for item in (semantic_facts or []) if str(item).strip()]
         self._enforce_limits()
         self._enforce_long_term_limits()
