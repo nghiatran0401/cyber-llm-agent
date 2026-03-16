@@ -101,7 +101,7 @@ def test_session_manager_prunes_expired_sessions(tmp_path: Path, monkeypatch):
     manager.prune_expired_sessions()
     assert not old_file.exists()
 
-# --- Week 1 additions ---
+# --- Stage 1 additions ---
 
 def test_load_state_rejects_invalid_role():
     memory = ConversationMemory(memory_type="buffer", max_messages=4)
@@ -170,3 +170,60 @@ def test_deterministic_replay_multi_turn():
 
     assert memory2.messages == memory.messages
     assert memory2.running_summary == memory.running_summary
+
+# --- Stage 2 additions ---
+
+def test_bm25_scores_higher_for_repeated_query_terms():
+    #doc_b contains both query terms; doc_a contains only one
+    # BM25 should score doc_b higher than doc_a because it sastisfies more of the query
+    score_a = ConversationMemory._bm25_score(
+        ["failed", "login"],
+        ["failed", "brute", "force", "attempt"]# only "failed" matches
+    )
+    score_b = ConversationMemory._bm25_score(
+        ["failed", "login"],
+        ["failed", "login", "brute", "force"]    # both "failed" and "login" match
+    )
+    assert score_b > score_a, (
+        f"Expected doc with both query terms ({score_b:.4f}) to score higher "
+        f"than doc with one query term ({score_a:.4f})"
+    )
+
+
+def test_recall_returns_more_relevant_item_first():
+    memory = ConversationMemory(memory_type="buffer", max_messages=6, recall_top_k=3)
+    memory.update_long_term_from_turn(
+        "Analysed ransomware beacon to C2 server",
+        "Severity: critical\nSource: VirusTotal\nIOC: 192.168.1.99"
+    )
+    memory.update_long_term_from_turn(
+        "Review patch schedule for web servers",
+        "Recommended Actions:\n- Apply CVE-2024-1234 patch"
+    )
+    recalled = memory.retrieve_relevant_memories("ransomware C2 IOC analysis")
+    assert recalled
+    assert "ransomware" in recalled[0].lower() or "ioc" in recalled[0].lower()
+
+
+def test_recall_deduplicates_near_identical_entries():
+    memory = ConversationMemory(memory_type="buffer", max_messages=10, recall_top_k=5)
+    for _ in range(4):
+        memory.add_episodic_memory(
+            "Severity: high — repeated brute force on /api/login",
+            tags=["auth"]
+        )
+    recalled = memory.retrieve_relevant_memories("brute force login")
+    # All four are near-identical; only one should appear in results
+    first_60 = [r[:60].lower() for r in recalled]
+    assert len(first_60) == len(set(first_60))
+
+
+def test_recency_boost_prefers_later_episodes():
+    memory = ConversationMemory(memory_type="buffer", max_messages=10, recall_top_k=2)
+    memory.add_episodic_memory("phishing email detected on endpoint A", tags=["phishing"])
+    for _ in range(5):
+        memory.add_episodic_memory("unrelated log noise — disk health check", tags=["general"])
+    memory.add_episodic_memory("phishing email detected on endpoint B — more recent", tags=["phishing"])
+    recalled = memory.retrieve_relevant_memories("phishing email endpoint")
+    assert recalled
+    assert "endpoint b" in recalled[0].lower() or "more recent" in recalled[0].lower()

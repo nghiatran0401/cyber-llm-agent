@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import re
 from typing import Dict, List
+import math
+from collections import Counter
 
 
 @dataclass
@@ -146,26 +148,43 @@ class ConversationMemory:
             self.add_semantic_fact(fact)
 
     def retrieve_relevant_memories(self, query: str, max_items: int | None = None) -> List[str]:
-        """Return top relevant episodic/semantic entries for the current query."""
-        query_tokens = self._tokens(query)
+        """Return top relevant episodic/semantic entries scored with BM25 + recency."""
+        query_token_list = self._tokens_list(query)
+        if not query_token_list:
+            return []
         limit = max_items or self.recall_top_k
-        scored: List[tuple[float, str]] = []
+        scored: list[tuple[float, str]] = []
 
-        for memory in self.episodic_memories:
+        for i, memory in enumerate(self.episodic_memories):
             summary = str(memory.get("summary", "")).strip()
             if not summary:
                 continue
-            score = self._token_overlap_score(query_tokens, self._tokens(summary))
-            if score > 0:
-                scored.append((score, f"Episodic: {summary}"))
+            bm25 = self._bm25_score(query_token_list, self._tokens_list(summary))
+            if bm25 <= 0:
+                continue
+            # Recency boost: later items in the list are more recent.
+            recency = (i + 1) / max(len(self.episodic_memories), 1)
+            final_score = bm25 * (1 + 0.2 * recency)
+            scored.append((final_score, f"Episodic: {summary}"))
 
         for fact in self.semantic_facts:
-            score = self._token_overlap_score(query_tokens, self._tokens(fact))
-            if score > 0:
-                scored.append((score, f"Semantic: {fact}"))
+            bm25 = self._bm25_score(query_token_list, self._tokens_list(fact))
+            if bm25 > 0:
+                scored.append((bm25, f"Semantic: {fact}"))
 
         scored.sort(key=lambda item: item[0], reverse=True)
-        return [item for _, item in scored[:limit]]
+
+        # Deduplicate by leading 60 chars to avoid near-duplicate recall items.
+        seen: set[str] = set()
+        results: list[str] = []
+        for _, text in scored:
+            key = text[:60].lower()
+            if key not in seen:
+                seen.add(key)
+                results.append(text)
+            if len(results) >= limit:
+                break
+        return results
 
     def _enforce_limits(self):
         """Trim memory using selected strategy."""
@@ -198,17 +217,34 @@ class ConversationMemory:
             self.episodic_memories = self.episodic_memories[-self.max_episodic_items :]
         if len(self.semantic_facts) > self.max_semantic_facts:
             self.semantic_facts = self.semantic_facts[-self.max_semantic_facts :]
-
+    
     @staticmethod
-    def _tokens(text: str) -> set[str]:
-        return {token.lower() for token in re.findall(r"[a-zA-Z0-9_.:-]{2,}", text or "")}
-
-    @staticmethod
-    def _token_overlap_score(query_tokens: set[str], text_tokens: set[str]) -> float:
-        if not query_tokens or not text_tokens:
+    def _bm25_score(
+        query_tokens: list[str],
+        doc_tokens: list[str],
+        avg_doc_len: float = 20.0,
+        k1: float = 1.5,
+        b: float = 0.75,
+    ) -> float:
+        """BM25 score"""
+        if not query_tokens or not doc_tokens:
             return 0.0
-        overlap = len(query_tokens.intersection(text_tokens))
-        return overlap / max(len(query_tokens), 1)
+        doc_len = len(doc_tokens)
+        doc_freq = Counter(doc_tokens)
+        score = 0.0
+        for term in query_tokens:
+            tf = doc_freq.get(term, 0)
+            if tf == 0:
+                continue
+            idf = math.log(1 + (1 / (tf + 0.5)))  # simplified IDF without corpus stats
+            tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (doc_len / avg_doc_len)))
+            score += idf * tf_norm
+        return score
+
+    @staticmethod
+    def _tokens_list(text: str) -> list[str]:
+        """Return ordered token list (preserves duplicates for BM25 TF)."""
+        return [t.lower() for t in re.findall(r"[a-zA-Z0-9_.:-]{2,}", text or "")]
 
     @staticmethod
     def _infer_tags(text: str) -> List[str]:

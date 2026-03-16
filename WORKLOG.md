@@ -20,3 +20,26 @@ What's deferred to next Stage:
 
 Recall ranking quality — current token-overlap scoring is still in place
 Summary compression readability — still using the pipe-delimited format
+
+Stage 2 Work Log
+Branch: memory_update
+Focus: BM25-style recall scoring + deduplication + recency boost
+What I did:
+
+Replaced the simple Jaccard token-overlap scorer in retrieve_relevant_memories() with a lightweight BM25-inspired implementation (_bm25_score) — no external dependencies, pure Python using math and collections.Counter
+Added _tokens_list() as a companion to the existing _tokens() — returns an ordered list with duplicates preserved, which BM25 needs for term frequency calculation
+Added a recency boost to episodic memory scoring: later entries in episodic_memories (more recent) get up to a 20% score multiplier, so a relevant recent episode ranks above an equally relevant old one
+Added deduplication in retrieve_relevant_memories() — items whose first 60 characters match are collapsed so near-identical repeated episodes don't flood the recall results
+Kept _token_overlap_score in place and marked it as backwards-compatible for any callers that reference it directly
+Added 4 new tests: BM25 term frequency sensitivity, relevant-item ranking order, near-duplicate deduplication, recency boost preference
+
+What I tested:
+
+All existing tests still pass
+All 4 new tests pass
+Spot-checked recall output on the existing test_long_term_memory_recall_returns_relevant_items test — relevant items still surface correctly with the new scorer
+
+What's deferred to next week:
+
+Summary compression readability — still using the old pipe-delimited format
+Context size cap — render_context() still has no total character limit
