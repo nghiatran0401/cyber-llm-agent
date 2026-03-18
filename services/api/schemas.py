@@ -18,7 +18,11 @@ class ErrorInfo(BaseModel):
 
 
 class ResponseMeta(BaseModel):
-    """Metadata attached to all API responses."""
+    """Metadata attached to all API responses.
+
+    This model is the public response-level contract for observability fields
+    such as stop reason, steps used, token estimates, and run identifiers.
+    """
 
     request_id: str
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -42,7 +46,12 @@ class ResponseMeta(BaseModel):
 
 
 class StepTrace(BaseModel):
-    """Human-readable execution trace step."""
+    """Human-readable execution trace step.
+
+    The current project intentionally uses a readable step contract instead of
+    a lower-level event format. Backend runtime paths and frontend rendering
+    should treat these fields as the canonical trace shape.
+    """
 
     step: str
     what_it_does: str
