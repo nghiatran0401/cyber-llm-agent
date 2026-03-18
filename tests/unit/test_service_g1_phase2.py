@@ -1,6 +1,7 @@
 """Unit tests for G1 structured output and critic review."""
 
 from services.api import g1_service
+from services.api.react_runtime import execute_tool_with_runtime_controls
 
 
 class _FakeAgent:
@@ -110,3 +111,28 @@ def test_g1_progress_trace_includes_structured_and_critic_steps(monkeypatch):
     names = [step.step for step in emitted]
     assert "StructuredOutput" in names
     assert "CriticReview" in names
+
+
+def test_g1_marks_budget_exceeded_when_tool_budget_is_hit(monkeypatch):
+    class _ToolHungryAgent:
+        def run(self, _input: str, **_kwargs) -> str:
+            first = execute_tool_with_runtime_controls("CTIFetch", "ransomware", lambda value: f"ran {value}")
+            second = execute_tool_with_runtime_controls("LogParser", "incident.log", lambda value: f"ran {value}")
+            return f"{first}\n{second}"
+
+    monkeypatch.setattr("services.api.g1_service._get_or_create_memory_agent", lambda _session_id: _ToolHungryAgent())
+    monkeypatch.setattr("services.api.g1_service.Settings.should_use_strong_model", lambda _text: False)
+    monkeypatch.setattr("services.api.g1_service.Settings.is_high_risk_task", lambda _text: False)
+    monkeypatch.setattr("services.api.g1_service.Settings.MAX_AGENT_STEPS", 3)
+    monkeypatch.setattr("services.api.g1_service.Settings.MAX_TOOL_CALLS", 1)
+    monkeypatch.setattr("services.api.g1_service.Settings.MAX_RUNTIME_SECONDS", 60)
+
+    result, trace, _model, stop_reason, steps_used, _prompt_version, _rubric_score, _rubric_label = (
+        g1_service.run_g1_analysis("investigate ransomware behavior")
+    )
+
+    assert stop_reason == "budget_exceeded"
+    assert steps_used == 1
+    assert "tool-call budget was exhausted" in result
+    run_control = next(item for item in trace if item.step == "RunControl")
+    assert "tool_calls_used=1" in run_control.input_summary
