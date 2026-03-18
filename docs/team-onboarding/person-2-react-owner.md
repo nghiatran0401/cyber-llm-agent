@@ -1,113 +1,71 @@
-# Person 2 Onboarding - ReAct Owner (Clarified Tasks)
+# Person 2 Onboarding - ReAct Owner
 
-## 1) Role Mission
+## 1) Project Context (plain English)
 
-Own the ReAct behavior end-to-end so agent execution is deterministic, auditable, and efficient.
+ReAct means the agent should:
 
-ReAct loop in this project:
+- think about next step
+- call tools when needed
+- read tool output
+- continue until final answer
 
-1. `thought` (what to do next)
-2. `action` (tool call or direct answer step)
-3. `observation` (tool result handling)
-4. `final` (stop with clear reason)
+In this project, G1 is closest to ReAct behavior. G2 is a more structured pipeline, but still needs clear reasoning trace.
 
-## 2) In-Scope vs Out-of-Scope
+## 2) Current Status (frank)
 
-In-scope:
+Current maturity for your track: **6.0/10**
 
-- ReAct schema and loop controller rules in G1 and G2 runtimes.
-- Trace contract from backend emission to frontend display.
-- Stop-reason policy and confidence output format.
-- ReAct-related tests, CI stability, and quality metrics.
+What this means:
 
-Out-of-scope:
+- Agent loops and traces exist.
+- But the ReAct contract is not explicit enough yet.
+- Some behavior is still string-heavy and less deterministic than it should be.
 
-- New infrastructure stack design (Person 1).
-- Retrieval ranking design (Person 3).
-- Memory model design (Person 4).
-- New tool business logic (Person 5).
+Main reality today:
 
-## 3) Current Status
+- Trace quality is useful, but not fully standardized end-to-end.
+- Loop control exists, but needs tighter policy and clearer stop reasons.
+- Important tests for this area are currently not fully active in CI.
 
-Current maturity: **6.0/10**
+## 3) What Is Already Implemented
 
-Known gaps:
+- G1 single-agent runner with bounded execution path.
+- G2 runner with step trace emission.
+- Workspace stream endpoint for live trace updates.
+- Frontend components for trace and monitor state.
+- Safety gates integrated around execution output.
 
-- Step schema is not strict enough across all paths.
-- Stop reasons can be inconsistent between runs.
-- Some tool calls are unnecessary.
-- ReAct tests are not consistently active in CI.
+## 4) What Must Improve
 
-## 4) Priority Backlog (Clear Work Items)
+- Define strict ReAct step schema (`thought/action/observation/final`).
+- Make loop stop reasons deterministic and auditable.
+- Reduce unnecessary tool calls.
+- Ensure trace fields are consistent from backend to UI.
+- Re-enable and stabilize ReAct-related tests.
 
-## P0 (must finish first)
+## 5) Your 4-Week Plan
 
-- Define single ReAct step schema used by all runners.
-  - Deliverable: shared schema + validation in runtime path.
-  - Acceptance: no step emitted without required fields (`type`, `content`, `ts`, `step_id`).
-- Enforce deterministic stop reasons.
-  - Deliverable: normalized stop reason enum.
-  - Acceptance: every completed run has exactly one valid stop reason.
-- Re-enable core ReAct tests in CI.
-  - Deliverable: passing tests for loop integrity and stop-policy behavior.
-  - Acceptance: CI gate fails on schema or stop-reason regressions.
+### Week 1
 
-## P1 (finish after P0)
+- Finalize ReAct schema and trace contract.
+- Add/repair tests for loop step integrity and stop reasons.
 
-- Add loop budget policy (max steps, max tool calls, timeout budget).
-  - Deliverable: centralized loop guard config.
-  - Acceptance: run terminates predictably when limits are reached.
-- Reduce wasteful tool calls.
-  - Deliverable: simple pre-call checks and dedupe policy.
-  - Acceptance: measurable drop in redundant calls on benchmark set.
-- Align backend trace payload and frontend rendering.
-  - Deliverable: contract table and field mapping.
-  - Acceptance: trace panel shows all required fields without fallback parsing.
+### Week 2
 
-## P2 (hardening/reporting)
+- Implement stronger loop controller policy (steps/tools/time budgets).
+- Standardize confidence + stop reason outputs.
 
-- Edge-case handling (tool failure, empty observation, malformed result).
-  - Deliverable: retry/abort rules documented and tested.
-  - Acceptance: no silent failure path in loop execution.
-- Publish ReAct quality report.
-  - Deliverable: weekly metrics (`completion_rate`, `avg_steps`, `tool_call_precision`, `stop_reason_distribution`).
-  - Acceptance: report is reproducible from benchmark script.
+### Week 3
 
-## 5) 4-Week Execution Plan
+- Integrate cleanly with RAG, memory, and tooling contracts.
+- Improve trace readability and consistency in UI.
 
-Week 1:
+### Week 4
 
-- Lock schema + stop-reason enum.
-- Repair/add CI tests for step integrity.
+- Hardening and edge-case fixes.
+- Publish ReAct quality report (precision, over-calling, completion quality).
 
-Week 2:
-
-- Implement budget controller (steps/tools/time).
-- Add deterministic termination behavior.
-
-Week 3:
-
-- Contract alignment with RAG, memory, tooling owners.
-- Frontend trace consistency fixes.
-
-Week 4:
-
-- Hardening for failure cases.
-- Final quality report and handoff notes.
-
-## 6) Handoff Dependencies
-
-You need from Person 3/4/5:
-
-- stable response envelopes for retrieval/memory/tool outputs
-- error-code conventions for failed actions
-
-You provide to Person 1:
-
-- CI test list and pass criteria for ReAct gates
-- schema version and migration notes
-
-## 7) First Files To Read
+## 6) First Files To Read
 
 - `src/agents/g1/adaptive_agent.py`
 - `src/agents/g1/agent_with_memory.py`
@@ -117,10 +75,9 @@ You provide to Person 1:
 - `apps/web/components/TracePanel.tsx`
 - `apps/web/lib/monitor-state.ts`
 
-## 8) Definition of Done (for Person 2)
+## 7) How You Know You Are Succeeding
 
-- ReAct schema is validated in all main execution paths.
-- Stop reasons are deterministic and queryable.
-- ReAct test suite is active and stable in CI.
-- Trace shown in UI matches backend payload contract.
-- Benchmarks show reduced redundant tool usage.
+- ReAct trace is predictable and easy to explain.
+- Fewer wasteful tool calls.
+- Stop reasons are always meaningful.
+- UI and backend agree on step semantics.
