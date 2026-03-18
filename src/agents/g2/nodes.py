@@ -24,6 +24,7 @@ from src.tools.rag_tools import retrieve_security_context
 from src.utils.logger import setup_logger
 from src.utils.prompt_templates import render_prompt_template
 from src.utils.state_validator import REQUIRED_STATE_KEYS, log_state, validate_state
+from services.api.react_runtime import execute_tool_with_runtime_controls
 
 from .state import AgentState
 
@@ -45,6 +46,17 @@ def _invoke_llm(llm: Any, prompt: str) -> str:
 def _looks_like_log_path(raw_input: str) -> bool:
     value = (raw_input or "").strip().lower()
     return value.endswith((".log", ".txt", ".json", ".jsonl"))
+
+
+def _has_usable_tool_evidence(value: str, *, unavailable_markers: tuple[str, ...] = ()) -> bool:
+    """Return True when a prior tool result is good enough to reuse safely."""
+    content = str(value or "").strip()
+    if not content:
+        return False
+    lowered = content.lower()
+    if "returned no usable output" in lowered or "temporarily unavailable" in lowered:
+        return False
+    return not any(marker in lowered for marker in unavailable_markers)
 
 
 def _derive_threat_query(text: str) -> str:
@@ -107,17 +119,43 @@ def log_analyzer_node(state: AgentState, llm: Any) -> AgentState:
     log_state(state, "log_analyzer")
     evidence_input = state["logs"]
     if _looks_like_log_path(state["logs"]):
-        raw_result = parse_system_log(state["logs"])
-        try:
-            parsed = json.loads(raw_result)
-            if isinstance(parsed, dict) and "ok" in parsed:
-                evidence_input = json.dumps(parsed["data"], indent=2) if parsed["ok"] and parsed.get("data") else parsed.get("error", raw_result)
-            else:
+        if _has_usable_tool_evidence(state.get("log_evidence", "")):
+            evidence_input = state["log_evidence"]
+        else:
+            raw_result = execute_tool_with_runtime_controls(
+                tool_name="LogParser",
+                raw_input=state["logs"],
+                tool_func=parse_system_log,
+            )
+            try:
+                parsed = json.loads(raw_result)
+                if isinstance(parsed, dict) and "ok" in parsed:
+                    evidence_input = (
+                        json.dumps(parsed["data"], indent=2)
+                        if parsed["ok"] and parsed.get("data")
+                        else parsed.get("error", raw_result)
+                    )
+                else:
+                    evidence_input = raw_result
+            except (json.JSONDecodeError, TypeError):
                 evidence_input = raw_result
-        except (json.JSONDecodeError, TypeError):
-            evidence_input = raw_result
     state["log_evidence"] = evidence_input
-    state["rag_context"] = retrieve_security_context(state["logs"])
+    state["rag_context"] = (
+        state["rag_context"]
+        if _has_usable_tool_evidence(
+            state.get("rag_context", ""),
+            unavailable_markers=("rag disabled", "no relevant context", "unavailable"),
+        )
+        else (
+            execute_tool_with_runtime_controls(
+                tool_name="RAGRetriever",
+                raw_input=f"log-analysis::{state['logs']}",
+                tool_func=retrieve_security_context,
+            )
+            if Settings.ENABLE_RAG
+            else "RAG disabled."
+        )
+    )
     prompt = render_prompt_template(
         "g2/nodes/log_analyzer.txt",
         system_prompt=LOG_ANALYZER_ROLE.system_prompt,
@@ -134,12 +172,23 @@ def threat_predictor_node(state: AgentState, llm: Any) -> AgentState:
     validate_state(state, REQUIRED_STATE_KEYS)
     log_state(state, "threat_predictor")
     cti_query = _derive_threat_query(state["log_analysis"])
-    if Settings.OTX_API_KEY:
-        raw_cti = fetch_cti_intelligence(cti_query)
+    if _has_usable_tool_evidence(
+        state.get("cti_evidence", ""),
+        unavailable_markers=("cti unavailable", "unavailable"),
+    ):
+        pass
+    elif Settings.OTX_API_KEY:
+        raw_cti = execute_tool_with_runtime_controls(
+            tool_name="CTIFetch",
+            raw_input=cti_query,
+            tool_func=fetch_cti_intelligence,
+        )
         try:
             parsed = json.loads(raw_cti)
             if isinstance(parsed, dict) and "ok" in parsed:
-                state["cti_evidence"] = parsed.get("data", raw_cti) if parsed["ok"] else parsed.get("error", raw_cti)
+                state["cti_evidence"] = (
+                    parsed.get("data", raw_cti) if parsed["ok"] else parsed.get("error", raw_cti)
+                )
             else:
                 state["cti_evidence"] = raw_cti
         except (json.JSONDecodeError, TypeError):
