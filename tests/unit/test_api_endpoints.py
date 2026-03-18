@@ -113,6 +113,9 @@ def test_workspace_stream_emits_trace_and_final(monkeypatch):
     assert any(event["type"] == "trace" for event in events)
     assert any(event["type"] == "final" and event["result"] == "final answer" for event in events)
     assert any(event["type"] == "done" for event in events)
+    trace_event = next(event for event in events if event.get("type") == "trace")
+    assert trace_event["step"]["run_id"]
+    assert trace_event["step"]["step_id"]
     final_event = next(event for event in events if event.get("type") == "final")
     assert final_event["meta"]["stop_reason"] == "completed"
     assert final_event["meta"]["steps_used"] == 2

@@ -44,4 +44,5 @@ app.include_router(router)
 
 # Re-register HTTPException handler after router inclusion
 from fastapi import HTTPException
+
 app.add_exception_handler(HTTPException, http_exception_handler)

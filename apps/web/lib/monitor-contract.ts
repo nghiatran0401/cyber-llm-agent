@@ -136,6 +136,12 @@ const G2_STEPS: MonitorStepDefinition[] = [
     phaseId: "reason",
   },
   {
+    key: "RunControl",
+    title: "Run Control",
+    whatItDoes: "Tracks shared execution budgets and stop conditions.",
+    phaseId: "reason",
+  },
+  {
     key: "WorkerTask",
     title: "Worker Task",
     whatItDoes: "Executes worker tasks to gather more evidence.",
