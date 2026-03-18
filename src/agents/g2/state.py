@@ -26,6 +26,7 @@ class AgentState(TypedDict):
     threat_prediction: str
     incident_response: str
     final_report: str
+    runtime_budget: Dict[str, int]
 
 
 class MultiagentStepTrace(TypedDict):
@@ -53,4 +54,5 @@ def create_initial_state(logs: str) -> AgentState:
         "threat_prediction": "",
         "incident_response": "",
         "final_report": "",
+        "runtime_budget": {},
     }

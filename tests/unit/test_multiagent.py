@@ -97,3 +97,21 @@ def test_run_multiagent_with_trace_stops_when_step_budget_exceeded(monkeypatch):
     assert traced["steps_used"] == 2
     assert len(traced["trace"]) == 2
 
+
+def test_run_multiagent_with_trace_stops_when_tool_budget_exceeded(monkeypatch):
+    llm = _FakeLLM()
+    monkeypatch.setattr("src.agents.g2.runner.Settings.MAX_AGENT_STEPS", 12)
+    monkeypatch.setattr("src.agents.g2.runner.Settings.MAX_TOOL_CALLS", 1)
+    monkeypatch.setattr("src.agents.g2.nodes.Settings.ENABLE_RAG", False)
+    monkeypatch.setattr("src.agents.g2.nodes.Settings.OTX_API_KEY", "configured")
+    monkeypatch.setattr("src.agents.g2.nodes.parse_system_log", lambda _path: "parsed log evidence")
+    monkeypatch.setattr("src.agents.g2.nodes.fetch_cti_intelligence", lambda _query: "live cti evidence")
+
+    traced = run_multiagent_with_trace("incident.log", llm=llm)
+
+    assert traced["stop_reason"] == "budget_exceeded"
+    assert traced["steps_used"] >= 1
+    assert "runtime_budget" in traced["result"]
+    assert traced["result"]["runtime_budget"]["tool_calls_used"] == 1
+    assert "ThreatPredictor" in [step["step"] for step in traced["trace"]]
+

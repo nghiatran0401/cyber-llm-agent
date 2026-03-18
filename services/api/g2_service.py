@@ -40,6 +40,25 @@ def _evaluate_response_rubric(response_text: str) -> Dict[str, Any]:
     return _EVALUATOR.evaluate_rubric(response_text)
 
 
+def _build_run_control_trace_strings(runtime_budget: Dict[str, Any], stop_reason: str) -> tuple[str, str, str]:
+    """Build one shared run-control summary for G2 trace emission."""
+    prompt_preview = (
+        f"max_steps={runtime_budget.get('max_steps', Settings.MAX_AGENT_STEPS)} "
+        f"max_tool_calls={runtime_budget.get('max_tool_calls', Settings.MAX_TOOL_CALLS)} "
+        f"max_runtime_seconds={runtime_budget.get('max_runtime_seconds', Settings.MAX_RUNTIME_SECONDS)}"
+    )
+    input_summary = (
+        f"steps_used={runtime_budget.get('steps_used', 0)}, "
+        f"tool_calls_used={runtime_budget.get('tool_calls_used', 0)}, "
+        f"duplicate_tool_calls={runtime_budget.get('duplicate_tool_calls', 0)}"
+    )
+    output_summary = (
+        f"stop_reason={stop_reason}, "
+        f"tool_calls_used={runtime_budget.get('tool_calls_used', 0)}"
+    )
+    return prompt_preview, input_summary, output_summary
+
+
 def _trace_step(
     *,
     step: str,
@@ -76,6 +95,7 @@ def run_g2_analysis(
 
     executed = run_multiagent_with_trace(prompted_logs)
     result = executed["result"]
+    runtime_budget = dict(result.get("runtime_budget", {})) if isinstance(result, dict) else {}
     trace = [
         _trace_step(
             step=str(step.get("step", "Unknown")),
@@ -100,8 +120,12 @@ def run_g2_analysis(
     if not policy_ok:
         result["final_report"] = "Output policy blocked this response due to potentially unsafe content. Please narrow the request to defensive security analysis."
         stop_reason = resolve_stop_reason(stop_reason, "needs_human")
+    run_control_prompt, run_control_input, run_control_output = _build_run_control_trace_strings(runtime_budget, stop_reason)
     rubric = _evaluate_response_rubric(result["final_report"])
     trace += [
+        _trace_step(step="RunControl", what_it_does="Tracks loop stop condition and tool/runtime budget state.",
+                    prompt_preview=run_control_prompt, input_summary=run_control_input,
+                    output_summary=run_control_output),
         _trace_step(step="PolicyGuard", what_it_does="Applies output-policy and high-risk action gates.",
                     prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
                     input_summary=f"evidence_count={evidence_count}",
@@ -144,6 +168,7 @@ def run_g2_analysis_with_progress(
         ))
 
     executed = run_multiagent_with_trace(prompted_logs, on_step=_on_step)
+    runtime_budget = dict(executed["result"].get("runtime_budget", {})) if isinstance(executed.get("result"), dict) else {}
     stop_reason = normalize_stop_reason(str(executed.get("stop_reason", "completed")), default="completed")
     steps_used = int(executed.get("steps_used", len(executed.get("trace", []))))
     final_text = str(executed["result"].get("final_report", ""))
@@ -155,7 +180,11 @@ def run_g2_analysis_with_progress(
     if not policy_ok:
         executed["result"]["final_report"] = "Output policy blocked this response due to potentially unsafe content. Please narrow the request to defensive security analysis."
         stop_reason = resolve_stop_reason(stop_reason, "needs_human")
+    run_control_prompt, run_control_input, run_control_output = _build_run_control_trace_strings(runtime_budget, stop_reason)
     rubric = _evaluate_response_rubric(executed["result"]["final_report"])
+    on_step(_trace_step(step="RunControl", what_it_does="Tracks loop stop condition and tool/runtime budget state.",
+                        prompt_preview=run_control_prompt, input_summary=run_control_input,
+                        output_summary=run_control_output))
     on_step(_trace_step(step="PolicyGuard", what_it_does="Applies output-policy and high-risk action gates.",
                         prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
                         input_summary=f"evidence_count={evidence_count}",

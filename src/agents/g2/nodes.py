@@ -23,6 +23,7 @@ from src.tools.rag_tools import retrieve_security_context
 from src.utils.logger import setup_logger
 from src.utils.prompt_templates import render_prompt_template
 from src.utils.state_validator import REQUIRED_STATE_KEYS, log_state, validate_state
+from services.api.react_runtime import execute_tool_with_runtime_controls
 
 from .state import AgentState
 
@@ -106,9 +107,22 @@ def log_analyzer_node(state: AgentState, llm: Any) -> AgentState:
     log_state(state, "log_analyzer")
     evidence_input = state["logs"]
     if _looks_like_log_path(state["logs"]):
-        evidence_input = parse_system_log(state["logs"])
+        # Guard explicit tool usage so G2 follows the same budget and dedupe policy as G1.
+        evidence_input = execute_tool_with_runtime_controls(
+            tool_name="LogParser",
+            raw_input=state["logs"],
+            tool_func=parse_system_log,
+        )
     state["log_evidence"] = evidence_input
-    state["rag_context"] = retrieve_security_context(state["logs"]) if Settings.ENABLE_RAG else "RAG disabled."
+    state["rag_context"] = (
+        execute_tool_with_runtime_controls(
+            tool_name="RAGRetriever",
+            raw_input=state["logs"],
+            tool_func=retrieve_security_context,
+        )
+        if Settings.ENABLE_RAG
+        else "RAG disabled."
+    )
     prompt = render_prompt_template(
         "g2/nodes/log_analyzer.txt",
         system_prompt=LOG_ANALYZER_ROLE.system_prompt,
@@ -126,7 +140,11 @@ def threat_predictor_node(state: AgentState, llm: Any) -> AgentState:
     log_state(state, "threat_predictor")
     cti_query = _derive_threat_query(state["log_analysis"])
     state["cti_evidence"] = (
-        fetch_cti_intelligence(cti_query)
+        execute_tool_with_runtime_controls(
+            tool_name="CTIFetch",
+            raw_input=cti_query,
+            tool_func=fetch_cti_intelligence,
+        )
         if Settings.OTX_API_KEY
         else "CTI unavailable: OTX_API_KEY is not configured."
     )
