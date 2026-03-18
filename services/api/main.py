@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -106,6 +107,7 @@ _OWASP_MITRE_MAP = {
     },
 }
 logger = setup_logger(__name__)
+_RUN_CONTROL_TOOL_CALLS_RE = re.compile(r"tool_calls_used=(\d+)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -151,6 +153,7 @@ def _extract_text_payload(value) -> str:
 
 def _derive_tool_stats(result, trace) -> tuple[int, int, int]:
     statuses: dict[str, bool] = {}
+    budget_tool_calls = 0
     if isinstance(result, dict):
         for key, tool_name in (
             ("log_evidence", "LogParser"),
@@ -171,35 +174,46 @@ def _derive_tool_stats(result, trace) -> tuple[int, int, int]:
 
     for item in trace or []:
         step_name = item.get("step") if isinstance(item, dict) else getattr(item, "step", "")
+        output_summary = item.get("output_summary", "") if isinstance(item, dict) else getattr(item, "output_summary", "")
         if step_name == "WorkerTask":
             statuses.setdefault("WorkerTask", True)
+        if step_name == "RunControl":
+            match = _RUN_CONTROL_TOOL_CALLS_RE.search(str(output_summary))
+            if match:
+                budget_tool_calls = max(budget_tool_calls, int(match.group(1)))
 
-    tool_calls = len(statuses)
+    tool_calls = max(len(statuses), budget_tool_calls)
     tool_success = sum(1 for ok in statuses.values() if ok)
     tool_fail = max(0, tool_calls - tool_success)
     return tool_calls, tool_success, tool_fail
 
 
-def _enrich_trace(trace, run_id: str):
+def _enrich_trace_step(item, run_id: str, step_index: int) -> StepTrace:
+    """Normalize one trace step so stream and non-stream paths share the same contract."""
+    if hasattr(item, "model_dump"):
+        payload = item.model_dump()
+    elif isinstance(item, dict):
+        payload = dict(item)
+    else:
+        payload = {
+            "step": "Unknown",
+            "what_it_does": "",
+            "prompt_preview": "",
+            "input_summary": "",
+            "output_summary": "",
+        }
+    payload["run_id"] = run_id
+    payload["step_id"] = payload.get("step_id") or f"{run_id}-s{step_index:03d}"
+    if payload.get("step") in {"WorkerTask", "SingleAgentExecution", "LogAnalyzer", "ThreatPredictor"}:
+        payload["tool_call_id"] = payload.get("tool_call_id") or f"{run_id}-t{step_index:03d}"
+    return StepTrace(**payload)
+
+
+def _enrich_trace(trace, run_id: str, start_index: int = 1):
+    """Enrich a trace list with stable IDs for API responses and live streaming."""
     enriched: list[StepTrace] = []
-    for idx, item in enumerate(trace or [], start=1):
-        if hasattr(item, "model_dump"):
-            payload = item.model_dump()
-        elif isinstance(item, dict):
-            payload = dict(item)
-        else:
-            payload = {
-                "step": "Unknown",
-                "what_it_does": "",
-                "prompt_preview": "",
-                "input_summary": "",
-                "output_summary": "",
-            }
-        payload["run_id"] = run_id
-        payload["step_id"] = payload.get("step_id") or f"{run_id}-s{idx:03d}"
-        if payload.get("step") in {"WorkerTask", "SingleAgentExecution", "LogAnalyzer", "ThreatPredictor"}:
-            payload["tool_call_id"] = payload.get("tool_call_id") or f"{run_id}-t{idx:03d}"
-        enriched.append(StepTrace(**payload))
+    for idx, item in enumerate(trace or [], start=start_index):
+        enriched.append(_enrich_trace_step(item=item, run_id=run_id, step_index=idx))
     return enriched
 
 
@@ -713,13 +727,22 @@ def workspace_stream(payload: WorkspaceStreamRequest):
     request_id = str(uuid4())
     event_queue: Queue[dict] = Queue()
     start_time = perf_counter()
+    run_id = request_id
+    streamed_trace: list[StepTrace] = []
+
     def _put_event(event_type: str, **data):
         event_queue.put({"type": event_type, **data})
 
     def _runner():
         try:
             def _on_step(step: StepTrace):
-                _put_event("trace", step=step.model_dump())
+                enriched_step = _enrich_trace_step(
+                    item=step,
+                    run_id=run_id,
+                    step_index=len(streamed_trace) + 1,
+                )
+                streamed_trace.append(enriched_step)
+                _put_event("trace", step=enriched_step.model_dump())
 
             result, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
                 _normalize_workspace_result(
@@ -734,12 +757,11 @@ def workspace_stream(payload: WorkspaceStreamRequest):
             )
 
             duration_ms = int((perf_counter() - start_time) * 1000)
-            run_id = request_id
             input_tokens_est = _estimate_tokens(payload.input)
             output_tokens_est = _estimate_tokens(_extract_text_payload(result))
             total_tokens_est = input_tokens_est + output_tokens_est
             cost_est_usd = round((total_tokens_est / 1000) * 0.0005, 6)
-            tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=[])
+            tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=streamed_trace)
             _record_metric(
                 endpoint="/api/v1/workspace/stream",
                 duration_ms=duration_ms,

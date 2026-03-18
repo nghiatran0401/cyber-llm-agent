@@ -22,8 +22,16 @@ export function TracePanel({ trace }: TracePanelProps) {
           <summary className="cursor-pointer text-sm font-medium text-slate-800 dark:text-slate-100">
             {index + 1}. {step.step}
           </summary>
-          <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">{step.what_it_does}</p>
-          <div className="mt-3 space-y-2 text-xs">
+            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">{step.what_it_does}</p>
+            {(step.run_id || step.step_id || step.tool_call_id) ? (
+              <div className="mt-3 grid gap-2 text-[11px] text-slate-500 dark:text-slate-400 md:grid-cols-3">
+                {/* Show trace metadata directly so the UI matches the backend contract without fallback logic. */}
+                <span>Run ID: {step.run_id || "n/a"}</span>
+                <span>Step ID: {step.step_id || "n/a"}</span>
+                <span>Tool Call ID: {step.tool_call_id || "n/a"}</span>
+              </div>
+            ) : null}
+            <div className="mt-3 space-y-2 text-xs">
             <div>
               <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Prompt preview</p>
               <pre className="code-block">{step.prompt_preview}</pre>
