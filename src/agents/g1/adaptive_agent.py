@@ -24,7 +24,9 @@ def _create_tool_agent(model_name: str, verbose: bool = True):
     llm = ChatOpenAI(
         model=model_name,
         temperature=Settings.TEMPERATURE,
-        openai_api_key=Settings.OPENAI_API_KEY,
+        openai_api_key=Settings.OPENROUTER_API_KEY,
+        openai_api_base=Settings.OPENROUTER_BASE_URL,
+        default_headers=Settings.openrouter_headers(),
     )
     tools = [log_parser, cti_fetch]
     if Settings.ENABLE_RAG:

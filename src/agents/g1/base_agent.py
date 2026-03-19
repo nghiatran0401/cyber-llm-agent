@@ -1,7 +1,7 @@
 """
 Purpose: Basic agent without tools
 What it does:
-- Connects to OpenAI LLM
+- Connects to OpenRouter LLM
 - Analyzes single log entries
 - Returns severity, threat type, and recommendations
 """
@@ -30,7 +30,9 @@ class CyberSecurityAgent:
         self.llm = ChatOpenAI(
             model=model_name or Settings.MODEL_NAME,
             temperature=temperature if temperature is not None else Settings.TEMPERATURE,
-            openai_api_key=Settings.OPENAI_API_KEY
+            openai_api_key=Settings.OPENROUTER_API_KEY,
+            openai_api_base=Settings.OPENROUTER_BASE_URL,
+            default_headers=Settings.openrouter_headers(),
         )
         logger.info(f"Initialized CyberSecurityAgent with model: {self.llm.model_name}")
 

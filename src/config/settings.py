@@ -11,14 +11,25 @@ load_dotenv()
 class Settings:
     """Application settings loaded from environment variables."""
 
-    # API Keys
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    # API Keys / LLM provider (OpenRouter default)
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+    OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    OPENROUTER_APP_URL = os.getenv("OPENROUTER_APP_URL", "")
+    OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE", "Cyber Threat Agent")
     HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 
+    # Propagate OpenRouter credentials to OpenAI-compatible env vars so downstream
+    # clients (langchain-openai, semantic-router, etc.) automatically pick them up.
+    if OPENROUTER_API_KEY:
+        os.environ.setdefault("OPENAI_API_KEY", OPENROUTER_API_KEY)
+    if OPENROUTER_BASE_URL:
+        os.environ.setdefault("OPENAI_API_BASE", OPENROUTER_BASE_URL)
+        os.environ.setdefault("OPENAI_BASE_URL", OPENROUTER_BASE_URL)
+
     # Model Configuration
-    MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+    MODEL_NAME = os.getenv("MODEL_NAME", "arcee-ai/trinity-mini:free")
     FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", MODEL_NAME)
-    STRONG_MODEL_NAME = os.getenv("STRONG_MODEL_NAME", "gpt-4o")
+    STRONG_MODEL_NAME = os.getenv("STRONG_MODEL_NAME", MODEL_NAME)
     AUTO_MODEL_ROUTING = os.getenv("AUTO_MODEL_ROUTING", "true").lower() == "true"
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
@@ -100,8 +111,10 @@ class Settings:
             )
         if cls.ENVIRONMENT == "production" and cls.ENABLE_SANDBOX:
             raise ValueError("ENABLE_SANDBOX must be false when ENVIRONMENT=production.")
-        if not cls.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required. Set it in .env file.")
+        if not cls.OPENROUTER_API_KEY:
+            raise ValueError("OPENROUTER_API_KEY is required. Set it in .env file.")
+        if not cls.OPENROUTER_BASE_URL:
+            raise ValueError("OPENROUTER_BASE_URL must be configured.")
         if not cls.FAST_MODEL_NAME or not cls.STRONG_MODEL_NAME:
             raise ValueError("FAST_MODEL_NAME and STRONG_MODEL_NAME must be configured.")
         if not (0.0 <= cls.TEMPERATURE <= 1.0):
@@ -185,6 +198,16 @@ class Settings:
         if not cls.AUTO_MODEL_ROUTING:
             return False
         return cls.is_high_risk_task(user_text)
+
+    @classmethod
+    def openrouter_headers(cls) -> dict:
+        """Return recommended headers for OpenRouter client usage."""
+        headers = {}
+        if cls.OPENROUTER_APP_URL:
+            headers["HTTP-Referer"] = cls.OPENROUTER_APP_URL
+        if cls.OPENROUTER_APP_TITLE:
+            headers["X-Title"] = cls.OPENROUTER_APP_TITLE
+        return headers
 
 
 # Initialize directories on import

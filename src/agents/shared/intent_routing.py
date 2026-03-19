@@ -66,7 +66,10 @@ def _get_route_layer() -> SemanticRouter:
     if _route_layer is None:
         logger.info("Initializing Semantic Router layer...")
         # Use a lightweight embedding model for routing
-        _encoder = OpenAIEncoder(name="text-embedding-3-small", openai_api_key=Settings.OPENAI_API_KEY)
+        _encoder = OpenAIEncoder(
+            name="text-embedding-3-small",
+            openai_api_key=Settings.OPENROUTER_API_KEY,
+        )
         _route_layer = SemanticRouter(encoder=_encoder, routes=[high_risk_route, standard_route])
 
     return _route_layer

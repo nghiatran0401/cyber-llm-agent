@@ -20,6 +20,7 @@ _PROMPT_INJECTION_MARKERS = (
 _OUTPUT_POLICY_DENYLIST = (
     "BEGIN PRIVATE KEY",
     "OPENAI_API_KEY=",
+    "OPENROUTER_API_KEY=",
     "authorization: bearer ",
     "how to weaponize",
     "drop table users",

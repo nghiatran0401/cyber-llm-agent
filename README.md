@@ -40,8 +40,8 @@ Input (Logs / Chat / Sandbox Event)
 
 ### 1) Prerequisites
 
-- Python 3.10+
-- OpenAI API key
+- Python 3.10-3.12 (NumPy and several deps do not yet support 3.13/3.14)
+- OpenRouter API key (e.g., free `arcee-ai/trinity-mini:free` model)
 - Node.js 20+ (for Next.js frontend)
 - Docker (optional, recommended)
 
@@ -49,38 +49,69 @@ Input (Logs / Chat / Sandbox Event)
 
 ```bash
 cp .env.example .env
-# Update .env values (OPENAI_API_KEY is required)
+# Update .env values (OPENROUTER_API_KEY is required)
+```
+
+### Windows quick start (PowerShell)
+
+```powershell
+python --version           # verify 3.10-3.12
+python -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+# Run FastAPI backend
+python services/api/main.py
+
+# (Optional) run tests
+python -m pytest
 ```
 
 `.env` is the single source of truth for app configuration.
 
-### 3) Install and validate
+### 3) Install dependencies (no tests)
 
+With `make` (macOS/Linux/Git Bash):
 ```bash
 make install
 make install-web
-make test
-make test-web
-make benchmark
-make benchmark-report
-make smoke
-make smoke-checklist
+```
+
+Without `make` (PowerShell):
+```powershell
+python -m pip install -r requirements.txt
+npm --prefix apps/web install
 ```
 
 ### 4) Run the API service
 
+With `make`:
 ```bash
 make run-api
+```
+
+Without `make` (PowerShell):
+```powershell
+uvicorn services.api.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Open `http://127.0.0.1:8000/docs` for OpenAPI docs.
 
 ### 5) Run the Next.js frontend
 
+With `make`:
 ```bash
 make install-web
 cp apps/web/.env.local.example apps/web/.env.local
 make run-web
+```
+
+Without `make` (PowerShell):
+```powershell
+npm --prefix apps/web install
+copy apps/web/.env.local.example apps/web/.env.local
+npm --prefix apps/web run dev
 ```
 
 Open `http://127.0.0.1:3000`.
@@ -89,9 +120,16 @@ The web app expects the FastAPI backend at `NEXT_PUBLIC_API_BASE_URL` (default `
 
 ### 6) Run the OWASP vulnerable lab + plain dashboard
 
+With `make`:
 ```bash
 make install-lab
 make run-lab
+```
+
+Without `make` (PowerShell):
+```powershell
+npm --prefix apps/vuln-lab install
+npm --prefix apps/vuln-lab run dev
 ```
 
 Open:
@@ -99,11 +137,38 @@ Open:
 - `http://127.0.0.1:3100` for vulnerable pages
 - `http://127.0.0.1:3100/dashboard` for live telemetry/detections
 
+### Optional: tests & benchmarks
+
+With `make`:
+```bash
+make test
+make test-web
+make benchmark
+make benchmark-report
+make smoke
+make smoke-checklist
+```
+
+Without `make` (PowerShell):
+```powershell
+python -m pytest -q
+npm --prefix apps/web run test
+python scripts/run_benchmark.py --mode offline --agent-mode g1 --provider openrouter --dataset data/benchmarks/threat_cases.json --output-dir data/benchmarks/results
+python scripts/run_benchmark.py --output-dir data/benchmarks/results --report-from-latest
+python -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
+python scripts/smoke_checklist.py
+```
 ## Run with Docker
 
 ```bash
 make docker-build
 make docker-run
+```
+
+Without `make` (PowerShell or Bash):
+```bash
+docker build -t cyber-llm-agent:latest .
+docker run --rm -p 8000:8000 --env-file .env cyber-llm-agent:latest
 ```
 
 The container runs the FastAPI backend and reads runtime config from `.env`.
@@ -175,10 +240,22 @@ CI pipeline (`.github/workflows/ci.yml`) runs:
 - frontend API integration tests (`make test-web`)
 - smoke tests (`make smoke`)
 
+Without `make` (PowerShell), the same checks are roughly:
+- `python -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py`
+- `python -m pytest -q`
+- `python scripts/run_benchmark.py --mode offline --agent-mode g1 --provider openrouter --dataset data/benchmarks/threat_cases.json --output-dir data/benchmarks/results`
+- `npm --prefix apps/web run test`
+- `python scripts/smoke_checklist.py`
+
 For one-command endpoint checklist validation (auth/rate-limit/RAG + core API routes), run:
 
 ```bash
 make smoke-checklist
+```
+
+PowerShell (no `make`):
+```powershell
+python scripts/smoke_checklist.py
 ```
 
 ## Benchmark Evaluation
@@ -195,6 +272,12 @@ make benchmark
 make benchmark-report
 ```
 
+PowerShell (no `make`):
+```powershell
+python scripts/run_benchmark.py --mode offline --agent-mode g1 --provider openrouter --dataset data/benchmarks/threat_cases.json --output-dir data/benchmarks/results
+python scripts/run_benchmark.py --output-dir data/benchmarks/results --report-from-latest
+```
+
 Artifacts are written to:
 
 - `data/benchmarks/results/latest.json`
@@ -208,7 +291,7 @@ Use this for assignment/demo evidence with real model calls:
 ```bash
 BENCHMARK_MODE=real-llm \
 BENCHMARK_AGENT_MODE=g1 \
-BENCHMARK_PROVIDER=openai \
+BENCHMARK_PROVIDER=openrouter \
 make benchmark
 ```
 
@@ -217,13 +300,21 @@ For G2:
 ```bash
 BENCHMARK_MODE=real-llm \
 BENCHMARK_AGENT_MODE=g2 \
-BENCHMARK_PROVIDER=openai \
+BENCHMARK_PROVIDER=openrouter \
 make benchmark
+```
+
+PowerShell (no `make`):
+```powershell
+$env:BENCHMARK_MODE="real-llm"
+$env:BENCHMARK_AGENT_MODE="g1"   # or g2
+$env:BENCHMARK_PROVIDER="openrouter"
+python scripts/run_benchmark.py --mode $env:BENCHMARK_MODE --agent-mode $env:BENCHMARK_AGENT_MODE --provider $env:BENCHMARK_PROVIDER --dataset data/benchmarks/threat_cases.json --output-dir data/benchmarks/results
 ```
 
 Required environment:
 
-- `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
 - `OTX_API_KEY`
 
 Reference methodology and evidence guidance:
@@ -257,3 +348,5 @@ tests/
 ## License
 
 MIT
+
+

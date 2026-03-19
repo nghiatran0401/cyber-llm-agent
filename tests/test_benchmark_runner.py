@@ -73,7 +73,7 @@ def test_write_artifacts_and_load_latest_report(tmp_path: Path):
         "timestamp": "2026-01-01T00:00:00+00:00",
         "benchmark_mode": "offline",
         "agent_mode": "g1",
-        "provider": "openai",
+        "provider": "openrouter",
         "dataset": "/tmp/threat_cases.json",
         "total_tests": 1,
         "average_precision": 1.0,

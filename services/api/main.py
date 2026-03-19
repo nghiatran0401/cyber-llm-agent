@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -14,6 +15,11 @@ from threading import Thread
 from time import perf_counter
 from uuid import uuid4
 
+# Ensure project root is importable when running as a script (python services/api/main.py)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -21,7 +27,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from src.config.settings import Settings
 from src.utils.logger import setup_logger, log_structured
 
-from .schemas import (
+from services.api.schemas import (
     AnalyzeRequest,
     ApiResponse,
     ChatRequest,
@@ -32,7 +38,7 @@ from .schemas import (
     StepTrace,
     WorkspaceStreamRequest,
 )
-from .service import (
+from services.api.service import (
     analyze_sandbox_event,
     get_sandbox_scenarios,
     run_chat,

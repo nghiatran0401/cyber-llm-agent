@@ -6,8 +6,8 @@ import os
 
 # Skip integration tests if no API key (they require real API calls)
 pytestmark = pytest.mark.skipif(
-    not os.getenv("OPENAI_API_KEY"),
-    reason="OPENAI_API_KEY not set - skipping integration tests"
+    not (os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")),
+    reason="OPENROUTER_API_KEY not set - skipping integration tests"
 )
 
 
@@ -64,11 +64,11 @@ def test_simple_agent_creation(mock_chat_openai):
 
 
 def test_simple_agent_with_real_api():
-    """Test simple agent with real API (requires OPENAI_API_KEY)."""
+    """Test simple agent with real API (requires OPENROUTER_API_KEY)."""
     from src.agents.g1.adaptive_agent import create_simple_agent
     
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY not set")
+    if not (os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        pytest.skip("OPENROUTER_API_KEY not set")
     
     agent = create_simple_agent(verbose=False)
     assert agent is not None
@@ -88,8 +88,8 @@ def test_agent_tool_integration():
     from src.agents.g1.adaptive_agent import create_simple_agent
     from pathlib import Path
     
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY not set")
+    if not (os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        pytest.skip("OPENROUTER_API_KEY not set")
     
     # Ensure sample logs exist
     sample_log_path = Path("data/logs/sample_logs.txt")
@@ -114,8 +114,8 @@ def test_agent_cti_fetch():
     """Test agent can fetch CTI intelligence."""
     from src.agents.g1.adaptive_agent import create_simple_agent
     
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY not set")
+    if not (os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        pytest.skip("OPENROUTER_API_KEY not set")
     
     agent = create_simple_agent(verbose=False)
     
