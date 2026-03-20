@@ -17,6 +17,7 @@ class ConversationMemory:
     max_summary_chars: int = 1200
     max_episodic_items: int = 30
     max_semantic_facts: int = 80
+    max_context_chars: int = 4000
     recall_top_k: int = 3
     messages: List[Dict[str, str]] = field(default_factory=list)
     running_summary: str = ""
@@ -33,6 +34,8 @@ class ConversationMemory:
             raise ValueError("max_episodic_items must be greater than 0.")
         if self.max_semantic_facts <= 0:
             raise ValueError("max_semantic_facts must be greater than 0.")
+        if self.max_context_chars < 500:
+            raise ValueError("max_context_chars must be at least 500.")
         if self.recall_top_k <= 0:
             raise ValueError("recall_top_k must be greater than 0.")
 
@@ -94,7 +97,7 @@ class ConversationMemory:
         }
 
     def render_context(self, query: str = "") -> str:
-        """Render conversation context that can be prepended to prompts."""
+        """Render conversation context for prompt injection, capped at max_context_chars."""
         if not self.messages and not self.running_summary and not self.episodic_memories and not self.semantic_facts:
             return "No prior conversation context."
 
@@ -103,14 +106,26 @@ class ConversationMemory:
             chunks.append(f"Conversation summary so far:\n{self.running_summary}")
 
         if self.messages:
-            rendered = "\n".join(f"{msg['role'].upper()}: {msg['content']}" for msg in self.messages)
+            rendered = "\n".join(
+                f"{msg['role'].upper()}: {msg['content']}" for msg in self.messages
+            )
             chunks.append(f"Recent conversation:\n{rendered}")
 
         recalled = self.retrieve_relevant_memories(query)
         if recalled:
             chunks.append("Relevant long-term memory:\n" + "\n".join(f"- {item}" for item in recalled))
 
-        return "\n\n".join(chunks)
+        full_context = "\n\n".join(chunks)
+
+        # Hard cap — truncate from the middle to preserve summary + most recent turn.
+        if len(full_context) > self.max_context_chars:
+            half = self.max_context_chars // 2
+            full_context = (
+                full_context[:half]
+                + "\n...[context trimmed for length]...\n"
+                + full_context[-half:]
+            )
+        return full_context
 
     def add_episodic_memory(self, summary: str, tags: List[str] | None = None):
         """Store a short episode summary for long-term recall."""
@@ -198,19 +213,27 @@ class ConversationMemory:
         if self.memory_type == "summary":
             self._update_summary(overflow)
 
-    def _update_summary(self, overflow_messages: List[Dict[str, str]]):
-        """Create a lightweight rolling summary from trimmed turns."""
-        compressed = " | ".join(
-            f"{msg['role']}:{msg['content'][:80]}{'...' if len(msg['content']) > 80 else ''}"
-            for msg in overflow_messages
-        )
+    def _update_summary(self, overflow_messages: List[Dict[str, str]]) -> None:
+        """Create a human-readable rolling summary from trimmed turns."""
+        lines = []
+        for msg in overflow_messages:
+            role = msg["role"]
+            body = msg["content"]
+            # Keep only first sentence of long turns to avoid summary bloat.
+            first_sentence = body.split(".")[0][:120]
+            ellipsis = "..." if len(body) > 120 else ""
+            lines.append(f"{role}: {first_sentence}{ellipsis}")
+        compressed = "\n".join(lines)
+
         if self.running_summary:
-            self.running_summary = f"{self.running_summary} || {compressed}"
+            self.running_summary = f"{self.running_summary}\n---\n{compressed}"
         else:
             self.running_summary = compressed
 
         if len(self.running_summary) > self.max_summary_chars:
-            self.running_summary = "..." + self.running_summary[-self.max_summary_chars:]
+            # Keep the tail (most recent compressed turns) not the head.
+            self.running_summary = "...[earlier context trimmed]...\n" + \
+                self.running_summary[-self.max_summary_chars:]
 
     def _enforce_long_term_limits(self):
         if len(self.episodic_memories) > self.max_episodic_items:

@@ -26,6 +26,7 @@ class StatefulSecurityAgent:
         max_messages: int = 12,
         max_episodic_items: int = 30,
         max_semantic_facts: int = 80,
+        max_context_chars: int = 2000,
         recall_top_k: int = 3,
         session_id: Optional[str] = None,
         backend_agent: Optional[Any] = None,
@@ -37,6 +38,7 @@ class StatefulSecurityAgent:
             max_messages=max_messages,
             max_episodic_items=max_episodic_items,
             max_semantic_facts=max_semantic_facts,
+            max_context_chars=max_context_chars,
             recall_top_k=recall_top_k,
         )
         self.session_manager = SessionManager()
@@ -58,6 +60,12 @@ class StatefulSecurityAgent:
         """Invoke backend agent with memory-aware context injection."""
         user_text = self._extract_user_text(payload)
         context_block = self.memory.render_context(query=user_text)
+        logger.debug(
+            "Memory context size: %d chars, %d episodic, %d semantic",
+            len(context_block),
+            len(self.memory.episodic_memories),
+            len(self.memory.semantic_facts),
+        )
         augmented_prompt = (
             "Use this conversation context when answering.\n\n"
             f"{context_block}\n\n"
@@ -115,6 +123,7 @@ def create_agent_with_memory(
     max_messages: int = 12,
     max_episodic_items: int = 30,
     max_semantic_facts: int = 80,
+    max_context_chars: int = 2000,
     recall_top_k: int = 3,
     session_id: Optional[str] = None,
     verbose: bool = True,
@@ -125,6 +134,7 @@ def create_agent_with_memory(
         max_messages=max_messages,
         max_episodic_items=max_episodic_items,
         max_semantic_facts=max_semantic_facts,
+        max_context_chars=max_context_chars,
         recall_top_k=recall_top_k,
         session_id=session_id,
         verbose=verbose,
