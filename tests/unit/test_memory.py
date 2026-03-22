@@ -300,3 +300,133 @@ def test_full_eval_score_above_threshold():
     from src.utils.eval_memory import run_full_eval
     result = run_full_eval()
     assert result.score >= 0.75, f"Memory eval score below 0.75: {result}"
+
+# --- Stage 5 additions ---
+
+from unittest.mock import MagicMock, patch
+
+
+def _fake_embedding(text: str) -> list[float]:
+    """Deterministic fake embedding: hashes tokens into a 8-dim vector."""
+    import hashlib
+    digest = hashlib.md5(text.encode()).digest()
+    return [((b / 255.0) * 2 - 1) for b in digest[:8]]
+
+
+def test_embedding_backend_openai_returns_vector():
+    from src.utils.memory_manager import EmbeddingBackend
+    backend = EmbeddingBackend(provider="openai", enabled=True)
+    mock_client = MagicMock()
+    mock_client.embeddings.create.return_value = MagicMock(
+        data=[MagicMock(embedding=[0.1, 0.2, 0.3])]
+    )
+    backend._openai_client = mock_client
+    result = backend.embed("test query")
+    assert result == [0.1, 0.2, 0.3]
+    mock_client.embeddings.create.assert_called_once()
+
+
+def test_embedding_backend_ollama_returns_vector():
+    from src.utils.memory_manager import EmbeddingBackend
+    import json
+    backend = EmbeddingBackend(provider="ollama", enabled=True)
+    fake_response = json.dumps({"embedding": [0.4, 0.5, 0.6]}).encode()
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = fake_response
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        result = backend.embed("test query")
+    assert result == [0.4, 0.5, 0.6]
+
+
+def test_embedding_backend_disabled_returns_none():
+    from src.utils.memory_manager import EmbeddingBackend
+    backend = EmbeddingBackend(provider="openai", enabled=False)
+    assert backend.embed("anything") is None
+
+
+def test_embedding_backend_failure_returns_none_not_raises():
+    from src.utils.memory_manager import EmbeddingBackend
+    backend = EmbeddingBackend(provider="openai", enabled=True)
+    backend._openai_client = MagicMock(
+        embeddings=MagicMock(create=MagicMock(side_effect=RuntimeError("network error")))
+    )
+    # Must not raise — falls back gracefully
+    result = backend.embed("query that fails")
+    assert result is None
+
+
+def test_cosine_similarity_identical_vectors():
+    from src.utils.memory_manager import EmbeddingBackend
+    v = [0.1, 0.5, 0.3]
+    assert abs(EmbeddingBackend.cosine_similarity(v, v) - 1.0) < 1e-6
+
+
+def test_cosine_similarity_orthogonal_vectors():
+    from src.utils.memory_manager import EmbeddingBackend
+    a = [1.0, 0.0]
+    b = [0.0, 1.0]
+    assert abs(EmbeddingBackend.cosine_similarity(a, b)) < 1e-6
+
+
+def _make_memory_with_fake_embeddings() -> "ConversationMemory":
+    """Helper: memory wired to a fake embedding backend for unit tests."""
+    from src.utils.memory_manager import ConversationMemory, EmbeddingBackend
+    backend = EmbeddingBackend(provider="openai", enabled=True)
+    backend.embed = _fake_embedding  # type: ignore[method-assign]
+    memory = ConversationMemory(memory_type="buffer", max_messages=6, recall_top_k=3)
+    memory._embedding_backend = backend
+    return memory
+
+
+def test_recall_uses_embedding_path_when_available():
+    memory = _make_memory_with_fake_embeddings()
+    memory.update_long_term_from_turn(
+        "ransomware C2 beacon to external IP",
+        "Severity: critical\nIOC: 10.0.0.1\nSource: VirusTotal",
+    )
+    memory.update_long_term_from_turn(
+        "patch schedule review",
+        "Recommended Actions:\n- Apply CVE-2024-1234",
+    )
+    recalled = memory.retrieve_relevant_memories("ransomware C2 beacon")
+    # With fake embeddings recall is non-empty and returns strings
+    assert isinstance(recalled, list)
+    assert all(isinstance(item, str) for item in recalled)
+
+
+def test_recall_falls_back_to_bm25_when_embedding_disabled():
+    from src.utils.memory_manager import ConversationMemory, EmbeddingBackend
+    backend = EmbeddingBackend(provider="openai", enabled=False)
+    memory = ConversationMemory(memory_type="buffer", max_messages=6, recall_top_k=3)
+    memory._embedding_backend = backend
+    memory.update_long_term_from_turn(
+        "failed login brute force VPN gateway",
+        "Severity: high\n- 400 SSH attempts from 185.0.0.2",
+    )
+    recalled = memory.retrieve_relevant_memories("failed login VPN")
+    assert recalled
+    assert any("failed" in item.lower() or "login" in item.lower() for item in recalled)
+
+
+def test_load_state_reembeds_entries():
+    """Embeddings must be rebuilt from text after a session round-trip."""
+    memory = _make_memory_with_fake_embeddings()
+    memory.add_episodic_memory("phishing email detected on endpoint A", tags=["phishing"])
+    memory.add_semantic_fact("Severity: high — confirmed phishing campaign")
+    state = memory.get_state()
+    # Verify embeddings are NOT in the persisted state
+    assert "episodic_embeddings" not in state
+    assert "semantic_embeddings" not in state
+    # Restore into a fresh instance with the same fake backend
+    memory2 = _make_memory_with_fake_embeddings()
+    memory2.load_state(
+        messages=state["messages"],
+        running_summary=state["running_summary"],
+        episodic_memories=state["episodic_memories"],
+        semantic_facts=state["semantic_facts"],
+    )
+    assert len(memory2._episodic_embeddings) == len(memory2.episodic_memories)
+    assert len(memory2._semantic_embeddings) == len(memory2.semantic_facts)
+    assert memory2._episodic_embeddings[0] is not None

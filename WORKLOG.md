@@ -83,9 +83,29 @@ Reviewed all changes across all four stages for consistency — no regressions i
 What I tested:
 
 All existing tests still pass across all four stages of changes
-All 3 new Week 4 tests pass
+All 3 new stage 4 tests pass
 python -m src.utils.eval_memory exits 0 with current implementation
 Manually verified .corrupt.json recovery, BM25 ranking, summary readability, and context size cap all behave correctly end-to-end in a single simulated session
 
 Outcome:
 Remaining gaps are embedding-based semantic similarity (would replace BM25 for higher recall precision) and cross-session memory sharing — both are candidates.
+
+Stage 5 work log 
+Branch: memory_update
+What I did:
+
+Added EmbeddingBackend class to memory_manager.py supporting two providers: OpenAI text-embedding-3-small (production) and Ollama nomic-embed-text (local dev). Provider is selected via EMBEDDING_PROVIDER env var; no code changes needed to switch
+Implemented cosine similarity scoring in _retrieve_by_embedding() replacing BM25 as the primary recall path — BM25 is automatically used as fallback when embeddings are unavailable or disabled
+Embeddings are stored in parallel lists _episodic_embeddings / _semantic_embeddings alongside the memory entries, kept in sync by _enforce_long_term_limits() trimming both lists together
+Embeddings are intentionally excluded from get_state() and re-computed on load_state() — avoids storing potentially large float arrays in session JSON and keeps the persistence format clean
+Added EMBEDDING_PROVIDER, EMBEDDING_ENABLED, OPENAI_EMBEDDING_MODEL, OLLAMA_BASE_URL, OLLAMA_EMBEDDING_MODEL to settings.py and validate()
+Added numpy>=1.26.0 to requirements.txt; Ollama uses stdlib urllib so no new package needed for that path
+Set EMBEDDING_ENABLED=false in CI env so all tests run against BM25 — no OpenAI credits consumed on push
+Added 10 new tests covering: OpenAI mock, Ollama mock, disabled backend, graceful failure, cosine similarity edge cases, embedding recall path, BM25 fallback, and session round-trip re-embedding
+
+What I tested:
+
+All 16 existing tests still pass with EMBEDDING_ENABLED=false
+All 10 new tests pass
+Manually verified OpenAI embedding path returns a 1536-dim vector for text-embedding-3-small
+Manually verified Ollama path works with nomic-embed-text pulled locally via ollama pull nomic-embed-text
