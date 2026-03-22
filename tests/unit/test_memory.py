@@ -276,3 +276,27 @@ def test_stateful_agent_logs_context_size(tmp_path, caplog):
         agent.invoke({"input": "Analyze suspicious login"})
     # Log line may not appear if logger level is higher in test env — just assert no crash
     assert True
+
+# --- Stage 4 additions ---
+
+def test_eval_recall_hit_rate_passes_on_seeded_memory():
+    from src.utils.eval_memory import _make_seeded_memory, evaluate_recall_hit_rate
+    memory = _make_seeded_memory()
+    probes = [
+        ("ransomware C2 beacon", "ransomware"),
+        ("failed login VPN", "failed"),
+    ]
+    rate = evaluate_recall_hit_rate(memory, probes)
+    assert rate >= 0.5, f"Recall hit rate too low: {rate}"
+
+
+def test_eval_session_roundtrip_passes():
+    from src.utils.eval_memory import _make_seeded_memory, evaluate_session_roundtrip
+    memory = _make_seeded_memory()
+    assert evaluate_session_roundtrip(memory)
+
+
+def test_full_eval_score_above_threshold():
+    from src.utils.eval_memory import run_full_eval
+    result = run_full_eval()
+    assert result.score >= 0.75, f"Memory eval score below 0.75: {result}"

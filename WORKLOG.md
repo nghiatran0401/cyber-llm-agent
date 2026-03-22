@@ -62,7 +62,30 @@ All existing tests still pass
 All 4 new tests pass
 Verified that a 10-turn session with 500-character messages stays within MAX_CONTEXT_CHARS after render_context()
 
-What's deferred to next STage:
+What's deferred to next Stage:
 
-Formal eval harness — quality scoring is still manual spot-checks might need to remake test case for Memory
+Formal eval harness — quality scoring is still manual spot-checks might need to make a new evaluation for Memory
 Documentation and quality report
+
+Stage 4 Work Log
+Branch: memory_update
+Focus: Eval harness, CI quality gate, final hardeningA
+What I did:
+
+Created src/utils/eval_memory.py — a standalone memory quality evaluator that can be run as a script (python -m src.utils.eval_memory)or via make command(make evaluate-memory) or imported in CI
+Evaluator covers four dimensions: recall hit rate (fraction of topic probes that surface a relevant memory), context size compliance, summary readability, and session round-trip fidelity
+MemoryEvalResult.score is a simple average across the four checks — anything below 0.75 causes the script to exit with code 1, making it easy to wire into a CI step
+_make_seeded_memory() builds a deterministic multi-turn session covering ransomware, VPN brute-force, SQL injection, and CVE patching — the same scenario types the agent sees in production
+Added 3 new tests: recall hit rate passes threshold on seeded memory, session round-trip passes, full eval score is above 0.75
+Ran the full eval script end-to-end and confirmed exit code 0 with score ≥ 0.75
+Reviewed all changes across all four stages for consistency — no regressions introduced
+
+What I tested:
+
+All existing tests still pass across all four stages of changes
+All 3 new Week 4 tests pass
+python -m src.utils.eval_memory exits 0 with current implementation
+Manually verified .corrupt.json recovery, BM25 ranking, summary readability, and context size cap all behave correctly end-to-end in a single simulated session
+
+Outcome:
+Remaining gaps are embedding-based semantic similarity (would replace BM25 for higher recall precision) and cross-session memory sharing — both are candidates.
