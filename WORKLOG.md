@@ -90,11 +90,11 @@ Manually verified .corrupt.json recovery, BM25 ranking, summary readability, and
 Outcome:
 Remaining gaps are embedding-based semantic similarity (would replace BM25 for higher recall precision) and cross-session memory sharing — both are candidates.
 
-Stage 5 work log 
+Stage 5.1 work log 
 Branch: memory_update
 What I did:
 
-Added EmbeddingBackend class to memory_manager.py supporting two providers: OpenAI text-embedding-3-small (production) and Ollama nomic-embed-text (local dev). Provider is selected via EMBEDDING_PROVIDER env var; no code changes needed to switch
+Added EmbeddingMemory class to memory_manager.py supporting two providers: OpenAI text-embedding-3-small (production) and Ollama nomic-embed-text (local dev). Provider is selected via EMBEDDING_PROVIDER env var; no code changes needed to switch
 Implemented cosine similarity scoring in _retrieve_by_embedding() replacing BM25 as the primary recall path — BM25 is automatically used as fallback when embeddings are unavailable or disabled
 Embeddings are stored in parallel lists _episodic_embeddings / _semantic_embeddings alongside the memory entries, kept in sync by _enforce_long_term_limits() trimming both lists together
 Embeddings are intentionally excluded from get_state() and re-computed on load_state() — avoids storing potentially large float arrays in session JSON and keeps the persistence format clean
@@ -109,3 +109,22 @@ All 16 existing tests still pass with EMBEDDING_ENABLED=false
 All 10 new tests pass
 Manually verified OpenAI embedding path returns a 1536-dim vector for text-embedding-3-small
 Manually verified Ollama path works with nomic-embed-text pulled locally via ollama pull nomic-embed-text
+
+Stage 5.2
+Work Log — Refactor: Split memory_manager.py and test_memory.py
+Branch: memory_update
+
+What I did
+Identified that memory_manager.py had grown to serve two distinct responsibilities — managing the embedding provider and managing conversation memory — with the test file growing alongside it as a single flat list of 30+ tests across five stages covering both concerns. Split everything cleanly across four files with no logic changes.
+Created src/utils/embedding.py by extracting EmbeddingMemory out of memory_manager.py. The only code changes during extraction were moving import urllib.request and import json as _json from inside _embed_ollama() to module-level imports where they belong. The class logic, from_settings() factory, cosine_similarity() static method, and both provider implementations are otherwise identical to what was in the original file.
+Cleaned memory_manager.py down to ConversationMemory only. Added from src.utils.embedding import EmbeddingMemory at the top to replace the inline class. Removed _token_overlap_score() which had been sitting with a "kept for backwards compat" comment since Stage 2 — nothing in the codebase calls it, BM25 is already the fallback, and dead code in a file being actively maintained is a liability. No other logic was touched.
+Split test_memory.py into two focused files. tests/unit/test_embedding.py takes all Stage 5 tests, the _fake_embedding helper, and _make_memory_with_fake_embeddings. Updated every from src.utils.memory_manager import EmbeddingMemory import in those tests to from src.utils.embedding_backend import EmbeddingBackend to match the new module location. Added three tests that were missing coverage: test_invalid_provider_raises, test_cosine_similarity_zero_vector_returns_zero, and test_cosine_similarity_mismatched_lengths_returns_zero. The remaining test_memory.py keeps stages 1–4 and the original five tests, covering only ConversationMemory and SessionManager.
+Cleaned up test file hygiene in both files — import pytest, import logging, and from unittest.mock import MagicMock, patch were all inline inside individual test functions or dropped mid-file in the original. Moved all imports to the top of each file.
+
+What I tested
+
+All 30 existing tests pass across both test files with no changes to assertions or test logic
+3 new edge-case tests in test_embedding.py pass
+Confirmed from src.utils.memory_manager import EmbeddingMemory now raises ImportError as expected — the old import path is gone
+Confirmed from src.utils.embedding import EmbeddingMemory and from src.utils.memory_manager import ConversationMemory both resolve correctly
+agent_with_memory.py, eval_memory.py, and session_manager.py required no changes — all import only ConversationMemory from memory_manager, which is unchanged

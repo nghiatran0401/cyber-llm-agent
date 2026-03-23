@@ -1,5 +1,3 @@
-"""Conversation memory helpers for stateful agent interactions."""
-
 from __future__ import annotations
 
 import math
@@ -9,104 +7,24 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
+from src.utils.embedding import EmbeddingMemory
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Embedding backend
-# ---------------------------------------------------------------------------
-
-class EmbeddingBackend:
-    """Thin wrapper that returns float vectors from either OpenAI or Ollama."""
-
-    def __init__(
-        self,
-        provider: str = "openai",
-        openai_model: str = "text-embedding-3-small",
-        ollama_base_url: str = "http://localhost:11434",
-        ollama_model: str = "nomic-embed-text",
-        enabled: bool = True,
-    ):
-        allowed = {"openai", "ollama"}
-        if provider not in allowed:
-            raise ValueError(f"EmbeddingBackend provider must be one of {allowed}; got '{provider}'.")
-        self.provider = provider
-        self.openai_model = openai_model
-        self.ollama_base_url = ollama_base_url.rstrip("/")
-        self.ollama_model = ollama_model
-        self.enabled = enabled
-        self._openai_client = None  # lazy-init to avoid import cost at module load
-
-    def embed(self, text: str) -> Optional[List[float]]:
-        """Return an embedding vector, or None if unavailable/disabled."""
-        if not self.enabled or not text.strip():
-            return None
-        try:
-            if self.provider == "openai":
-                return self._embed_openai(text)
-            return self._embed_ollama(text)
-        except Exception as exc:
-            logger.warning("Embedding failed (%s), falling back to BM25: %s", self.provider, exc)
-            return None
-
-    def _embed_openai(self, text: str) -> List[float]:
-        if self._openai_client is None:
-            from openai import OpenAI
-            self._openai_client = OpenAI()
-        response = self._openai_client.embeddings.create(
-            input=text[:8000],  # stay within token limit
-            model=self.openai_model,
-        )
-        return response.data[0].embedding
-
-    def _embed_ollama(self, text: str) -> List[float]:
-        import urllib.request
-        import json as _json
-        payload = _json.dumps({"model": self.ollama_model, "prompt": text[:8000]}).encode()
-        req = urllib.request.Request(
-            f"{self.ollama_base_url}/api/embeddings",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            result = _json.loads(resp.read().decode())
-        return result["embedding"]
-
-    @staticmethod
-    def cosine_similarity(a: List[float], b: List[float]) -> float:
-        """Cosine similarity between two equal-length vectors."""
-        if not a or not b or len(a) != len(b):
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        norm_a = math.sqrt(sum(x * x for x in a))
-        norm_b = math.sqrt(sum(x * x for x in b))
-        if norm_a == 0.0 or norm_b == 0.0:
-            return 0.0
-        return dot / (norm_a * norm_b)
-
-    @classmethod
-    def from_settings(cls) -> "EmbeddingBackend":
-        """Construct from Settings without circular imports."""
-        from src.config.settings import Settings
-        return cls(
-            provider=Settings.EMBEDDING_PROVIDER,
-            openai_model=Settings.OPENAI_EMBEDDING_MODEL,
-            ollama_base_url=Settings.OLLAMA_BASE_URL,
-            ollama_model=Settings.OLLAMA_EMBEDDING_MODEL,
-            enabled=Settings.EMBEDDING_ENABLED,
-        )
-
-
-# ---------------------------------------------------------------------------
-# Conversation memory
-# ---------------------------------------------------------------------------
-
 @dataclass
 class ConversationMemory:
-    """Maintain chat history with buffer or summary strategy."""
+    """Maintain chat history with buffer or summary strategy.
+
+    Short-term memory: recent messages kept in ``messages`` up to
+    ``max_messages``. Overflow is either dropped (buffer) or compressed
+    into ``running_summary`` (summary).
+
+    Long-term memory: episodic episodes and semantic facts stored
+    indefinitely up to their respective caps. Recall uses cosine similarity
+    when an embedding_memory is available, otherwise falls back to BM25.
+    """
 
     memory_type: str = "buffer"
     max_messages: int = 12
@@ -120,22 +38,17 @@ class ConversationMemory:
     episodic_memories: List[Dict] = field(default_factory=list)
     semantic_facts: List[str] = field(default_factory=list)
 
-    # Embedding vectors stored parallel to episodic/semantic lists.
-    # Not persisted to session JSON — re-embedded on load_state.
-    _episodic_embeddings: List[Optional[List[float]]] = field(
-        default_factory=list, repr=False
-    )
-    _semantic_embeddings: List[Optional[List[float]]] = field(
-        default_factory=list, repr=False
-    )
-    _embedding_backend: Optional[EmbeddingBackend] = field(
-        default=None, repr=False
-    )
+    # Parallel embedding vectors — excluded from get_state(), re-built on load_state().
+    _episodic_embeddings: List[Optional[List[float]]] = field(default_factory=list, repr=False)
+    _semantic_embeddings: List[Optional[List[float]]] = field(default_factory=list, repr=False)
+    _embedding_backend: Optional[EmbeddingMemory] = field(default=None, repr=False)
 
     def __post_init__(self):
         allowed = {"buffer", "summary"}
         if self.memory_type not in allowed:
-            raise ValueError(f"Unsupported memory_type '{self.memory_type}'. Use one of {allowed}.")
+            raise ValueError(
+                f"Unsupported memory_type '{self.memory_type}'. Use one of {allowed}."
+            )
         if self.max_messages < 2:
             raise ValueError("max_messages must be at least 2.")
         if self.max_episodic_items <= 0:
@@ -148,16 +61,15 @@ class ConversationMemory:
             raise ValueError("recall_top_k must be greater than 0.")
         if self._embedding_backend is None:
             try:
-                self._embedding_backend = EmbeddingBackend.from_settings()
+                self._embedding_backend = EmbeddingMemory.from_settings()
             except Exception as exc:
                 logger.warning("Could not initialise embedding backend: %s", exc)
-                self._embedding_backend = EmbeddingBackend(enabled=False)
+                self._embedding_backend = EmbeddingMemory(enabled=False)
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+    # Public API — short-term memory
 
-    def add_turn(self, role: str, content: str):
+    def add_turn(self, role: str, content: str) -> None:
+        """Append a user/assistant message and enforce buffer/summary limits."""
         if not content:
             return
         self.messages.append({"role": role, "content": content})
@@ -169,7 +81,7 @@ class ConversationMemory:
         running_summary: str = "",
         episodic_memories: List[Dict] | None = None,
         semantic_facts: List[str] | None = None,
-    ):
+    ) -> None:
         """Restore memory state from persisted data with contract validation."""
         validated_messages = []
         for i, msg in enumerate(messages or []):
@@ -181,21 +93,19 @@ class ConversationMemory:
                 raise ValueError(f"messages[{i}] has invalid role '{msg['role']}'")
             validated_messages.append({"role": str(msg["role"]), "content": str(msg["content"])})
 
-        validated_episodic = []
-        for ep in (episodic_memories or []):
-            if isinstance(ep, dict) and "summary" in ep:
-                validated_episodic.append(ep)
-
         self.messages = validated_messages
         self.running_summary = str(running_summary or "")[:self.max_summary_chars]
-        self.episodic_memories = validated_episodic
+        self.episodic_memories = [
+            ep for ep in (episodic_memories or [])
+            if isinstance(ep, dict) and "summary" in ep
+        ]
         self.semantic_facts = [
             str(item).strip() for item in (semantic_facts or []) if str(item).strip()
         ]
         self._enforce_limits()
         self._enforce_long_term_limits()
 
-        # Re-embed all loaded entries (embeddings are not persisted to disk).
+        # Re-embed all loaded entries — embeddings are never persisted to disk.
         self._episodic_embeddings = [
             self._embed(ep.get("summary", "")) for ep in self.episodic_memories
         ]
@@ -204,7 +114,7 @@ class ConversationMemory:
         ]
 
     def get_state(self) -> Dict[str, object]:
-        """Return serializable memory state — embeddings intentionally excluded."""
+        """Return serializable memory state. Embeddings excluded by design."""
         return {
             "memory_type": self.memory_type,
             "max_messages": self.max_messages,
@@ -252,7 +162,10 @@ class ConversationMemory:
             )
         return full_context
 
-    def add_episodic_memory(self, summary: str, tags: List[str] | None = None):
+    # Public API — long-term memory
+
+    def add_episodic_memory(self, summary: str, tags: List[str] | None = None) -> None:
+        """Store a short episode summary with optional tags."""
         cleaned = (summary or "").strip()
         if not cleaned:
             return
@@ -267,7 +180,8 @@ class ConversationMemory:
         self._episodic_embeddings.append(self._embed(cleaned))
         self._enforce_long_term_limits()
 
-    def add_semantic_fact(self, fact: str):
+    def add_semantic_fact(self, fact: str) -> None:
+        """Store a stable fact. Silently skips exact duplicates."""
         cleaned = (fact or "").strip()
         if not cleaned or cleaned in self.semantic_facts:
             return
@@ -275,84 +189,67 @@ class ConversationMemory:
         self._semantic_embeddings.append(self._embed(cleaned))
         self._enforce_long_term_limits()
 
-    def update_long_term_from_turn(self, user_text: str, assistant_text: str):
+    def update_long_term_from_turn(self, user_text: str, assistant_text: str) -> None:
+        """Derive episodic and semantic memory from one interaction turn."""
         user_clean = (user_text or "").strip()
         assistant_clean = (assistant_text or "").strip()
         if not user_clean and not assistant_clean:
             return
         episode = f"user={user_clean[:120]} | assistant={assistant_clean[:140]}"
-        tags = self._infer_tags(user_clean + "\n" + assistant_clean)
-        self.add_episodic_memory(episode, tags=tags)
+        self.add_episodic_memory(episode, tags=self._infer_tags(user_clean + "\n" + assistant_clean))
         for fact in self._extract_semantic_facts(assistant_clean):
             self.add_semantic_fact(fact)
 
     def retrieve_relevant_memories(
         self, query: str, max_items: int | None = None
     ) -> List[str]:
-        """Rank memories by cosine similarity if embeddings available, else BM25."""
+        """Rank memories by cosine similarity when available, else BM25."""
         limit = max_items or self.recall_top_k
         query_embedding = self._embed(query)
-
         if query_embedding is not None:
             return self._retrieve_by_embedding(query_embedding, limit)
         return self._retrieve_by_bm25(query, limit)
 
-    # ------------------------------------------------------------------
-    # Internal — embedding helpers
-    # ------------------------------------------------------------------
+    # Private — recall
 
     def _embed(self, text: str) -> Optional[List[float]]:
         if self._embedding_backend is None:
             return None
         return self._embedding_backend.embed(text)
 
-    def _retrieve_by_embedding(
-        self, query_vec: List[float], limit: int
-    ) -> List[str]:
+    def _retrieve_by_embedding(self, query_vec: List[float], limit: int) -> List[str]:
         scored: List[tuple[float, str]] = []
-        cosine = EmbeddingBackend.cosine_similarity
+        cosine = EmbeddingMemory.cosine_similarity
 
         for i, memory in enumerate(self.episodic_memories):
             summary = str(memory.get("summary", "")).strip()
             if not summary:
                 continue
-            vec = (
-                self._episodic_embeddings[i]
-                if i < len(self._episodic_embeddings)
-                else None
-            )
+            vec = self._episodic_embeddings[i] if i < len(self._episodic_embeddings) else None
             if vec is None:
                 vec = self._embed(summary)
-                # Backfill so future calls don't re-embed
                 if i < len(self._episodic_embeddings):
-                    self._episodic_embeddings[i] = vec
+                    self._episodic_embeddings[i] = vec  # backfill
             if vec is None:
                 continue
-            sim = cosine(query_vec, vec)
-            # Apply recency boost (same 20% cap as BM25 path)
             recency = (i + 1) / max(len(self.episodic_memories), 1)
-            scored.append((sim * (1 + 0.2 * recency), f"Episodic: {summary}"))
+            scored.append((cosine(query_vec, vec) * (1 + 0.2 * recency), f"Episodic: {summary}"))
 
         for i, fact in enumerate(self.semantic_facts):
-            vec = (
-                self._semantic_embeddings[i]
-                if i < len(self._semantic_embeddings)
-                else None
-            )
+            vec = self._semantic_embeddings[i] if i < len(self._semantic_embeddings) else None
             if vec is None:
                 vec = self._embed(fact)
                 if i < len(self._semantic_embeddings):
-                    self._semantic_embeddings[i] = vec
+                    self._semantic_embeddings[i] = vec  # backfill
             if vec is None:
                 continue
-            sim = cosine(query_vec, vec)
-            scored.append((sim, f"Semantic: {fact}"))
+            scored.append((cosine(query_vec, vec), f"Semantic: {fact}"))
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return self._deduplicate(scored, limit)
 
     def _retrieve_by_bm25(self, query: str, limit: int) -> List[str]:
-        """BM25 fallback used when embedding backend is unavailable."""
+        """BM25 fallback — used when embedding backend is disabled or unavailable."""
         query_tokens = self._tokens_list(query)
         if not query_tokens:
             return []
@@ -388,11 +285,9 @@ class ConversationMemory:
                 break
         return results
 
-    # ------------------------------------------------------------------
-    # Internal — limits and summary
-    # ------------------------------------------------------------------
+    # Private — buffer / summary limits
 
-    def _enforce_limits(self):
+    def _enforce_limits(self) -> None:
         if len(self.messages) <= self.max_messages:
             return
         overflow_count = len(self.messages) - self.max_messages
@@ -419,7 +314,7 @@ class ConversationMemory:
                 + self.running_summary[-self.max_summary_chars:]
             )
 
-    def _enforce_long_term_limits(self):
+    def _enforce_long_term_limits(self) -> None:
         if len(self.episodic_memories) > self.max_episodic_items:
             trim = len(self.episodic_memories) - self.max_episodic_items
             self.episodic_memories = self.episodic_memories[trim:]
@@ -429,7 +324,7 @@ class ConversationMemory:
             self.semantic_facts = self.semantic_facts[trim:]
             self._semantic_embeddings = self._semantic_embeddings[trim:]
 
-    # Internal — BM25 (kept as fallback)
+    # Private — BM25 scoring
 
     @staticmethod
     def _tokens_list(text: str) -> list[str]:
@@ -453,22 +348,11 @@ class ConversationMemory:
             if tf == 0:
                 continue
             idf = math.log(1 + (1 / (tf + 0.5)))
-            tf_norm = (tf * (k1 + 1)) / (
-                tf + k1 * (1 - b + b * (doc_len / avg_doc_len))
-            )
+            tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (doc_len / avg_doc_len)))
             score += idf * tf_norm
         return score
 
-    # kept for backwards compat
-    @staticmethod
-    def _token_overlap_score(query_tokens: set[str], text_tokens: set[str]) -> float:
-        if not query_tokens or not text_tokens:
-            return 0.0
-        return len(query_tokens & text_tokens) / max(len(query_tokens), 1)
-
-    # ------------------------------------------------------------------
-    # Internal — tagging / fact extraction
-    # ------------------------------------------------------------------
+    # Private — tagging and fact extraction
 
     @staticmethod
     def _infer_tags(text: str) -> List[str]:
@@ -499,9 +383,6 @@ class ConversationMemory:
             if lowered.startswith("source:"):
                 facts.append(line)
                 continue
-            if any(
-                marker in lowered
-                for marker in ("severity", "confidence", "ioc", "#chunk-")
-            ):
+            if any(marker in lowered for marker in ("severity", "confidence", "ioc", "#chunk-")):
                 facts.append(line[:240])
         return facts[:6]
