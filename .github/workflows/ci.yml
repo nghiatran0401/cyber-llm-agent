@@ -40,7 +40,7 @@ jobs:
       - name: Compile checks
         run: make lint
 
-      - name: Run full test suite (excluding known legacy regressions)
+      - name: Run full test suite (excluding integration tests requiring API key)
         run: make test-ci
 
       - name: Benchmark evaluation

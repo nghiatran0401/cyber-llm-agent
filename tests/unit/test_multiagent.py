@@ -2,15 +2,15 @@
 
 import pytest
 
-from src.agents.g2.multiagent_system import (
-    create_initial_state,
+from src.agents.g2.state import create_initial_state
+from src.agents.g2.nodes import (
     log_analyzer_node,
     threat_predictor_node,
     incident_responder_node,
     orchestrator_node,
-    create_multiagent_workflow,
-    run_multiagent_with_trace,
 )
+from src.agents.g2.graph import create_multiagent_workflow
+from src.agents.g2.runner import run_multiagent_with_trace
 
 
 class _FakeResponse:
