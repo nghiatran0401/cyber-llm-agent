@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Dict, List
 
 from src.config.settings import Settings
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 SCENARIOS: Dict[str, Dict[str, str]] = {
     "sqli": {
@@ -65,9 +68,13 @@ def generate_event(
 def append_event_to_live_log(event: Dict[str, object], output_path: Path | None = None) -> Path:
     """Append event as JSONL line into live web logs file."""
     path = output_path or (Settings.LOGS_DIR / "live_web_logs.jsonl")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event) + "\n")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event) + "\n")
+    except OSError as exc:
+        logger.error("Failed to write sandbox event to %s: %s", path, exc)
+        raise
     return path
 
 

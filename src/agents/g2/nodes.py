@@ -8,6 +8,7 @@ What it does:
 
 from __future__ import annotations
 
+import json
 from typing import Any, List
 
 from src.agents.g2.multiagent_config import (
@@ -106,7 +107,15 @@ def log_analyzer_node(state: AgentState, llm: Any) -> AgentState:
     log_state(state, "log_analyzer")
     evidence_input = state["logs"]
     if _looks_like_log_path(state["logs"]):
-        evidence_input = parse_system_log(state["logs"])
+        raw_result = parse_system_log(state["logs"])
+        try:
+            parsed = json.loads(raw_result)
+            if isinstance(parsed, dict) and "ok" in parsed:
+                evidence_input = json.dumps(parsed["data"], indent=2) if parsed["ok"] and parsed.get("data") else parsed.get("error", raw_result)
+            else:
+                evidence_input = raw_result
+        except (json.JSONDecodeError, TypeError):
+            evidence_input = raw_result
     state["log_evidence"] = evidence_input
     state["rag_context"] = retrieve_security_context(state["logs"]) if Settings.ENABLE_RAG else "RAG disabled."
     prompt = render_prompt_template(
@@ -125,11 +134,18 @@ def threat_predictor_node(state: AgentState, llm: Any) -> AgentState:
     validate_state(state, REQUIRED_STATE_KEYS)
     log_state(state, "threat_predictor")
     cti_query = _derive_threat_query(state["log_analysis"])
-    state["cti_evidence"] = (
-        fetch_cti_intelligence(cti_query)
-        if Settings.OTX_API_KEY
-        else "CTI unavailable: OTX_API_KEY is not configured."
-    )
+    if Settings.OTX_API_KEY:
+        raw_cti = fetch_cti_intelligence(cti_query)
+        try:
+            parsed = json.loads(raw_cti)
+            if isinstance(parsed, dict) and "ok" in parsed:
+                state["cti_evidence"] = parsed.get("data", raw_cti) if parsed["ok"] else parsed.get("error", raw_cti)
+            else:
+                state["cti_evidence"] = raw_cti
+        except (json.JSONDecodeError, TypeError):
+            state["cti_evidence"] = raw_cti
+    else:
+        state["cti_evidence"] = "CTI unavailable: OTX_API_KEY is not configured."
     prompt = render_prompt_template(
         "g2/nodes/threat_predictor.txt",
         system_prompt=THREAT_PREDICTOR_ROLE.system_prompt,

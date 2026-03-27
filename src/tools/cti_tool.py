@@ -2,6 +2,7 @@
 
 import re
 import time
+from time import perf_counter
 from typing import Any
 from urllib.parse import quote
 
@@ -10,6 +11,8 @@ from langchain_core.tools import Tool
 
 from src.config.settings import Settings
 from src.utils.logger import setup_logger
+
+from ._tool_envelope import build_tool_result, serialize_tool_result
 
 logger = setup_logger(__name__)
 _IOC_PATTERN = re.compile(r"^ioc:(ip|domain|hostname|url|hash):(.+)$", re.IGNORECASE)
@@ -55,18 +58,19 @@ def _format_cti_report(
     return _truncate_text(_sanitize_text(report), Settings.CTI_MAX_RESPONSE_CHARS)
 
 
-def _otx_request(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Perform OTX GET with retry/backoff."""
+def _otx_request(path: str, params: dict[str, Any] | None = None) -> tuple[dict[str, Any], int]:
+    """Perform OTX GET with retry/backoff. Returns (payload, retries_used)."""
     url = f"{Settings.OTX_BASE_URL}{path}"
     headers = {"X-OTX-API-KEY": Settings.OTX_API_KEY}
     attempts = Settings.CTI_MAX_RETRIES + 1
     last_error: Exception | None = None
+    retries_used = 0
 
     for attempt in range(attempts):
         try:
             response = requests.get(url, params=params, headers=headers, timeout=Settings.CTI_REQUEST_TIMEOUT_SECONDS)
             if response.status_code == 200:
-                return response.json()
+                return response.json(), retries_used
             if response.status_code in {429, 500, 502, 503, 504}:
                 last_error = RuntimeError(f"Transient OTX error {response.status_code}")
             else:
@@ -80,24 +84,26 @@ def _otx_request(path: str, params: dict[str, Any] | None = None) -> dict[str, A
             last_error = exc
             break
 
+        retries_used = attempt + 1
         if attempt < attempts - 1 and Settings.CTI_RETRY_BACKOFF_SECONDS > 0:
             time.sleep(Settings.CTI_RETRY_BACKOFF_SECONDS * (attempt + 1))
 
     raise RuntimeError("OTX request failed after retries.") from last_error
 
 
-def _query_otx_threat_type(threat_type: str) -> str:
-    """Search OTX pulses by threat keyword."""
-    payload = _otx_request("/search/pulses", params={"query": threat_type, "limit": Settings.CTI_TOP_RESULTS})
+def _query_otx_threat_type(threat_type: str) -> tuple[str, int]:
+    """Search OTX pulses by threat keyword. Returns (report, retries_used)."""
+    payload, retries_used = _otx_request("/search/pulses", params={"query": threat_type, "limit": Settings.CTI_TOP_RESULTS})
     results = payload.get("results") or []
     if not isinstance(results, list) or not results:
-        return _format_cti_report(
+        report = _format_cti_report(
             source="AlienVault OTX", query=threat_type,
             summary=f"No OTX pulse results found for '{threat_type}'.",
             observations=["The query returned zero matching pulses."],
             actions=["Try a broader threat keyword or known malware family name.", "Pivot to IOC lookup if specific indicators are available."],
             confidence="Low",
         )
+        return report, retries_used
 
     observations: list[str] = []
     for pulse in results[: Settings.CTI_TOP_RESULTS]:
@@ -112,20 +118,21 @@ def _query_otx_threat_type(threat_type: str) -> str:
     if not observations:
         observations.append("Pulse data returned but no parsable entries were available.")
 
-    return _format_cti_report(
+    report = _format_cti_report(
         source="AlienVault OTX", query=threat_type,
         summary=f"Found {len(results)} pulse result(s) for '{threat_type}'.",
         observations=observations,
         actions=["Validate matched indicators against internal telemetry before blocking.", "Prioritize high-confidence indicators seen across multiple pulses.", "Schedule periodic refresh because pulse activity changes quickly."],
         confidence="Medium",
     )
+    return report, retries_used
 
 
-def _query_otx_ioc(ioc_type: str, indicator: str) -> str:
-    """Query OTX general indicator context for IP/domain/url/hash/etc."""
+def _query_otx_ioc(ioc_type: str, indicator: str) -> tuple[str, int]:
+    """Query OTX general indicator context. Returns (report, retries_used)."""
     otx_type_map = {"ip": "IPv4", "domain": "domain", "hostname": "hostname", "url": "url", "hash": "file"}
     safe_indicator = quote(indicator, safe="")
-    payload = _otx_request(f"/indicators/{otx_type_map[ioc_type]}/{safe_indicator}/general")
+    payload, retries_used = _otx_request(f"/indicators/{otx_type_map[ioc_type]}/{safe_indicator}/general")
 
     pulse_info = payload.get("pulse_info") if isinstance(payload, dict) else {}
     pulses = pulse_info.get("pulses", []) if isinstance(pulse_info, dict) else []
@@ -143,7 +150,7 @@ def _query_otx_ioc(ioc_type: str, indicator: str) -> str:
         if pulse_names:
             observations.append(f"Example pulses: {', '.join(pulse_names)}")
 
-    return _format_cti_report(
+    report = _format_cti_report(
         source="AlienVault OTX",
         query=f"ioc:{ioc_type}:{indicator}",
         summary=(f"OTX returned context for IOC '{indicator}' with {pulse_count} linked pulse(s)." if pulse_count > 0 else f"OTX returned IOC metadata for '{indicator}' but no linked pulses."),
@@ -151,6 +158,7 @@ def _query_otx_ioc(ioc_type: str, indicator: str) -> str:
         actions=["Cross-check indicator sightings with SIEM/EDR before enforcement.", "If confirmed malicious, block at DNS, firewall, and endpoint controls.", "Track related IOCs from linked pulses for wider containment."],
         confidence="High" if pulse_count > 0 else "Low",
     )
+    return report, retries_used
 
 
 def _fallback_cti_report(query: str) -> str:
@@ -189,31 +197,54 @@ def fetch_cti_intelligence(threat_type: str) -> str:
     - IOC queries: "ioc:<type>:<value>" where type ∈ {ip, domain, hostname, url, hash}
 
     Returns:
-        Normalized CTI report string with summary, observations, and actions.
+        JSON string containing a ToolResult envelope with CTI report data.
     """
+    start = perf_counter()
+
     if not threat_type or not threat_type.strip():
-        return "Error: Threat type cannot be empty."
+        duration_ms = int((perf_counter() - start) * 1000)
+        return serialize_tool_result(build_tool_result(
+            ok=False, tool="CTIFetch", error="Threat type cannot be empty.",
+            error_type="empty_query", duration_ms=duration_ms, input_val=threat_type or "",
+        ))
 
     try:
         query_mode, parsed_query = _parse_cti_query(threat_type)
     except ValueError as exc:
+        duration_ms = int((perf_counter() - start) * 1000)
         logger.warning("Invalid CTI query format.")
-        return f"Error: {exc}"
+        return serialize_tool_result(build_tool_result(
+            ok=False, tool="CTIFetch", error=str(exc),
+            error_type="invalid_ioc_format", duration_ms=duration_ms, input_val=threat_type,
+        ))
 
     if Settings.CTI_PROVIDER != "otx":
-        return "Error: Unsupported CTI provider. Only 'otx' is supported."
+        duration_ms = int((perf_counter() - start) * 1000)
+        return serialize_tool_result(build_tool_result(
+            ok=False, tool="CTIFetch", error="Unsupported CTI provider. Only 'otx' is supported.",
+            error_type="unsupported_provider", duration_ms=duration_ms, input_val=threat_type,
+        ))
 
     try:
         if query_mode == "ioc":
             ioc_type, indicator = parsed_query.split(":", 1)
-            result = _query_otx_ioc(ioc_type=ioc_type, indicator=indicator)
+            report, retries_used = _query_otx_ioc(ioc_type=ioc_type, indicator=indicator)
         else:
-            result = _query_otx_threat_type(parsed_query)
-        logger.info("CTI fetch completed with provider=otx.")
-        return result
+            report, retries_used = _query_otx_threat_type(parsed_query)
+        duration_ms = int((perf_counter() - start) * 1000)
+        logger.info("CTI fetch completed with provider=otx (retries=%d, duration=%dms).", retries_used, duration_ms)
+        return serialize_tool_result(build_tool_result(
+            ok=True, tool="CTIFetch", data=report,
+            duration_ms=duration_ms, retries=retries_used, input_val=threat_type,
+        ))
     except Exception:
-        logger.warning("CTI fetch failed for provider=otx.")
-        return _fallback_cti_report(threat_type.strip())
+        duration_ms = int((perf_counter() - start) * 1000)
+        logger.warning("CTI fetch failed for provider=otx (duration=%dms). Using fallback.", duration_ms)
+        fallback = _fallback_cti_report(threat_type.strip())
+        return serialize_tool_result(build_tool_result(
+            ok=True, tool="CTIFetch", data=fallback,
+            duration_ms=duration_ms, retries=Settings.CTI_MAX_RETRIES, input_val=threat_type,
+        ))
 
 
 cti_fetch = Tool(

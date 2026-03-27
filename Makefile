@@ -1,4 +1,4 @@
-PYTHON ?= python
+PYTHON ?= python3
 IMAGE ?= cyber-llm-agent:latest
 
 .PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci docker-build docker-run
