@@ -130,8 +130,7 @@ Confirmed from src.utils.embedding import EmbeddingMemory and from src.utils.mem
 agent_with_memory.py, eval_memory.py, and session_manager.py required no changes — all import only ConversationMemory from memory_manager, which is unchanged
 
 Stage 5.3 work log — memory hygiene pass
-Date: 2026-03-28
-Branch: memory_update (continued)
+Branch: memory_update
 Focus: Correct BM25 IDF, consistent contracts, lazy embedding init, session ID safety, payload adapter, eval seeding, test quality
 
 What I did:
@@ -148,8 +147,8 @@ Tests: updated BM25 unit test for new helpers; added tests for invalid `add_turn
 
 What I tested:
 
-`pytest` on `tests/unit/test_memory.py` and `tests/unit/test_embedding_memory.py` — all passing (38 tests).
-`python -c` / script run of `run_full_eval()` — `MemoryEvalResult` still reaches score 1.0 on the seeded harness (smoke/regression; not a claim of unbiased benchmark quality).
+make test-memory — all passing (38 tests).
+make evaluate memory still reaches score 1.0 on the seeded harness (smoke/regression; not a claim of unbiased benchmark quality).
 
 What's deferred:
 
