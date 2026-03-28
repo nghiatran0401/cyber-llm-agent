@@ -1,5 +1,4 @@
 import json
-import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -68,6 +67,12 @@ def test_long_term_memory_recall_returns_relevant_items():
 # Stage 1 — session manager basics
 # ------------------------------------------------------------------
 
+def test_session_manager_rejects_invalid_session_id(tmp_path: Path):
+    manager = SessionManager(session_dir=tmp_path)
+    with pytest.raises(ValueError, match="invalid character"):
+        manager.save_session("user@domain", {"messages": []})
+
+
 def test_session_manager_save_and_load(tmp_path: Path):
     manager = SessionManager(session_dir=tmp_path)
     manager.save_session("abc_123", {"messages": [{"role": "user", "content": "hello"}]})
@@ -119,6 +124,12 @@ def test_load_state_rejects_invalid_role():
     memory = ConversationMemory(memory_type="buffer", max_messages=4)
     with pytest.raises(ValueError, match="invalid role"):
         memory.load_state(messages=[{"role": "bot", "content": "hi"}])
+
+
+def test_add_turn_rejects_invalid_role():
+    memory = ConversationMemory(memory_type="buffer", max_messages=4)
+    with pytest.raises(ValueError, match="Invalid role"):
+        memory.add_turn("bot", "hello")
 
 
 def test_load_state_rejects_missing_keys():
@@ -183,15 +194,21 @@ def test_deterministic_replay_multi_turn():
 # ------------------------------------------------------------------
 
 def test_bm25_scores_higher_for_repeated_query_terms():
-    # doc_b satisfies both query terms; doc_a satisfies only one
-    score_a = ConversationMemory._bm25_score(
-        ["failed", "login"],
+    corpus = [
         ["failed", "brute", "force", "attempt"],
-    )
-    score_b = ConversationMemory._bm25_score(
-        ["failed", "login"],
         ["failed", "login", "brute", "force"],
-    )
+    ]
+    query = ["failed", "login"]
+    n = len(corpus)
+    avg_doc_len = sum(len(d) for d in corpus) / n
+    idf_map = {
+        term: ConversationMemory._bm25_idf(
+            sum(1 for d in corpus if term in set(d)), n
+        )
+        for term in set(query)
+    }
+    score_a = ConversationMemory._bm25_doc_score(query, corpus[0], idf_map, avg_doc_len)
+    score_b = ConversationMemory._bm25_doc_score(query, corpus[1], idf_map, avg_doc_len)
     assert score_b > score_a, (
         f"Expected doc with both query terms ({score_b:.4f}) to score higher "
         f"than doc with one query term ({score_a:.4f})"
@@ -265,17 +282,17 @@ def test_render_context_respects_size_cap():
 
 
 def test_context_contains_trim_marker_when_over_limit():
-    memory = ConversationMemory(memory_type="buffer", max_messages=10, recall_top_k=3)
+    memory = ConversationMemory(
+        memory_type="buffer", max_messages=10, recall_top_k=3, max_context_chars=500
+    )
     for i in range(10):
         memory.add_turn("user", "x" * 500)
         memory.add_turn("assistant", "y" * 500)
     context = memory.render_context(query="anything")
-    if len(context) <= memory.max_context_chars:
-        return  # no trim needed — pass
     assert "trimmed" in context
 
 
-def test_stateful_agent_logs_context_size(tmp_path: Path, caplog):
+def test_stateful_agent_invoke_does_not_crash(tmp_path: Path):
     fake_backend = _FakeBackendAgent()
     agent = StatefulSecurityAgent(
         memory_type="buffer",
@@ -285,9 +302,8 @@ def test_stateful_agent_logs_context_size(tmp_path: Path, caplog):
         verbose=False,
     )
     agent.session_manager = SessionManager(session_dir=tmp_path)
-    with caplog.at_level(logging.DEBUG):
-        agent.invoke({"input": "Analyze suspicious login"})
-    assert True  # asserts no crash; log line presence depends on env log level
+    result = agent.invoke({"input": "Analyze suspicious login"})
+    assert "messages" in result
 
 
 # ------------------------------------------------------------------

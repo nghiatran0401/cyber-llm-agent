@@ -13,7 +13,11 @@ from src.utils.memory_manager import ConversationMemory
 # ------------------------------------------------------------------
 
 def _fake_embedding(text: str) -> list[float]:
-    """Deterministic fake embedding: MD5 digest mapped to an 8-dim vector."""
+    """Deterministic fake embedding: MD5 digest mapped to an 8-dim vector.
+
+    Intentionally short (production vectors are 1536+ dims); cosine_similarity
+    only requires equal lengths between query and document vectors from this stub.
+    """
     digest = hashlib.md5(text.encode()).digest()
     return [((b / 255.0) * 2 - 1) for b in digest[:8]]
 

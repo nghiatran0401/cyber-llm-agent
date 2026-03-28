@@ -5,7 +5,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.utils.embedding import EmbeddingMemory
 from src.utils.logger import setup_logger
@@ -35,7 +35,7 @@ class ConversationMemory:
     recall_top_k: int = 3
     messages: List[Dict[str, str]] = field(default_factory=list)
     running_summary: str = ""
-    episodic_memories: List[Dict] = field(default_factory=list)
+    episodic_memories: List[Dict[str, Any]] = field(default_factory=list)
     semantic_facts: List[str] = field(default_factory=list)
 
     # Parallel embedding vectors — excluded from get_state(), re-built on load_state().
@@ -59,12 +59,17 @@ class ConversationMemory:
             raise ValueError("max_context_chars must be at least 500.")
         if self.recall_top_k <= 0:
             raise ValueError("recall_top_k must be greater than 0.")
-        if self._embedding_backend is None:
-            try:
-                self._embedding_backend = EmbeddingMemory.from_settings()
-            except Exception as exc:
-                logger.warning("Could not initialise embedding backend: %s", exc)
-                self._embedding_backend = EmbeddingMemory(enabled=False)
+
+    def _ensure_embedding_backend(self) -> Optional[EmbeddingMemory]:
+        """Lazily construct the embedding backend on first use (avoids I/O at dataclass init)."""
+        if self._embedding_backend is not None:
+            return self._embedding_backend
+        try:
+            self._embedding_backend = EmbeddingMemory.from_settings()
+        except Exception as exc:
+            logger.warning("Could not initialise embedding backend: %s", exc)
+            self._embedding_backend = EmbeddingMemory(enabled=False)
+        return self._embedding_backend
 
     # Public API — short-term memory
 
@@ -72,6 +77,11 @@ class ConversationMemory:
         """Append a user/assistant message and enforce buffer/summary limits."""
         if not content:
             return
+        allowed_roles = {"user", "assistant", "system"}
+        if role not in allowed_roles:
+            raise ValueError(
+                f"Invalid role '{role}'. Must be one of {sorted(allowed_roles)}."
+            )
         self.messages.append({"role": role, "content": content})
         self._enforce_limits()
 
@@ -79,7 +89,7 @@ class ConversationMemory:
         self,
         messages: List[Dict[str, str]],
         running_summary: str = "",
-        episodic_memories: List[Dict] | None = None,
+        episodic_memories: List[Dict[str, Any]] | None = None,
         semantic_facts: List[str] | None = None,
     ) -> None:
         """Restore memory state from persisted data with contract validation."""
@@ -213,9 +223,7 @@ class ConversationMemory:
     # Private — recall
 
     def _embed(self, text: str) -> Optional[List[float]]:
-        if self._embedding_backend is None:
-            return None
-        return self._embedding_backend.embed(text)
+        return self._ensure_embedding_backend().embed(text)
 
     def _retrieve_by_embedding(self, query_vec: List[float], limit: int) -> List[str]:
         scored: List[tuple[float, str]] = []
@@ -253,21 +261,39 @@ class ConversationMemory:
         query_tokens = self._tokens_list(query)
         if not query_tokens:
             return []
-        scored: List[tuple[float, str]] = []
 
+        doc_entries: List[tuple[list[str], str, int]] = []
         for i, memory in enumerate(self.episodic_memories):
             summary = str(memory.get("summary", "")).strip()
             if not summary:
                 continue
-            score = self._bm25_score(query_tokens, self._tokens_list(summary))
-            if score > 0:
-                recency = (i + 1) / max(len(self.episodic_memories), 1)
-                scored.append((score * (1 + 0.2 * recency), f"Episodic: {summary}"))
-
+            doc_entries.append((self._tokens_list(summary), f"Episodic: {summary}", i))
         for fact in self.semantic_facts:
-            score = self._bm25_score(query_tokens, self._tokens_list(fact))
-            if score > 0:
-                scored.append((score, f"Semantic: {fact}"))
+            doc_entries.append((self._tokens_list(fact), f"Semantic: {fact}", -1))
+
+        if not doc_entries:
+            return []
+
+        corpus_tokens = [dt for dt, _, _ in doc_entries]
+        corpus_size = len(corpus_tokens)
+        avg_doc_len = sum(len(dt) for dt in corpus_tokens) / max(corpus_size, 1)
+
+        idf_map: dict[str, float] = {}
+        for term in set(query_tokens):
+            df = sum(1 for dt in corpus_tokens if term in set(dt))
+            idf_map[term] = self._bm25_idf(df, corpus_size)
+
+        scored: List[tuple[float, str]] = []
+        for doc_tokens, label, episodic_idx in doc_entries:
+            score = self._bm25_doc_score(
+                query_tokens, doc_tokens, idf_map, avg_doc_len=avg_doc_len
+            )
+            if score <= 0:
+                continue
+            if episodic_idx >= 0:
+                recency = (episodic_idx + 1) / max(len(self.episodic_memories), 1)
+                score *= 1 + 0.2 * recency
+            scored.append((score, label))
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return self._deduplicate(scored, limit)
@@ -331,9 +357,17 @@ class ConversationMemory:
         return [t.lower() for t in re.findall(r"[a-zA-Z0-9_.:-]{2,}", text or "")]
 
     @staticmethod
-    def _bm25_score(
+    def _bm25_idf(df: int, corpus_size: int) -> float:
+        """Okapi BM25 inverse document frequency using corpus-wide document frequency."""
+        if corpus_size <= 0:
+            return 0.0
+        return math.log((corpus_size - df + 0.5) / (df + 0.5) + 1.0)
+
+    @staticmethod
+    def _bm25_doc_score(
         query_tokens: list[str],
         doc_tokens: list[str],
+        idf_map: dict[str, float],
         avg_doc_len: float = 20.0,
         k1: float = 1.5,
         b: float = 0.75,
@@ -347,7 +381,7 @@ class ConversationMemory:
             tf = doc_freq.get(term, 0)
             if tf == 0:
                 continue
-            idf = math.log(1 + (1 / (tf + 0.5)))
+            idf = idf_map.get(term, 0.0)
             tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (doc_len / avg_doc_len)))
             score += idf * tf_norm
         return score

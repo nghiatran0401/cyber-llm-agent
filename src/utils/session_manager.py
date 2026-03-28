@@ -1,85 +1,146 @@
-import json
-import os
-import tempfile
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, Optional
-from src.config.settings import Settings
+"""Memory quality evaluator — run as a script or import in CI."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import List, Tuple
+
+from src.utils.memory_manager import ConversationMemory
 
 
-class SessionManager:
-    """Load and save conversational sessions as JSON."""
+@dataclass
+class MemoryEvalResult:
+    recall_hit_rate: float = 0.0
+    context_size_ok: bool = True
+    summary_readable: bool = True
+    session_roundtrip_ok: bool = True
+    details: List[str] = field(default_factory=list)
 
-    def __init__(self, session_dir: Optional[Path] = None):
-        self.session_dir = Path(session_dir or Settings.SESSIONS_DIR)
-        self.session_dir.mkdir(parents=True, exist_ok=True)
+    @property
+    def score(self) -> float:
+        checks = [
+            self.recall_hit_rate,
+            1.0 if self.context_size_ok else 0.0,
+            1.0 if self.summary_readable else 0.0,
+            1.0 if self.session_roundtrip_ok else 0.0,
+        ]
+        return round(sum(checks) / len(checks), 3)
 
-    def _session_path(self, session_id: str) -> Path:
-        safe_id = "".join(ch for ch in session_id if ch.isalnum() or ch in {"-", "_"})
-        return self.session_dir / f"{safe_id}.json"
-
-    def save_session(self, session_id: str, payload: Dict[str, Any]) -> None:
-        """Persist session payload atomically (write-temp-then-rename)."""
-        self.prune_expired_sessions()
-        session_file = self._session_path(session_id)
-        data = {
-            "session_id": session_id,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            **payload,
-        }
-        # Write to a sibling temp file first, then atomically replace.
-        fd, tmp_path = tempfile.mkstemp(
-            dir=self.session_dir, prefix=f".{session_id}_", suffix=".tmp"
+    def __str__(self) -> str:
+        return (
+            f"MemoryEvalResult(score={self.score}, "
+            f"recall_hit_rate={self.recall_hit_rate:.2f}, "
+            f"context_size_ok={self.context_size_ok}, "
+            f"summary_readable={self.summary_readable}, "
+            f"session_roundtrip_ok={self.session_roundtrip_ok})"
         )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(data, handle, indent=2)
-            os.replace(tmp_path, session_file)  # atomic on POSIX, best-effort on Windows
-        except Exception:
-            # Clean up the temp file if anything went wrong.
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
 
-    def load_session(self, session_id: str) -> Dict[str, Any]:
-        """Read previously saved session payload. Returns {} on missing or corrupt file."""
-        session_file = self._session_path(session_id)
-        if not session_file.exists():
-            return {}
-        try:
-            with open(session_file, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
-            if not isinstance(data, dict):
-                raise ValueError("Session file root is not a JSON object")
-            return data
-        except (json.JSONDecodeError, ValueError, OSError) as exc:
-            # Back up the corrupt file for post-mortem, then return clean state.
-            corrupt_path = session_file.with_suffix(".corrupt.json")
-            try:
-                session_file.rename(corrupt_path)
-            except OSError:
-                pass
-            return {}
 
-    def prune_expired_sessions(self) -> None:
-        """Delete expired session files based on retention policy."""
-        retention_seconds = max(1, Settings.SESSION_RETENTION_DAYS) * 24 * 60 * 60
-        now = datetime.now(timezone.utc)
-        for session_file in self.session_dir.glob("*.json"):
-            # Never prune corrupt-backup files automatically.
-            if session_file.name.endswith(".corrupt.json"):
-                continue
-            try:
-                with open(session_file, "r", encoding="utf-8") as handle:
-                    data = json.load(handle)
-                updated_at = data.get("updated_at")
-                if not updated_at:
-                    continue
-                updated_time = datetime.fromisoformat(str(updated_at))
-                age_seconds = (now - updated_time).total_seconds()
-                if age_seconds > retention_seconds:
-                    session_file.unlink(missing_ok=True)
-            except Exception:
-                continue
+def _make_seeded_memory(max_messages: int = 8) -> ConversationMemory:
+    memory = ConversationMemory(memory_type="summary", max_messages=max_messages, recall_top_k=3)
+    turns: List[Tuple[str, str]] = [
+        ("user", "Investigate ransomware beacon to 10.0.0.1"),
+        ("assistant", "Severity: critical\nSource: AlienVault\nIOC: 10.0.0.1"),
+        ("user", "Check failed logins on VPN gateway"),
+        ("assistant", "Severity: high\n- 400 failed SSH attempts from 185.0.0.2"),
+        ("user", "Scan for SQL injection in /api/login"),
+        ("assistant", "Severity: medium\n- Payload detected in username field"),
+        ("user", "What is the patch status for CVE-2024-1234?"),
+        ("assistant", "Unpatched on 3 hosts. Recommended Actions:\n- Apply vendor patch"),
+        ("user", "Summarise today's findings"),
+        ("assistant", "Four incidents: ransomware C2, VPN brute-force, SQLi, unpatched CVE."),
+    ]
+    for i in range(0, len(turns), 2):
+        user_role, user_text = turns[i]
+        asst_role, assistant_text = turns[i + 1]
+        memory.add_turn(user_role, user_text)
+        memory.add_turn(asst_role, assistant_text)
+        memory.update_long_term_from_turn(
+            user_text=user_text, assistant_text=assistant_text
+        )
+    return memory
+
+
+def evaluate_recall_hit_rate(memory: ConversationMemory, probes: List[Tuple[str, str]]) -> float:
+    """Fraction of probes where at least one recalled item contains the expected keyword."""
+    if not probes:
+        return 1.0
+    hits = 0
+    for query, expected_keyword in probes:
+        recalled = memory.retrieve_relevant_memories(query)
+        if any(expected_keyword.lower() in item.lower() for item in recalled):
+            hits += 1
+    return hits / len(probes)
+
+
+def evaluate_context_size(memory: ConversationMemory) -> bool:
+    context = memory.render_context(query="ransomware IOC")
+    return len(context) <= getattr(memory, "MAX_CONTEXT_CHARS", 4000) + 200
+
+
+def evaluate_summary_readability(memory: ConversationMemory) -> bool:
+    if not memory.running_summary:
+        return True
+    # Must not be a raw pipe-wall and must contain at least one colon (role: content)
+    pipes = memory.running_summary.count("|")
+    colons = memory.running_summary.count(":")
+    return pipes < 5 and colons >= 1
+
+
+def evaluate_session_roundtrip(memory: ConversationMemory) -> bool:
+    state = memory.get_state()
+    memory2 = ConversationMemory(
+        memory_type=state["memory_type"],
+        max_messages=state["max_messages"],
+        recall_top_k=state["recall_top_k"],
+    )
+    try:
+        memory2.load_state(
+            messages=state["messages"],
+            running_summary=state["running_summary"],
+            episodic_memories=state["episodic_memories"],
+            semantic_facts=state["semantic_facts"],
+        )
+    except Exception:
+        return False
+    return memory2.messages == memory.messages and memory2.running_summary == memory.running_summary
+
+
+def run_full_eval() -> MemoryEvalResult:
+    memory = _make_seeded_memory()
+    result = MemoryEvalResult()
+
+    probes = [
+        ("ransomware C2 beacon", "ransomware"),
+        ("failed login brute force VPN", "failed"),
+        ("SQL injection api login", "sql"),
+        ("CVE patch unpatched hosts", "patch"),
+    ]
+    result.recall_hit_rate = evaluate_recall_hit_rate(memory, probes)
+    result.context_size_ok = evaluate_context_size(memory)
+    result.summary_readable = evaluate_summary_readability(memory)
+    result.session_roundtrip_ok = evaluate_session_roundtrip(memory)
+
+    if result.recall_hit_rate < 0.75:
+        result.details.append(f"Recall hit rate below threshold: {result.recall_hit_rate:.2f}")
+    if not result.context_size_ok:
+        result.details.append("render_context() exceeds MAX_CONTEXT_CHARS")
+    if not result.summary_readable:
+        result.details.append("Running summary looks unreadable (pipe-wall pattern)")
+    if not result.session_roundtrip_ok:
+        result.details.append("Session roundtrip failed — state mismatch after load_state()")
+
+    return result
+
+
+def main() -> int:
+    """CLI entry — not run on ``import eval_memory`` (safe for CI that imports helpers)."""
+    result = run_full_eval()
+    print(result)
+    for detail in result.details:
+        print(f"  WARNING: {detail}")
+    return 0 if result.score >= 0.75 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

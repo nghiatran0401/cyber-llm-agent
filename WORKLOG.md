@@ -128,3 +128,29 @@ All 30 existing tests pass across both test files with no changes to assertions 
 Confirmed from src.utils.memory_manager import EmbeddingMemory now raises ImportError as expected — the old import path is gone
 Confirmed from src.utils.embedding import EmbeddingMemory and from src.utils.memory_manager import ConversationMemory both resolve correctly
 agent_with_memory.py, eval_memory.py, and session_manager.py required no changes — all import only ConversationMemory from memory_manager, which is unchanged
+
+Stage 5.3 work log — memory hygiene pass
+Date: 2026-03-28
+Branch: memory_update (continued)
+Focus: Correct BM25 IDF, consistent contracts, lazy embedding init, session ID safety, payload adapter, eval seeding, test quality
+
+What I did:
+
+Fixed BM25 fallback in `ConversationMemory._retrieve_by_bm25()`: IDF now uses corpus-wide document frequency (`_bm25_idf` / `_bm25_doc_score`) instead of the previous per-document TF term in the IDF slot, which had inverted rare-term behaviour. Recency boost for episodic rows unchanged.
+Aligned `add_turn()` with `load_state()`: only `user`, `assistant`, and `system` roles are accepted; invalid roles raise `ValueError` so bad data cannot be persisted and then rejected on reload.
+Typed `episodic_memories` as `List[Dict[str, Any]]` for clearer schema intent at the type level.
+Deferred embedding backend construction: removed `EmbeddingMemory.from_settings()` from `ConversationMemory.__post_init__`; `_ensure_embedding_backend()` runs on first `_embed()` so constructing the dataclass does not trigger provider I/O or heavy imports.
+`embedding.py`: use `import json` directly (no `_json` alias); `from_settings()` now imports `Settings` at module level — no circular dependency with `src.config.settings`, so the lazy import inside the classmethod was unnecessary.
+`session_manager.py`: `prune_expired_sessions()` runs once in `__init__` instead of on every `save_session()` to avoid O(n) directory scans per write. `load_session()` docstring documents renaming corrupt files to `*.corrupt.json`. Session IDs are validated (`[A-Za-z0-9_-]` only); invalid IDs raise `ValueError` instead of silent stripping/collision.
+Extracted invoke payload parsing from `agent_with_memory.py` into `src/agents/g1/llm_payload.py` (`extract_user_text`, `extract_response_text`); removed redundant module-level docstring in favour of the class docstring.
+`eval_memory.py`: `_make_seeded_memory()` now mirrors real usage — per turn, `add_turn` for user/assistant then `update_long_term_from_turn(user_text=..., assistant_text=...)` without duplicating assistant text as user text. Added `main()` for CLI; `run_full_eval` is not invoked at import time.
+Tests: updated BM25 unit test for new helpers; added tests for invalid `add_turn` role and invalid session ID; trim-marker test forces the minimum allowed `max_context_chars` (500) so the trim path always runs; replaced vacuous log assertion with `test_stateful_agent_invoke_does_not_crash`; noted in `test_embedding_memory.py` that the 8-dim fake embedding is intentional for cosine tests.
+
+What I tested:
+
+`pytest` on `tests/unit/test_memory.py` and `tests/unit/test_embedding_memory.py` — all passing (38 tests).
+`python -c` / script run of `run_full_eval()` — `MemoryEvalResult` still reaches score 1.0 on the seeded harness (smoke/regression; not a claim of unbiased benchmark quality).
+
+What's deferred:
+
+Stronger eval probes, negative/adversarial scenarios, and metrics beyond keyword-in-recall if we want less hand-aligned quality signals.

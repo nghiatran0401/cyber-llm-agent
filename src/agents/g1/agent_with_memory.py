@@ -1,15 +1,8 @@
-"""
-Purpose: Memory and session wrapper for adaptive agent
-What it does:
-- Wraps the adaptive security agent with conversation memory
-- Persists and restores state by session ID
-- Injects memory context into prompts before invocation
-"""
-
 from typing import Any, Optional
 from uuid import uuid4
 
 from src.agents.g1.adaptive_agent import AdaptiveSecurityAgent
+from src.agents.g1.llm_payload import extract_response_text, extract_user_text
 from src.utils.memory_manager import ConversationMemory
 from src.utils.session_manager import SessionManager
 from src.utils.logger import setup_logger
@@ -58,7 +51,7 @@ class StatefulSecurityAgent:
 
     def invoke(self, payload: Any):
         """Invoke backend agent with memory-aware context injection."""
-        user_text = self._extract_user_text(payload)
+        user_text = extract_user_text(payload)
         context_block = self.memory.render_context(query=user_text)
         logger.debug(
             "Memory context size: %d chars, %d episodic, %d semantic",
@@ -73,7 +66,7 @@ class StatefulSecurityAgent:
         )
 
         result = self.backend_agent.invoke({"messages": [("user", augmented_prompt)]})
-        answer_text = self._extract_response_text(result)
+        answer_text = extract_response_text(result)
 
         self.memory.add_turn("user", user_text)
         self.memory.add_turn("assistant", answer_text)
@@ -84,38 +77,10 @@ class StatefulSecurityAgent:
     def run(self, user_input: str) -> str:
         """Convenience method returning plain text output."""
         result = self.invoke({"input": user_input})
-        return self._extract_response_text(result)
+        return extract_response_text(result)
 
     def _persist(self):
         self.session_manager.save_session(self.session_id, self.memory.get_state())
-
-    @staticmethod
-    def _extract_user_text(payload: Any) -> str:
-        if isinstance(payload, dict):
-            if "input" in payload:
-                return str(payload["input"])
-            if "messages" in payload and payload["messages"]:
-                last = payload["messages"][-1]
-                if isinstance(last, tuple) and len(last) == 2:
-                    return str(last[1])
-                return str(last)
-        return str(payload)
-
-    @staticmethod
-    def _extract_response_text(result: Any) -> str:
-        if isinstance(result, dict):
-            if "output" in result:
-                return str(result["output"])
-            if "messages" in result and result["messages"]:
-                last = result["messages"][-1]
-                if hasattr(last, "content"):
-                    return str(last.content)
-                if isinstance(last, tuple) and len(last) == 2:
-                    return str(last[1])
-                return str(last)
-        if hasattr(result, "content"):
-            return str(result.content)
-        return str(result)
 
 
 def create_agent_with_memory(

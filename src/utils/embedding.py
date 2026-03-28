@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import json as _json
+import json
 import math
 import urllib.request
 from typing import List, Optional
 
+from src.config.settings import Settings
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -70,9 +71,7 @@ class EmbeddingMemory:
 
     @classmethod
     def from_settings(cls) -> "EmbeddingMemory":
-        """Construct from Settings. Deferred import avoids circular dependency."""
-        from src.config.settings import Settings
-
+        """Construct from application :class:`Settings`."""
         return cls(
             provider=Settings.EMBEDDING_PROVIDER,
             openai_model=Settings.OPENAI_EMBEDDING_MODEL,
@@ -96,7 +95,7 @@ class EmbeddingMemory:
         return response.data[0].embedding
 
     def _embed_ollama(self, text: str) -> List[float]:
-        payload = _json.dumps(
+        payload = json.dumps(
             {"model": self.ollama_model, "prompt": text[:8000]}
         ).encode()
         req = urllib.request.Request(
@@ -106,5 +105,5 @@ class EmbeddingMemory:
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
-            result = _json.loads(resp.read().decode())
+            result = json.loads(resp.read().decode())
         return result["embedding"]

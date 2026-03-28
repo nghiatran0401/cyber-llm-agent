@@ -50,10 +50,14 @@ def _make_seeded_memory(max_messages: int = 8) -> ConversationMemory:
         ("user", "Summarise today's findings"),
         ("assistant", "Four incidents: ransomware C2, VPN brute-force, SQLi, unpatched CVE."),
     ]
-    for role, content in turns:
-        memory.add_turn(role, content)
-    for role, content in turns:
-        memory.update_long_term_from_turn(content, content)
+    for i in range(0, len(turns), 2):
+        user_role, user_text = turns[i]
+        asst_role, assistant_text = turns[i + 1]
+        memory.add_turn(user_role, user_text)
+        memory.add_turn(asst_role, assistant_text)
+        memory.update_long_term_from_turn(
+            user_text=user_text, assistant_text=assistant_text
+        )
     return memory
 
 
@@ -129,9 +133,14 @@ def run_full_eval() -> MemoryEvalResult:
     return result
 
 
-if __name__ == "__main__":
+def main() -> int:
+    """CLI entry — not run on ``import eval_memory`` (safe for CI that imports helpers)."""
     result = run_full_eval()
     print(result)
     for detail in result.details:
         print(f"  WARNING: {detail}")
-    raise SystemExit(0 if result.score >= 0.75 else 1)
+    return 0 if result.score >= 0.75 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
