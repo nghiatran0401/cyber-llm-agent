@@ -2,6 +2,7 @@
 
 from services.api.react_runtime import (
     activate_runtime_budget,
+    build_budget_summary,
     build_step_trace,
     create_runtime_budget_state,
     deactivate_runtime_budget,
@@ -76,7 +77,71 @@ def test_execute_tool_with_runtime_controls_returns_skip_message_for_duplicates(
         first = execute_tool_with_runtime_controls("RAGRetriever", "same query", lambda value: f"ran {value}")
         second = execute_tool_with_runtime_controls("RAGRetriever", "same query", lambda value: f"ran {value}")
         assert first == "ran same query"
-        assert "Skipped duplicate RAGRetriever" in second
+        assert second == "ran same query"
+        assert build_budget_summary()["cached_tool_reuses"] == 1
+    finally:
+        deactivate_runtime_budget(token)
+
+
+def test_execute_tool_with_runtime_controls_reuses_semantically_equivalent_requests():
+    state = create_runtime_budget_state(max_steps=4, max_tool_calls=3, max_runtime_seconds=30)
+    token = activate_runtime_budget(state)
+    tool_runs = {"count": 0}
+
+    def _tool(_value: str) -> str:
+        tool_runs["count"] += 1
+        return "cached CTI evidence"
+
+    try:
+        first = execute_tool_with_runtime_controls("CTIFetch", "possible ransomware activity", _tool)
+        second = execute_tool_with_runtime_controls("CTIFetch", "ransomware attack", _tool)
+        assert first == "cached CTI evidence"
+        assert second == "cached CTI evidence"
+        assert tool_runs["count"] == 1
+        summary = build_budget_summary()
+        assert summary["tool_calls_used"] == 1
+        assert summary["duplicate_tool_calls"] == 1
+        assert summary["semantic_duplicate_tool_calls"] == 1
+        assert summary["cached_tool_reuses"] == 1
+    finally:
+        deactivate_runtime_budget(token)
+
+
+def test_execute_tool_with_runtime_controls_cools_down_failed_semantic_retry():
+    state = create_runtime_budget_state(max_steps=4, max_tool_calls=3, max_runtime_seconds=30)
+    token = activate_runtime_budget(state)
+
+    try:
+        first = execute_tool_with_runtime_controls("CTIFetch", "possible ransomware activity", lambda _value: 1 / 0)
+        second = execute_tool_with_runtime_controls("CTIFetch", "ransomware attack", lambda _value: "should not run")
+        assert first == "CTIFetch is temporarily unavailable because tool execution failed."
+        assert "semantically equivalent request already failed" in second
+        summary = build_budget_summary()
+        assert summary["tool_calls_used"] == 1
+        assert summary["tool_failures"] == 1
+        assert summary["cooldown_skips"] == 1
+    finally:
+        deactivate_runtime_budget(token)
+
+
+def test_execute_tool_with_runtime_controls_handles_empty_tool_output():
+    state = create_runtime_budget_state(max_steps=4, max_tool_calls=3, max_runtime_seconds=30)
+    token = activate_runtime_budget(state)
+    try:
+        result = execute_tool_with_runtime_controls("LogParser", "incident.log", lambda _value: "")
+        assert result == "LogParser returned no usable output for this request."
+        assert build_budget_summary()["tool_failures"] == 1
+    finally:
+        deactivate_runtime_budget(token)
+
+
+def test_execute_tool_with_runtime_controls_handles_tool_exception():
+    state = create_runtime_budget_state(max_steps=4, max_tool_calls=3, max_runtime_seconds=30)
+    token = activate_runtime_budget(state)
+    try:
+        result = execute_tool_with_runtime_controls("CTIFetch", "ransomware", lambda _value: 1 / 0)
+        assert result == "CTIFetch is temporarily unavailable because tool execution failed."
+        assert build_budget_summary()["tool_failures"] == 1
     finally:
         deactivate_runtime_budget(token)
 

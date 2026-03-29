@@ -88,6 +88,23 @@ def test_run_multiagent_with_trace_returns_four_steps():
         assert "output_summary" in item
 
 
+def test_run_multiagent_with_trace_matches_canonical_sequence():
+    llm = _FakeLLM()
+    traced = run_multiagent_with_trace("Failed login and scan patterns detected.", llm=llm)
+
+    assert [item["step"] for item in traced["trace"]] == [
+        "LogAnalyzer",
+        "WorkerPlanner",
+        "ThreatPredictor",
+        "WorkerTask",
+        "WorkerTask",
+        "WorkerTask",
+        "IncidentResponder",
+        "Verifier",
+        "Orchestrator",
+    ]
+
+
 def test_run_multiagent_with_trace_stops_when_step_budget_exceeded(monkeypatch):
     llm = _FakeLLM()
     monkeypatch.setattr("src.agents.g2.runner.Settings.MAX_AGENT_STEPS", 2)
@@ -113,5 +130,23 @@ def test_run_multiagent_with_trace_stops_when_tool_budget_exceeded(monkeypatch):
     assert traced["steps_used"] >= 1
     assert "runtime_budget" in traced["result"]
     assert traced["result"]["runtime_budget"]["tool_calls_used"] == 1
+    assert traced["result"]["runtime_budget"]["tool_failures"] == 0
     assert "ThreatPredictor" in [step["step"] for step in traced["trace"]]
+
+
+def test_threat_predictor_reuses_existing_cti_evidence(monkeypatch):
+    llm = _FakeLLM()
+    state = create_initial_state("Failed login repeated from same host.")
+    state["log_analysis"] = "Analysis: ransomware activity suspected."
+    state["rag_context"] = "Retrieved context already available."
+    state["cti_evidence"] = "Cached CTI evidence for ransomware family."
+    monkeypatch.setattr("src.agents.g2.nodes.Settings.OTX_API_KEY", "configured")
+    monkeypatch.setattr(
+        "src.agents.g2.nodes.fetch_cti_intelligence",
+        lambda _query: (_ for _ in ()).throw(AssertionError("CTI should have been reused instead of called again")),
+    )
+
+    updated = threat_predictor_node(state, llm)
+
+    assert updated["cti_evidence"] == "Cached CTI evidence for ransomware family."
 

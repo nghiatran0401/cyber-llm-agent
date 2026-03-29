@@ -45,16 +45,23 @@ def _build_run_control_trace_strings(runtime_budget: Dict[str, Any], stop_reason
     prompt_preview = (
         f"max_steps={runtime_budget.get('max_steps', Settings.MAX_AGENT_STEPS)} "
         f"max_tool_calls={runtime_budget.get('max_tool_calls', Settings.MAX_TOOL_CALLS)} "
-        f"max_runtime_seconds={runtime_budget.get('max_runtime_seconds', Settings.MAX_RUNTIME_SECONDS)}"
+        f"max_runtime_seconds={runtime_budget.get('max_runtime_seconds', Settings.MAX_RUNTIME_SECONDS)} "
+        "trace_schema=react-trace-v1"
     )
     input_summary = (
         f"steps_used={runtime_budget.get('steps_used', 0)}, "
         f"tool_calls_used={runtime_budget.get('tool_calls_used', 0)}, "
-        f"duplicate_tool_calls={runtime_budget.get('duplicate_tool_calls', 0)}"
+        f"duplicate_tool_calls={runtime_budget.get('duplicate_tool_calls', 0)}, "
+        f"semantic_duplicate_tool_calls={runtime_budget.get('semantic_duplicate_tool_calls', 0)}, "
+        f"cached_tool_reuses={runtime_budget.get('cached_tool_reuses', 0)}, "
+        f"cooldown_skips={runtime_budget.get('cooldown_skips', 0)}, "
+        f"tool_failures={runtime_budget.get('tool_failures', 0)}"
     )
     output_summary = (
         f"stop_reason={stop_reason}, "
-        f"tool_calls_used={runtime_budget.get('tool_calls_used', 0)}"
+        f"tool_calls_used={runtime_budget.get('tool_calls_used', 0)}, "
+        f"cached_tool_reuses={runtime_budget.get('cached_tool_reuses', 0)}, "
+        f"tool_failures={runtime_budget.get('tool_failures', 0)}"
     )
     return prompt_preview, input_summary, output_summary
 
