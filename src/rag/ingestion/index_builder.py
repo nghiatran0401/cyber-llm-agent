@@ -25,7 +25,11 @@ def build_mitre_index() -> None:
 
     documents = [c.page_content for c in chunks]
     metadatas = [c.metadata for c in chunks]
-    ids = [f"ID{i}" for i in range(len(chunks))]
+    ids = []
+    for i, meta in enumerate(metadatas):
+        chunk_id = f"ID{i}"
+        meta["chunk_id"] = chunk_id
+        ids.append(chunk_id)
 
     collection = get_mitre_collection()
     collection.upsert(documents=documents, metadatas=metadatas, ids=ids)

@@ -78,6 +78,7 @@ class Settings:
     # RAG (LangChain + Pinecone)
     ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() == "true"
     RAG_MAX_RESULTS = int(os.getenv("RAG_MAX_RESULTS", "3"))
+    RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.25"))
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
     PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "cyber-llm-knowledge")
 
@@ -170,6 +171,8 @@ class Settings:
                 raise ValueError("PINECONE_API_KEY is required when ENABLE_RAG=true.")
             if not cls.PINECONE_INDEX_NAME:
                 raise ValueError("PINECONE_INDEX_NAME is required when ENABLE_RAG=true.")
+        if cls.RAG_MIN_SCORE < 0 or cls.RAG_MIN_SCORE > 1:
+            raise ValueError("RAG_MIN_SCORE must be between 0 and 1.")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
         return True

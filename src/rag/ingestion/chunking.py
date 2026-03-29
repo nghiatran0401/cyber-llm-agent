@@ -24,11 +24,11 @@ def split_mitre_documents(documents: List[Document]) -> List[Document]:
         headers_to_split_on=headers_to_split_on
     )
 
-    # Approximate token-based splitting using characters; langchain will use
-    # tiktoken if available.
+    # Approximate 300-600 token chunks using characters (tiktoken used when
+    # available). 1800 chars ~450 tokens with safety overlap.
     chunk_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,
-        chunk_overlap=200,
+        chunk_size=1800,
+        chunk_overlap=400,
         separators=["\n\n", "\n", ". ", " "],
     )
 

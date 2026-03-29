@@ -38,11 +38,13 @@ def retrieve_mitre_contexts(
 
     contexts: List[RetrievedContext] = []
     for doc, meta, dist in zip(documents, metadatas, distances):
+        # Chroma returns distance; convert to cosine similarity where higher is better.
+        similarity = max(0.0, 1.0 - float(dist))
         contexts.append(
             RetrievedContext(
                 document=doc,
                 metadata=meta,
-                score=float(dist),
+                score=similarity,
             )
         )
     return contexts

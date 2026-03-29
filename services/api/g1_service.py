@@ -120,6 +120,8 @@ def run_g1_analysis(
         StepTrace(step="SafetyGuard", what_it_does="Detects prompt-injection patterns before execution.",
                   prompt_preview="prompt_injection_guard=enabled", input_summary=summarize_text(clean_input),
                   output_summary=f"injection_detected={injection_detected}"),
+        StepTrace(step="RAGStatus", what_it_does="Notes whether retrieval-augmented context is available.",
+                  prompt_preview="ENABLE_RAG flag", input_summary="", output_summary=f"rag_enabled={Settings.ENABLE_RAG}"),
     ]
 
     if injection_detected:
@@ -192,6 +194,8 @@ def run_g1_analysis_with_progress(
     on_step(StepTrace(step="SafetyGuard", what_it_does="Detects prompt-injection patterns before execution.",
                       prompt_preview="prompt_injection_guard=enabled", input_summary=summarize_text(clean_input),
                       output_summary=f"injection_detected={injection_detected}"))
+    on_step(StepTrace(step="RAGStatus", what_it_does="Notes whether retrieval-augmented context is available.",
+                      prompt_preview="ENABLE_RAG flag", input_summary="", output_summary=f"rag_enabled={Settings.ENABLE_RAG}"))
 
     if injection_detected:
         return ("Potential prompt-injection content detected. Please remove control-instruction text and retry.",

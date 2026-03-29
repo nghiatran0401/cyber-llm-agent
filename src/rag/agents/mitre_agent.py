@@ -37,8 +37,11 @@ def run_mitre_agent(user_query: str) -> Dict[str, object]:
 
     contexts = simple_rerank(contexts)
 
-    best_distance = contexts[0].score
-    if best_distance > settings.distance_threshold:
+    # Scores are cosine similarity (higher is better). Preserve the
+    # existing distance-based threshold by converting it.
+    min_similarity = max(0.0, 1.0 - settings.distance_threshold)
+    best_score = contexts[0].score
+    if best_score < min_similarity:
         return {"error": "Query out of MITRE scope."}
 
     mitre_resp: MITRETechniqueResponse = answer_mitre_query(retrieval_query, contexts)

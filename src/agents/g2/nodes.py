@@ -19,7 +19,7 @@ from src.agents.g2.multiagent_config import (
 from src.config.settings import Settings
 from src.tools.cti_tool import fetch_cti_intelligence
 from src.tools.log_parser_tool import parse_system_log
-from src.tools.rag_tools import retrieve_security_context
+from src.tools.rag_tools import retrieve_security_context, format_rag_result
 from src.utils.logger import setup_logger
 from src.utils.prompt_templates import render_prompt_template
 from src.utils.state_validator import REQUIRED_STATE_KEYS, log_state, validate_state
@@ -108,7 +108,9 @@ def log_analyzer_node(state: AgentState, llm: Any) -> AgentState:
     if _looks_like_log_path(state["logs"]):
         evidence_input = parse_system_log(state["logs"])
     state["log_evidence"] = evidence_input
-    state["rag_context"] = retrieve_security_context(state["logs"]) if Settings.ENABLE_RAG else "RAG disabled."
+    rag_result = retrieve_security_context(state["logs"]) if Settings.ENABLE_RAG else None
+    state["rag_result"] = rag_result or {}
+    state["rag_context"] = format_rag_result(rag_result) if rag_result else "RAG disabled."
     prompt = render_prompt_template(
         "g2/nodes/log_analyzer.txt",
         system_prompt=LOG_ANALYZER_ROLE.system_prompt,

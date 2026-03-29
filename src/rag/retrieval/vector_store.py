@@ -19,6 +19,7 @@ def get_mitre_collection() -> Collection:
     collection = client.get_or_create_collection(
         name=settings.chroma_collection,
         embedding_function=sentence_ef,
+        metadata={"hnsw:space": "cosine"},
     )
     return collection
 
