@@ -76,6 +76,17 @@ def _derive_threat_query(text: str) -> str:
     return "malware"
 
 
+def _has_usable_tool_evidence(value: str, *, unavailable_markers: tuple[str, ...] = ()) -> bool:
+    """Return True when a prior tool result is good enough to reuse safely."""
+    content = str(value or "").strip()
+    if not content:
+        return False
+    lowered = content.lower()
+    if "returned no usable output" in lowered or "temporarily unavailable" in lowered:
+        return False
+    return not any(marker in lowered for marker in unavailable_markers)
+
+
 def plan_worker_tasks(state: AgentState) -> List[str]:
     """Create dynamic worker plan based on current evidence."""
     content = (

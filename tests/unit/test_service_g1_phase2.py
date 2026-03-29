@@ -51,6 +51,41 @@ def test_g1_adds_structured_and_critic_trace(monkeypatch):
         assert isinstance(step.output_summary, str)
 
 
+def test_g1_trace_sequence_matches_canonical_contract(monkeypatch):
+    response_text = (
+        "Severity: medium\n"
+        "Findings:\n- Repeated failed logins observed\n\n"
+        "Recommended Actions:\n- Enable MFA\n\n"
+        "Source: AlienVault OTX"
+    )
+    monkeypatch.setattr("services.api.g1_service._get_or_create_memory_agent", lambda _session_id: _FakeAgent(response_text))
+    monkeypatch.setattr("services.api.g1_service.Settings.should_use_strong_model", lambda _text: False)
+    monkeypatch.setattr("services.api.g1_service.Settings.is_high_risk_task", lambda _text: False)
+    monkeypatch.setattr("services.api.g1_service.Settings.MAX_AGENT_STEPS", 3)
+    monkeypatch.setattr("services.api.g1_service.Settings.MAX_RUNTIME_SECONDS", 60)
+
+    _result, trace, _model, _stop_reason, _steps_used, _prompt_version, _rubric_score, _rubric_label = g1_service.run_g1_analysis(
+        "check login anomalies"
+    )
+
+    assert [step.step for step in trace] == [
+        "InputPreparation",
+        "RoutingPolicy",
+        "PromptVersion",
+        "SafetyGuard",
+        "SingleAgentExecution",
+        "RunControl",
+        "StructuredOutput",
+        "CriticReview",
+        "PolicyGuard",
+        "RubricEvaluation",
+    ]
+    run_control = next(item for item in trace if item.step == "RunControl")
+    assert "trace_schema=react-trace-v1" in run_control.prompt_preview
+    assert "cached_tool_reuses=" in run_control.input_summary
+    assert "cooldown_skips=" in run_control.input_summary
+
+
 def test_g1_high_risk_without_citations_requires_human(monkeypatch):
     response_text = (
         "Severity: high\n"
@@ -136,3 +171,39 @@ def test_g1_marks_budget_exceeded_when_tool_budget_is_hit(monkeypatch):
     assert "tool-call budget was exhausted" in result
     run_control = next(item for item in trace if item.step == "RunControl")
     assert "tool_calls_used=1" in run_control.input_summary
+    assert "tool_failures=0" in run_control.output_summary
+
+
+def test_g1_reuses_semantically_equivalent_tool_calls(monkeypatch):
+    class _SemanticReuseAgent:
+        def run(self, _input: str) -> str:
+            first = execute_tool_with_runtime_controls(
+                "CTIFetch",
+                "possible ransomware activity",
+                lambda _value: "cached CTI evidence",
+            )
+            second = execute_tool_with_runtime_controls(
+                "CTIFetch",
+                "ransomware attack",
+                lambda _value: "should not execute",
+            )
+            return f"{first}\n{second}"
+
+    monkeypatch.setattr("services.api.g1_service._get_or_create_memory_agent", lambda _session_id: _SemanticReuseAgent())
+    monkeypatch.setattr("services.api.g1_service.Settings.should_use_strong_model", lambda _text: False)
+    monkeypatch.setattr("services.api.g1_service.Settings.is_high_risk_task", lambda _text: False)
+    monkeypatch.setattr("services.api.g1_service.Settings.MAX_AGENT_STEPS", 3)
+    monkeypatch.setattr("services.api.g1_service.Settings.MAX_TOOL_CALLS", 3)
+    monkeypatch.setattr("services.api.g1_service.Settings.MAX_RUNTIME_SECONDS", 60)
+
+    result, trace, _model, stop_reason, steps_used, _prompt_version, _rubric_score, _rubric_label = g1_service.run_g1_analysis(
+        "investigate ransomware behavior"
+    )
+
+    assert stop_reason == "completed"
+    assert steps_used == 1
+    assert result.count("cached CTI evidence") == 2
+    run_control = next(item for item in trace if item.step == "RunControl")
+    assert "tool_calls_used=1" in run_control.input_summary
+    assert "semantic_duplicate_tool_calls=1" in run_control.input_summary
+    assert "cached_tool_reuses=1" in run_control.input_summary

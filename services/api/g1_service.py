@@ -135,16 +135,23 @@ def _build_run_control_trace_strings(stop_reason: str, steps_used: int) -> tuple
     prompt_preview = (
         f"max_steps={budget['max_steps']} "
         f"max_tool_calls={budget['max_tool_calls']} "
-        f"max_runtime_seconds={budget['max_runtime_seconds']}"
+        f"max_runtime_seconds={budget['max_runtime_seconds']} "
+        "trace_schema=react-trace-v1"
     )
     input_summary = (
         f"steps_used={steps_used}, "
         f"tool_calls_used={budget['tool_calls_used']}, "
-        f"duplicate_tool_calls={budget['duplicate_tool_calls']}"
+        f"duplicate_tool_calls={budget['duplicate_tool_calls']}, "
+        f"semantic_duplicate_tool_calls={budget['semantic_duplicate_tool_calls']}, "
+        f"cached_tool_reuses={budget['cached_tool_reuses']}, "
+        f"cooldown_skips={budget['cooldown_skips']}, "
+        f"tool_failures={budget['tool_failures']}"
     )
     output_summary = (
         f"stop_reason={stop_reason}, "
-        f"tool_calls_used={budget['tool_calls_used']}"
+        f"tool_calls_used={budget['tool_calls_used']}, "
+        f"cached_tool_reuses={budget['cached_tool_reuses']}, "
+        f"tool_failures={budget['tool_failures']}"
     )
     return prompt_preview, input_summary, output_summary
 
