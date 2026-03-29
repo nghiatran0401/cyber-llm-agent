@@ -40,6 +40,7 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
     assert body["result"] == "mocked response"
     assert body["meta"]["mode"] == "g1"
     assert body["meta"]["api_version"] == "v1"
+    assert body["meta"]["trace_schema_version"] == "react-trace-v1"
     assert body["meta"]["stop_reason"] == "completed"
     assert body["meta"]["steps_used"] == 1
     assert body["meta"]["prompt_version"] == "security_analysis_v2.txt"
@@ -119,6 +120,7 @@ def test_workspace_stream_emits_trace_and_final(monkeypatch):
     final_event = next(event for event in events if event.get("type") == "final")
     assert final_event["meta"]["stop_reason"] == "completed"
     assert final_event["meta"]["steps_used"] == 2
+    assert final_event["meta"]["trace_schema_version"] == "react-trace-v1"
     assert final_event["meta"]["run_id"]
     assert final_event["meta"]["total_tokens_est"] >= 1
 
@@ -130,6 +132,11 @@ def test_metrics_endpoint_returns_aggregates():
     body = response.json()
     assert body["ok"] is True
     assert "requests_total" in body["result"]
+    assert "duplicate_tool_calls_total" in body["result"]
+    assert "semantic_duplicate_tool_calls_total" in body["result"]
+    assert "cached_tool_reuses_total" in body["result"]
+    assert "cooldown_skips_total" in body["result"]
+    assert "avg_tool_calls_per_run" in body["result"]
     assert "by_endpoint" in body["result"]
     assert "by_stop_reason" in body["result"]
 
@@ -142,6 +149,11 @@ def test_metrics_dashboard_endpoint_returns_summary():
     assert body["ok"] is True
     assert "summary" in body["result"]
     assert "breakdown" in body["result"]
+    assert "avg_tool_calls_per_run" in body["result"]["summary"]
+    assert "duplicate_tool_calls_total" in body["result"]["breakdown"]
+    assert "semantic_duplicate_tool_calls_total" in body["result"]["breakdown"]
+    assert "cached_tool_reuses_total" in body["result"]["breakdown"]
+    assert "cooldown_skips_total" in body["result"]["breakdown"]
     assert "recent_runs" in body["result"]
 
 

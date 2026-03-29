@@ -14,6 +14,7 @@ export interface ResponseMeta {
   request_id: string;
   timestamp: string;
   api_version: "v1";
+  trace_schema_version: "react-trace-v1";
   mode?: AgentMode;
   model?: string;
   duration_ms?: number;
@@ -86,6 +87,10 @@ export interface RecentDetectionItem {
   total_tokens_est?: number;
   tool_calls?: number;
   tool_fail?: number;
+  duplicate_tool_calls?: number;
+  semantic_duplicate_tool_calls?: number;
+  cached_tool_reuses?: number;
+  cooldown_skips?: number;
 }
 
 export interface RecentDetectionEnvelope {
