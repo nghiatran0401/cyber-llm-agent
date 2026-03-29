@@ -10,6 +10,10 @@ It documents the trace shape that backend services emit, tests validate, and the
 
 The current runtime uses the `StepTrace` schema from `services/api/schemas.py`.
 
+Trace contract version:
+
+- `trace_schema_version = react-trace-v1`
+
 Required fields:
 
 | Field | Type | Meaning |
@@ -53,6 +57,37 @@ The project does **not** currently use a lower-level trace format such as:
 
 Instead, the practical production contract in this repository is the human-readable `StepTrace` model above.
 
+## Canonical execution sequences
+
+These sequences are the current golden traces validated by unit tests.
+
+### G1 canonical sequence
+
+1. `InputPreparation`
+2. `RoutingPolicy`
+3. `PromptVersion`
+4. `SafetyGuard`
+5. `SingleAgentExecution`
+6. `RunControl`
+7. `StructuredOutput`
+8. `CriticReview`
+9. `PolicyGuard`
+10. `RubricEvaluation`
+
+### G2 canonical sequence
+
+For the default successful workflow without verifier retry:
+
+1. `LogAnalyzer`
+2. `WorkerPlanner`
+3. `ThreatPredictor`
+4. one or more `WorkerTask` steps
+5. `IncidentResponder`
+6. `Verifier`
+7. `Orchestrator`
+
+These canonical sequences matter because they make the trace explainable to humans and predictable for tests and UI rendering.
+
 ## Main implementation anchors
 
 - `services/api/schemas.py`
@@ -70,3 +105,4 @@ Week 1 is considered functionally complete when:
 1. the trace shape is explicitly documented
 2. stop reasons are normalized and deterministic
 3. core runtime tests for trace and stop reasons pass in a real test environment
+4. the trace contract has a named schema version and golden sequence coverage

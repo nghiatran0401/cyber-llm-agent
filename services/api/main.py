@@ -71,6 +71,10 @@ _METRICS_STATE = {
     "cost_total_est_usd": 0.0,
     "tool_calls_total": 0,
     "tool_fail_total": 0,
+    "duplicate_tool_calls_total": 0,
+    "semantic_duplicate_tool_calls_total": 0,
+    "cached_tool_reuses_total": 0,
+    "cooldown_skips_total": 0,
     "by_endpoint": defaultdict(int),
     "by_mode": defaultdict(int),
     "by_stop_reason": defaultdict(int),
@@ -108,6 +112,11 @@ _OWASP_MITRE_MAP = {
 }
 logger = setup_logger(__name__)
 _RUN_CONTROL_TOOL_CALLS_RE = re.compile(r"tool_calls_used=(\d+)")
+_RUN_CONTROL_DUPLICATES_RE = re.compile(r"duplicate_tool_calls=(\d+)")
+_RUN_CONTROL_SEMANTIC_DUPLICATES_RE = re.compile(r"semantic_duplicate_tool_calls=(\d+)")
+_RUN_CONTROL_CACHE_REUSES_RE = re.compile(r"cached_tool_reuses=(\d+)")
+_RUN_CONTROL_COOLDOWN_SKIPS_RE = re.compile(r"cooldown_skips=(\d+)")
+_RUN_CONTROL_TOOL_FAILURES_RE = re.compile(r"tool_failures=(\d+)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -151,9 +160,14 @@ def _extract_text_payload(value) -> str:
     return str(value or "")
 
 
-def _derive_tool_stats(result, trace) -> tuple[int, int, int]:
+def _derive_tool_stats(result, trace) -> tuple[int, int, int, int, int, int, int]:
     statuses: dict[str, bool] = {}
     budget_tool_calls = 0
+    duplicate_tool_calls = 0
+    semantic_duplicate_tool_calls = 0
+    cached_tool_reuses = 0
+    cooldown_skips = 0
+    explicit_tool_failures = 0
     if isinstance(result, dict):
         for key, tool_name in (
             ("log_evidence", "LogParser"),
@@ -174,6 +188,7 @@ def _derive_tool_stats(result, trace) -> tuple[int, int, int]:
 
     for item in trace or []:
         step_name = item.get("step") if isinstance(item, dict) else getattr(item, "step", "")
+        input_summary = item.get("input_summary", "") if isinstance(item, dict) else getattr(item, "input_summary", "")
         output_summary = item.get("output_summary", "") if isinstance(item, dict) else getattr(item, "output_summary", "")
         if step_name == "WorkerTask":
             statuses.setdefault("WorkerTask", True)
@@ -181,11 +196,36 @@ def _derive_tool_stats(result, trace) -> tuple[int, int, int]:
             match = _RUN_CONTROL_TOOL_CALLS_RE.search(str(output_summary))
             if match:
                 budget_tool_calls = max(budget_tool_calls, int(match.group(1)))
+            duplicate_match = _RUN_CONTROL_DUPLICATES_RE.search(str(input_summary))
+            if duplicate_match:
+                duplicate_tool_calls = max(duplicate_tool_calls, int(duplicate_match.group(1)))
+            semantic_duplicate_match = _RUN_CONTROL_SEMANTIC_DUPLICATES_RE.search(str(input_summary))
+            if semantic_duplicate_match:
+                semantic_duplicate_tool_calls = max(semantic_duplicate_tool_calls, int(semantic_duplicate_match.group(1)))
+            cache_reuse_match = _RUN_CONTROL_CACHE_REUSES_RE.search(str(input_summary))
+            if cache_reuse_match:
+                cached_tool_reuses = max(cached_tool_reuses, int(cache_reuse_match.group(1)))
+            cooldown_skip_match = _RUN_CONTROL_COOLDOWN_SKIPS_RE.search(str(input_summary))
+            if cooldown_skip_match:
+                cooldown_skips = max(cooldown_skips, int(cooldown_skip_match.group(1)))
+            failure_match = _RUN_CONTROL_TOOL_FAILURES_RE.search(str(output_summary))
+            if not failure_match:
+                failure_match = _RUN_CONTROL_TOOL_FAILURES_RE.search(str(input_summary))
+            if failure_match:
+                explicit_tool_failures = max(explicit_tool_failures, int(failure_match.group(1)))
 
     tool_calls = max(len(statuses), budget_tool_calls)
     tool_success = sum(1 for ok in statuses.values() if ok)
-    tool_fail = max(0, tool_calls - tool_success)
-    return tool_calls, tool_success, tool_fail
+    tool_fail = max(explicit_tool_failures, max(0, tool_calls - tool_success))
+    return (
+        tool_calls,
+        tool_success,
+        tool_fail,
+        duplicate_tool_calls,
+        semantic_duplicate_tool_calls,
+        cached_tool_reuses,
+        cooldown_skips,
+    )
 
 
 def _enrich_trace_step(item, run_id: str, step_index: int) -> StepTrace:
@@ -228,6 +268,10 @@ def _record_metric(
     cost_est_usd: float = 0.0,
     tool_calls: int = 0,
     tool_fail: int = 0,
+    duplicate_tool_calls: int = 0,
+    semantic_duplicate_tool_calls: int = 0,
+    cached_tool_reuses: int = 0,
+    cooldown_skips: int = 0,
     run_id: str | None = None,
     model: str | None = None,
 ):
@@ -238,6 +282,10 @@ def _record_metric(
         _METRICS_STATE["cost_total_est_usd"] += max(0.0, float(cost_est_usd))
         _METRICS_STATE["tool_calls_total"] += max(0, int(tool_calls))
         _METRICS_STATE["tool_fail_total"] += max(0, int(tool_fail))
+        _METRICS_STATE["duplicate_tool_calls_total"] += max(0, int(duplicate_tool_calls))
+        _METRICS_STATE["semantic_duplicate_tool_calls_total"] += max(0, int(semantic_duplicate_tool_calls))
+        _METRICS_STATE["cached_tool_reuses_total"] += max(0, int(cached_tool_reuses))
+        _METRICS_STATE["cooldown_skips_total"] += max(0, int(cooldown_skips))
         _METRICS_STATE["by_endpoint"][endpoint] += 1
         _METRICS_STATE["by_mode"][mode or "none"] += 1
         _METRICS_STATE["by_stop_reason"][stop_reason or ("completed" if success else "error")] += 1
@@ -259,6 +307,10 @@ def _record_metric(
                 "cost_est_usd": round(float(cost_est_usd), 6),
                 "tool_calls": int(tool_calls),
                 "tool_fail": int(tool_fail),
+                "duplicate_tool_calls": int(duplicate_tool_calls),
+                "semantic_duplicate_tool_calls": int(semantic_duplicate_tool_calls),
+                "cached_tool_reuses": int(cached_tool_reuses),
+                "cooldown_skips": int(cooldown_skips),
             }
         )
 
@@ -285,7 +337,15 @@ def _build_success_response(
     output_tokens_est = _estimate_tokens(_extract_text_payload(result))
     total_tokens_est = input_tokens_est + output_tokens_est
     cost_est_usd = round((total_tokens_est / 1000) * 0.0005, 6)
-    tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=enriched_trace)
+    (
+        tool_calls,
+        tool_success,
+        tool_fail,
+        duplicate_tool_calls,
+        semantic_duplicate_tool_calls,
+        cached_tool_reuses,
+        cooldown_skips,
+    ) = _derive_tool_stats(result=result, trace=enriched_trace)
 
     if endpoint:
         _record_metric(
@@ -298,6 +358,10 @@ def _build_success_response(
             cost_est_usd=cost_est_usd,
             tool_calls=tool_calls,
             tool_fail=tool_fail,
+            duplicate_tool_calls=duplicate_tool_calls,
+            semantic_duplicate_tool_calls=semantic_duplicate_tool_calls,
+            cached_tool_reuses=cached_tool_reuses,
+            cooldown_skips=cooldown_skips,
             run_id=run_id,
             model=model,
         )
@@ -314,6 +378,7 @@ def _build_success_response(
         cost_est_usd=cost_est_usd,
         tool_calls=tool_calls,
         tool_fail=tool_fail,
+        duplicate_tool_calls=duplicate_tool_calls,
     )
     return ApiResponse(
         ok=True,
@@ -487,10 +552,17 @@ def metrics() -> ApiResponse:
         cost_total_est_usd = float(_METRICS_STATE["cost_total_est_usd"])
         tool_calls_total = int(_METRICS_STATE["tool_calls_total"])
         tool_fail_total = int(_METRICS_STATE["tool_fail_total"])
+        duplicate_tool_calls_total = int(_METRICS_STATE["duplicate_tool_calls_total"])
+        semantic_duplicate_tool_calls_total = int(_METRICS_STATE["semantic_duplicate_tool_calls_total"])
+        cached_tool_reuses_total = int(_METRICS_STATE["cached_tool_reuses_total"])
+        cooldown_skips_total = int(_METRICS_STATE["cooldown_skips_total"])
         by_endpoint = dict(_METRICS_STATE["by_endpoint"])
         by_mode = dict(_METRICS_STATE["by_mode"])
         by_stop_reason = dict(_METRICS_STATE["by_stop_reason"])
     avg_duration_ms = round(duration_total_ms / requests_total, 2) if requests_total else 0.0
+    avg_tool_calls = round(tool_calls_total / requests_total, 2) if requests_total else 0.0
+    avg_duplicate_tool_calls = round(duplicate_tool_calls_total / requests_total, 2) if requests_total else 0.0
+    tool_fail_rate_pct = round((tool_fail_total / tool_calls_total) * 100, 2) if tool_calls_total else 0.0
     return ApiResponse(
         ok=True,
         result={
@@ -504,6 +576,13 @@ def metrics() -> ApiResponse:
             "cost_total_est_usd": round(cost_total_est_usd, 6),
             "tool_calls_total": tool_calls_total,
             "tool_fail_total": tool_fail_total,
+            "duplicate_tool_calls_total": duplicate_tool_calls_total,
+            "semantic_duplicate_tool_calls_total": semantic_duplicate_tool_calls_total,
+            "cached_tool_reuses_total": cached_tool_reuses_total,
+            "cooldown_skips_total": cooldown_skips_total,
+            "avg_tool_calls_per_run": avg_tool_calls,
+            "avg_duplicate_tool_calls_per_run": avg_duplicate_tool_calls,
+            "tool_fail_rate_pct": tool_fail_rate_pct,
             "by_endpoint": by_endpoint,
             "by_mode": by_mode,
             "by_stop_reason": by_stop_reason,
@@ -526,11 +605,22 @@ def metrics_dashboard() -> ApiResponse:
         tokens_total_est = int(_METRICS_STATE["tokens_total_est"])
         by_mode = dict(_METRICS_STATE["by_mode"])
         by_stop_reason = dict(_METRICS_STATE["by_stop_reason"])
+        tool_calls_total = int(_METRICS_STATE["tool_calls_total"])
+        tool_fail_total = int(_METRICS_STATE["tool_fail_total"])
+        duplicate_tool_calls_total = int(_METRICS_STATE["duplicate_tool_calls_total"])
+        semantic_duplicate_tool_calls_total = int(_METRICS_STATE["semantic_duplicate_tool_calls_total"])
+        cached_tool_reuses_total = int(_METRICS_STATE["cached_tool_reuses_total"])
+        cooldown_skips_total = int(_METRICS_STATE["cooldown_skips_total"])
         recent_runs = list(_METRICS_STATE["recent_runs"])[:25]
 
     success_rate = round((success_total / requests_total) * 100, 2) if requests_total else 0.0
     avg_duration_ms = round(duration_total_ms / requests_total, 2) if requests_total else 0.0
     avg_tokens = round(tokens_total_est / requests_total, 2) if requests_total else 0.0
+    avg_tool_calls = round(tool_calls_total / requests_total, 2) if requests_total else 0.0
+    avg_duplicate_tool_calls = round(duplicate_tool_calls_total / requests_total, 2) if requests_total else 0.0
+    tool_fail_rate_pct = round((tool_fail_total / tool_calls_total) * 100, 2) if tool_calls_total else 0.0
+    budget_exceeded_rate_pct = round((by_stop_reason.get("budget_exceeded", 0) / requests_total) * 100, 2) if requests_total else 0.0
+    needs_human_rate_pct = round((by_stop_reason.get("needs_human", 0) / requests_total) * 100, 2) if requests_total else 0.0
 
     return ApiResponse(
         ok=True,
@@ -543,10 +633,21 @@ def metrics_dashboard() -> ApiResponse:
                 "avg_duration_ms": avg_duration_ms,
                 "avg_tokens_est": avg_tokens,
                 "cost_total_est_usd": round(cost_total_est_usd, 6),
+                "avg_tool_calls_per_run": avg_tool_calls,
+                "avg_duplicate_tool_calls_per_run": avg_duplicate_tool_calls,
+                "tool_fail_rate_pct": tool_fail_rate_pct,
+                "budget_exceeded_rate_pct": budget_exceeded_rate_pct,
+                "needs_human_rate_pct": needs_human_rate_pct,
             },
             "breakdown": {
                 "by_mode": by_mode,
                 "by_stop_reason": by_stop_reason,
+                "tool_calls_total": tool_calls_total,
+                "tool_fail_total": tool_fail_total,
+                "duplicate_tool_calls_total": duplicate_tool_calls_total,
+                "semantic_duplicate_tool_calls_total": semantic_duplicate_tool_calls_total,
+                "cached_tool_reuses_total": cached_tool_reuses_total,
+                "cooldown_skips_total": cooldown_skips_total,
             },
             "recent_runs": recent_runs,
         },
@@ -605,6 +706,7 @@ def detections_recent(limit: int = Query(default=25, ge=1, le=100)) -> ApiRespon
                     "total_tokens_est": run.get("total_tokens_est"),
                     "tool_calls": run.get("tool_calls"),
                     "tool_fail": run.get("tool_fail"),
+                    "duplicate_tool_calls": run.get("duplicate_tool_calls"),
                 }
             )
         if len(filtered) >= limit:
@@ -761,7 +863,15 @@ def workspace_stream(payload: WorkspaceStreamRequest):
             output_tokens_est = _estimate_tokens(_extract_text_payload(result))
             total_tokens_est = input_tokens_est + output_tokens_est
             cost_est_usd = round((total_tokens_est / 1000) * 0.0005, 6)
-            tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=streamed_trace)
+            (
+                tool_calls,
+                tool_success,
+                tool_fail,
+                duplicate_tool_calls,
+                semantic_duplicate_tool_calls,
+                cached_tool_reuses,
+                cooldown_skips,
+            ) = _derive_tool_stats(result=result, trace=streamed_trace)
             _record_metric(
                 endpoint="/api/v1/workspace/stream",
                 duration_ms=duration_ms,
@@ -772,6 +882,10 @@ def workspace_stream(payload: WorkspaceStreamRequest):
                 cost_est_usd=cost_est_usd,
                 tool_calls=tool_calls,
                 tool_fail=tool_fail,
+                duplicate_tool_calls=duplicate_tool_calls,
+                semantic_duplicate_tool_calls=semantic_duplicate_tool_calls,
+                cached_tool_reuses=cached_tool_reuses,
+                cooldown_skips=cooldown_skips,
                 run_id=run_id,
                 model=model,
             )
@@ -786,6 +900,10 @@ def workspace_stream(payload: WorkspaceStreamRequest):
                 cost_est_usd=cost_est_usd,
                 tool_calls=tool_calls,
                 tool_fail=tool_fail,
+                duplicate_tool_calls=duplicate_tool_calls,
+                semantic_duplicate_tool_calls=semantic_duplicate_tool_calls,
+                cached_tool_reuses=cached_tool_reuses,
+                cooldown_skips=cooldown_skips,
             )
             _put_event(
                 "final",

@@ -27,6 +27,7 @@ class ResponseMeta(BaseModel):
     request_id: str
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     api_version: Literal["v1"] = "v1"
+    trace_schema_version: Literal["react-trace-v1"] = "react-trace-v1"
     mode: Optional[Literal["g1", "g2"]] = None
     model: Optional[str] = None
     duration_ms: Optional[int] = None
@@ -50,7 +51,8 @@ class StepTrace(BaseModel):
 
     The current project intentionally uses a readable step contract instead of
     a lower-level event format. Backend runtime paths and frontend rendering
-    should treat these fields as the canonical trace shape.
+    should treat these fields as the canonical trace shape for
+    ``trace_schema_version=react-trace-v1``.
     """
 
     step: str
