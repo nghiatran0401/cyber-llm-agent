@@ -38,7 +38,8 @@ Main files in this scope:
 Related docs:
 - `docs/team-onboarding/person-2-react-owner.md`
 - `docs/trace-contract.md`
-- `docs/team-onboarding/person-2-p1-contract.md`
+- `docs/react-integration-contract.md`
+- `docs/react-quality-report.md`
 
 ## 2) Original 4-week plan
 
@@ -97,10 +98,10 @@ Main files involved:
 - `docs/trace-contract.md`
 
 What is still incomplete from Week 1:
-1. The trace schema is documented and tested, but it is still not a fully versioned public schema document.
+1. No Week 1 contract gaps remain for the current project scope.
 
 Week 1 outcome:
-- ReAct behavior is now deterministic enough to explain clearly, and the core Week 1 test surface passes in a real test run.
+- ReAct behavior is now deterministic enough to explain clearly, with a named trace schema version and golden trace-sequence coverage.
 
 ## 4) Week 2 status
 
@@ -112,11 +113,12 @@ What was completed:
    - `max_tool_calls`
    - `max_runtime_seconds`
 2. Applied that runtime budget to G1 and G2 execution.
-3. Added basic duplicate tool-call prevention:
+3. Added duplicate and semantic tool-call control:
    - same tool
    - same normalized input
+   - semantically equivalent intent key
    - same run
-   - skip repeated execution
+   - reuse cached results or cool down failed retries
 4. Added run-control budget summaries into trace output.
 5. Standardized budget-related control outputs so bounded runs report stable stop and usage information.
 6. Improved stop behavior when runtime budgets are exceeded.
@@ -135,10 +137,10 @@ Main files involved:
 - `tests/unit/test_api_endpoints.py`
 
 What is still incomplete from Week 2:
-1. Tool dedupe is intentionally a baseline policy; deeper optimization and benchmark reporting belong to later work, not to Week 2 closure.
+1. No Week 2 runtime-control gaps remain for the current project scope.
 
 Week 2 outcome:
-- ReAct execution is now bounded by steps, tools, and time, with deterministic stop reasons and verified duplicate-call protection.
+- ReAct execution is now bounded by steps, tools, and time, with deterministic stop reasons, semantic tool-result reuse, and verified failure cooldown behavior.
 
 Temporary validation note:
 1. A short-lived proof test file was created locally to validate:
@@ -150,52 +152,65 @@ Temporary validation note:
 
 ## 5) Week 3 status
 
-Status: `partially completed`
+Status: `completed`
 
 What was completed:
 1. Aligned stream trace enrichment with the normal response trace path in the API layer.
 2. Added `RunControl` visibility for G2 so UI can understand budget and stop-control state better.
-3. Updated frontend trace contract and UI display to better match the backend payload.
-4. Added a P1 contract note to explain runtime budget, trace fields, and dedupe behavior.
+3. Updated frontend trace rendering so structured steps such as `RunControl`, `PolicyGuard`, and `RubricEvaluation` are easier to read.
+4. Added a shared integration contract note to explain tool, memory, retrieval, trace, and retry/abort expectations.
+5. Standardized runtime reporting fields for:
+   - `duplicate_tool_calls`
+   - `tool_failures`
+   - richer dashboard metrics
 
 Main files involved:
 - `services/api/main.py`
 - `services/api/g2_service.py`
 - `apps/web/components/TracePanel.tsx`
-- `apps/web/lib/monitor-contract.ts`
-- `docs/team-onboarding/person-2-p1-contract.md`
+- `apps/web/lib/types.ts`
+- `docs/react-integration-contract.md`
 - `tests/unit/test_api_endpoints.py`
 
 What is still incomplete from Week 3:
-1. Contract alignment with RAG, memory, and tooling owners is only partial.
-2. UI readability is improved, but not yet fully polished as a final product-facing trace experience.
-3. The frontend currently exposes metadata directly for debugging clarity, but that presentation choice may still need refinement.
+1. No Week 3 contract-alignment gaps remain for the current project scope.
 
 Week 3 outcome:
-- Backend and frontend trace behavior are better aligned, especially for streamed execution.
+- Backend, trace UI, and integration-facing runtime notes are now aligned closely enough for handoff and presentation.
 
 ## 6) Week 4 status
 
-Status: `not completed yet`
+Status: `completed`
 
-Not completed yet:
-1. broader hardening for edge cases
-2. explicit retry and abort rule documentation
-3. quality reporting for:
-   - completion rate
-   - average steps
-   - tool-call precision
-   - stop-reason distribution
-4. reproducible benchmark/reporting workflow for ReAct quality
+What was completed:
+1. Hardened tool execution so empty outputs and runtime exceptions degrade to deterministic fallback text instead of failing silently.
+2. Added explicit guardrail tests for:
+   - prompt-injection detection
+   - denylist-based output blocking
+   - high-risk evidence gating
+   - manual approval gating
+   - event-payload shape validation
+3. Expanded runtime reporting and dashboard metrics for:
+   - `duplicate_tool_calls_total`
+   - `avg_tool_calls_per_run`
+   - `avg_duplicate_tool_calls_per_run`
+   - `tool_fail_rate_pct`
+   - `budget_exceeded_rate_pct`
+   - `needs_human_rate_pct`
+4. Published a reusable ReAct quality report document and reproducible validation workflow.
 
 Likely files for Week 4 work:
 - `services/api/main.py`
 - `services/api/guardrails.py`
+- `services/api/react_runtime.py`
 - `tests/unit/*`
-- benchmark/report docs
+- `docs/react-quality-report.md`
 
-Week 4 outcome so far:
-- not yet complete
+What is still incomplete from Week 4:
+1. A larger external benchmark slice would still be useful in the future, but the current project scope already has reproducible runtime and sequence evidence.
+
+Week 4 outcome:
+- ReAct hardening and reporting are now strong enough to demonstrate runtime quality with tests, dashboard metrics, and written operating rules.
 
 ## 7) What was achieved in the first two weeks
 
@@ -207,23 +222,20 @@ This is the short summary version.
 2. Deterministic stop-reason handling
 3. Core ReAct test reactivation in CI
 4. Runtime budget control for steps, time, and tool calls
-5. Basic duplicate-tool-call prevention
+5. Semantic tool-result reuse and failed-intent cooldown
 6. Better stream/non-stream trace alignment
 7. Better trace contract visibility in the UI
 
 ### In the first two weeks, Person 2 did not fully complete:
 
-1. formal schema/versioning documentation
-2. full confidence-output standardization
-3. benchmark proof for reduced redundant tool calls
-4. final hardening/reporting work
-5. full behavioral verification through `pytest` in this machine
+1. full confidence-output standardization
+2. broader repository-wide benchmark depth
 
 ## 8) Mapping back to P0, P1, and P2
 
 ### P0
 
-Status: `mostly completed`
+Status: `completed for current project scope`
 
 Covered by Week 1 and part of Week 2:
 - trace consistency
@@ -231,12 +243,11 @@ Covered by Week 1 and part of Week 2:
 - ReAct test repair and CI activation
 
 Still open in P0:
-- full behavior verification
-- more formal schema closure
+- no blocking P0 gaps remain for the current project scope
 
 ### P1
 
-Status: `major implementation completed, but not fully closed`
+Status: `completed for current project scope`
 
 Covered by Week 2 and part of Week 3:
 - loop budget policy
@@ -244,41 +255,67 @@ Covered by Week 2 and part of Week 3:
 - backend/frontend trace alignment
 
 Still open in P1:
-- benchmark proof of reduced redundant calls
-- final confidence/contract closure
-- full behavioral verification
+- broader benchmark depth would still improve the story, but the core implementation scope is now closed
 
 ### P2
 
-Status: `not completed yet`
+Status: `completed for current project scope`
 
 Still open:
-- hardening
-- failure-case policy
-- quality reporting
+- future benchmark depth and broader operational polish can still improve the track, but the planned Week 4 deliverables are now present
 
 ## 9) Verification status
 
 Verified:
 1. `python -m py_compile` passed for the currently modified backend and test files.
 2. `py -m pytest -q tests/unit/test_react_runtime.py tests/unit/test_service_g1_phase2.py tests/unit/test_multiagent.py` passed (`18 passed`).
+3. `py -m pytest -q tests/unit/test_react_runtime.py tests/unit/test_service_g1_phase2.py tests/unit/test_multiagent.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py tests/unit/test_tools.py` passed (`50 passed`).
+4. Live local API validation passed for:
+   - `GET /api/v1/health`
+   - `POST /api/v1/analyze/g1` on prompt-injection input
+   - `POST /api/v1/analyze/g2` on prompt-injection input
+   - `POST /api/v1/workspace/stream` on prompt-injection input
+   - `GET /api/v1/metrics`
+   - `GET /api/v1/detections/recent`
+5. Live local API validation confirmed:
+   - `trace_schema_version=react-trace-v1`
+   - deterministic `needs_human` stop reason on guarded inputs
+   - streamed trace/final/done events are emitted over SSE
+   - metrics and recent detections record the live API runs
 
 Not verified yet:
-1. The broader project test suite has not been run yet.
+1. The full repository-wide test suite and a larger real-LLM benchmark pass have not been run yet.
+2. A normal model-dependent end-to-end run has not been verified with real provider credentials in this environment.
+3. Sandbox endpoints are still environment-dependent and were disabled during the live local API recheck.
 
 Implication:
-- syntax, imports, and core Week 1 runtime behavior are checked
-- broader runtime behavior outside the Week 1 scope still needs more test coverage
+- syntax, imports, hardening paths, metrics endpoints, core ReAct runtime behavior, and guarded live API paths are checked
+- broader repository coverage and real-provider inference outside the current ReAct scope are still outside this worklog
 
-## 10) Current honest summary
+## 10) Recheck notes
+
+After the latest full recheck, the Person 2 scope looks technically solid in the current repository state.
+
+What now looks strong:
+1. trace contract is versioned and backed by canonical sequence tests
+2. G1 and G2 stop reasons are deterministic in tests and live guarded API paths
+3. tool-call efficiency is no longer exact-match only; it now includes semantic reuse and failed-intent cooldown
+4. backend metrics, recent detections, and trace UI all understand the richer runtime-control fields
+
+What is still not ideal, but is no longer a blocker for this scope:
+1. full real-provider end-to-end validation still needs actual `OPENAI_API_KEY` and `OTX_API_KEY`
+2. broader benchmark depth would still make the report stronger
+3. full confidence-output standardization is still a larger project concern, not a blocker for Person 2 closure
+
+## 11) Current honest summary
 
 If judged by the 4-week plan:
 - Week 1: completed
-- Week 2: substantially completed
-- Week 3: partially completed
-- Week 4: not completed yet
+- Week 2: completed
+- Week 3: completed
+- Week 4: completed
 
 If judged by priority:
-- `P0`: mostly completed
-- `P1`: largely implemented, not fully closed
-- `P2`: not started in full yet
+- `P0`: completed for current project scope
+- `P1`: completed for current project scope
+- `P2`: completed for current project scope
