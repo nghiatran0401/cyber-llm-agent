@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 from datetime import datetime, timedelta, timezone
 
-from src.agents.g1.agent_with_memory import StatefulSecurityAgent
+from src.agents.g1.g1_agent import G1Agent
 from src.utils.memory_manager import ConversationMemory
 from src.utils.session_manager import SessionManager
 
@@ -66,7 +66,7 @@ def test_session_manager_save_and_load(tmp_path: Path):
 
 def test_stateful_agent_persists_memory_to_disk(tmp_path: Path):
     fake_backend = _FakeBackendAgent()
-    agent = StatefulSecurityAgent(
+    agent = G1Agent(
         memory_type="buffer",
         max_messages=4,
         session_id="memory_test",

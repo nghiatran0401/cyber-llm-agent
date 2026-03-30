@@ -13,13 +13,10 @@ class Settings:
 
     # API Keys
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 
     # Model Configuration
-    MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
-    FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", MODEL_NAME)
+    FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", "gpt-4o-mini")
     STRONG_MODEL_NAME = os.getenv("STRONG_MODEL_NAME", "gpt-4o")
-    AUTO_MODEL_ROUTING = os.getenv("AUTO_MODEL_ROUTING", "true").lower() == "true"
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
 
@@ -54,19 +51,19 @@ class Settings:
     REQUIRE_HUMAN_APPROVAL_HIGH_RISK = os.getenv("REQUIRE_HUMAN_APPROVAL_HIGH_RISK", "false").lower() == "true"
     MIN_EVIDENCE_FOR_HIGH_RISK = int(os.getenv("MIN_EVIDENCE_FOR_HIGH_RISK", "1"))
 
-    # CTI provider configuration
-    CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").lower()
+    # CTI (AlienVault OTX)
     OTX_API_KEY = os.getenv("OTX_API_KEY", "")
     OTX_BASE_URL = os.getenv("OTX_BASE_URL", "https://otx.alienvault.com/api/v1").rstrip("/")
+    CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").strip().lower()
     CTI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("CTI_REQUEST_TIMEOUT_SECONDS", "10"))
     CTI_MAX_RETRIES = int(os.getenv("CTI_MAX_RETRIES", "2"))
     CTI_RETRY_BACKOFF_SECONDS = float(os.getenv("CTI_RETRY_BACKOFF_SECONDS", "0.5"))
     CTI_MAX_RESPONSE_CHARS = int(os.getenv("CTI_MAX_RESPONSE_CHARS", "3000"))
     CTI_TOP_RESULTS = int(os.getenv("CTI_TOP_RESULTS", "5"))
 
-    # RAG (LangChain + Pinecone)
-    ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() == "true"
-    RAG_MAX_RESULTS = int(os.getenv("RAG_MAX_RESULTS", "3"))
+    # RAG (LangChain + Pinecone) — always enabled; tune retrieval depth here if needed
+    ENABLE_RAG = os.getenv("ENABLE_RAG", "true").lower() == "true"
+    RAG_MAX_RESULTS = 3
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
     PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "cyber-llm-knowledge")
 
@@ -108,10 +105,10 @@ class Settings:
             raise ValueError("TEMPERATURE must be between 0.0 and 1.0.")
         if cls.MAX_TOKENS <= 0:
             raise ValueError("MAX_TOKENS must be greater than 0.")
-        if cls.CTI_PROVIDER != "otx":
-            raise ValueError("CTI_PROVIDER must be 'otx'. Mock CTI has been removed.")
         if not cls.OTX_API_KEY:
-            raise ValueError("OTX_API_KEY is required when CTI_PROVIDER=otx.")
+            raise ValueError("OTX_API_KEY is required.")
+        if cls.CTI_PROVIDER != "otx":
+            raise ValueError("CTI_PROVIDER must be 'otx'.")
         if cls.CTI_REQUEST_TIMEOUT_SECONDS <= 0:
             raise ValueError("CTI_REQUEST_TIMEOUT_SECONDS must be greater than 0.")
         if cls.CTI_MAX_RETRIES < 0:
@@ -152,11 +149,10 @@ class Settings:
             raise ValueError("PROMPT_VERSION_G1 must not be empty.")
         if not cls.PROMPT_VERSION_G2.strip():
             raise ValueError("PROMPT_VERSION_G2 must not be empty.")
-        if cls.ENABLE_RAG:
-            if not cls.PINECONE_API_KEY:
-                raise ValueError("PINECONE_API_KEY is required when ENABLE_RAG=true.")
-            if not cls.PINECONE_INDEX_NAME:
-                raise ValueError("PINECONE_INDEX_NAME is required when ENABLE_RAG=true.")
+        if not cls.PINECONE_API_KEY:
+            raise ValueError("PINECONE_API_KEY is required (RAG is always enabled).")
+        if not cls.PINECONE_INDEX_NAME:
+            raise ValueError("PINECONE_INDEX_NAME is required (RAG is always enabled).")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
         return True
@@ -181,9 +177,7 @@ class Settings:
 
     @classmethod
     def should_use_strong_model(cls, user_text: str) -> bool:
-        """Route strong model for high-risk tasks when auto-routing is enabled."""
-        if not cls.AUTO_MODEL_ROUTING:
-            return False
+        """Use strong model for high-risk tasks (intent-based routing is always on)."""
         return cls.is_high_risk_task(user_text)
 
 

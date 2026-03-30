@@ -68,7 +68,7 @@ Main reality today:
 
 - `src/utils/memory_manager.py`
 - `src/utils/session_manager.py`
-- `src/agents/g1/agent_with_memory.py`
+- `src/agents/g1/g1_agent.py`
 - `tests/unit/test_memory.py`
 - `services/api/g1_service.py` (session usage context)
 

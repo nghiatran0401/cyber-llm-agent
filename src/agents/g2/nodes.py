@@ -117,7 +117,7 @@ def log_analyzer_node(state: AgentState, llm: Any) -> AgentState:
         except (json.JSONDecodeError, TypeError):
             evidence_input = raw_result
     state["log_evidence"] = evidence_input
-    state["rag_context"] = retrieve_security_context(state["logs"]) if Settings.ENABLE_RAG else "RAG disabled."
+    state["rag_context"] = retrieve_security_context(state["logs"])
     prompt = render_prompt_template(
         "g2/nodes/log_analyzer.txt",
         system_prompt=LOG_ANALYZER_ROLE.system_prompt,

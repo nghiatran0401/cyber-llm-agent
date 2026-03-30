@@ -67,8 +67,7 @@ Main reality today:
 
 ## 6) First Files To Read
 
-- `src/agents/g1/adaptive_agent.py`
-- `src/agents/g1/agent_with_memory.py`
+- `src/agents/g1/g1_agent.py`
 - `src/agents/g2/runner.py`
 - `services/api/g1_service.py`
 - `services/api/g2_service.py`

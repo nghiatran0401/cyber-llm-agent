@@ -1,7 +1,7 @@
 PYTHON ?= python3
 IMAGE ?= cyber-llm-agent:latest
 
-.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci docker-build docker-run
+.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci validate-traces release-gate docker-build docker-run
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -16,7 +16,7 @@ test:
 	pytest -q
 
 test-ci:
-	pytest -q --ignore=tests/unit/test_multiagent.py --ignore=tests/unit/test_rag_tools.py --ignore=tests/unit/test_service_g1_phase2.py --ignore=tests/integration/test_agent_flow.py
+	pytest -q --ignore=tests/integration/test_agent_flow.py --tb=short 2>&1 | $(PYTHON) scripts/ci_report.py
 
 test-web:
 	npm --prefix apps/web run test
@@ -47,6 +47,12 @@ smoke:
 
 smoke-checklist:
 	$(PYTHON) scripts/smoke_checklist.py
+
+validate-traces:
+	$(PYTHON) scripts/validate_traces.py
+
+release-gate:
+	$(PYTHON) scripts/release_gate.py
 
 docker-build:
 	docker build -t $(IMAGE) .
