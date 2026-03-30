@@ -33,3 +33,23 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+
+  lab:
+    build:
+      context: ./apps/vuln-lab
+      dockerfile: Dockerfile
+    environment:
+      LAB_MODE: ${LAB_MODE:-vulnerable}
+      LAB_HOST: 0.0.0.0
+      LAB_PORT: ${LAB_PORT:-3100}
+      CTI_API_BASE: ${CTI_API_BASE:-http://api:8000}
+      CTI_BRIDGE_MODE: ${CTI_BRIDGE_MODE:-both}
+      CTI_ANALYZE_MODE: ${CTI_ANALYZE_MODE:-g1}
+      CTI_BATCH_SIZE: ${CTI_BATCH_SIZE:-8}
+      CTI_FLUSH_MS: ${CTI_FLUSH_MS:-7000}
+    ports:
+      - "3100:3100"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

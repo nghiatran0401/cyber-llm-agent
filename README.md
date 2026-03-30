@@ -158,7 +158,7 @@ make run-lab
 Open:
 
 - `http://127.0.0.1:3100` for vulnerable pages
-- `http://127.0.0.1:3100/dashboard` for live telemetry/detections
+- `http://127.0.0.1:3100/api/dashboard/scenarios` for dashboard scenario feed (JSON)
 
 ## Run with Docker (recommended for macOS + Windows teams)
 
@@ -202,10 +202,18 @@ docker compose logs -f
 docker compose down --remove-orphans
 ```
 
-The compose stack runs both:
+The compose stack runs:
 
 - `api` (`services.api.main:app`) on `8000`
 - `web` (Next.js production server) on `3000`
+- `lab` (OWASP vulnerable lab + dashboard) on `3100`
+
+Open:
+
+- `http://localhost:3000` (web workspace)
+- `http://localhost:8000/docs` (API docs)
+- `http://localhost:3100` (lab)
+- `http://localhost:3100/api/dashboard/scenarios` (lab dashboard scenario feed)
 
 Detailed operator notes are in `docs/docker-setup.md`.
 

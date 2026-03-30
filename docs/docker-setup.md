@@ -1,9 +1,10 @@
 # Docker Setup Guide
 
-This project is designed to run as a two-service Docker Compose stack:
+This project is designed to run as a three-service Docker Compose stack:
 
 - `api` (FastAPI) on `http://localhost:8000`
 - `web` (Next.js) on `http://localhost:3000`
+- `lab` (OWASP vulnerable lab + dashboard) on `http://localhost:3100`
 
 ## Prerequisites
 
@@ -51,6 +52,13 @@ Hard reset (remove volumes too):
 ```bash
 docker compose down -v --remove-orphans
 ```
+
+## URLs
+
+- Web workspace: `http://localhost:3000`
+- API docs: `http://localhost:8000/docs`
+- Lab app: `http://localhost:3100`
+- Lab dashboard scenarios API: `http://localhost:3100/api/dashboard/scenarios`
 
 ## Optional Make shortcuts
 

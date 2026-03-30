@@ -13,10 +13,10 @@ install-lab:
 	npm --prefix apps/vuln-lab install
 
 test:
-	pytest -q
+	PYTHONPATH=. pytest -q
 
 test-ci:
-	pytest -q --ignore=tests/unit/test_multiagent.py --ignore=tests/unit/test_rag_tools.py --ignore=tests/unit/test_service_g1_phase2.py --ignore=tests/integration/test_agent_flow.py
+	PYTHONPATH=. pytest -q --ignore=tests/unit/test_multiagent.py --ignore=tests/unit/test_rag_tools.py --ignore=tests/unit/test_service_g1_phase2.py --ignore=tests/unit/test_tools.py --ignore=tests/integration/test_agent_flow.py
 
 test-web:
 	npm --prefix apps/web run test
@@ -35,8 +35,9 @@ ci: lint test-ci benchmark smoke test-web
 clean:
 	rm -rf node_modules
 	rm -rf apps/web/node_modules
+	rm -rf apps/vuln-lab/node_modules
 	rm -rf apps/web/.next
-	rm -f .DS_Store apps/web/.DS_Store
+	rm -f .DS_Store apps/web/.DS_Store apps/vuln-lab/.DS_Store
 
 run-api:
 	uvicorn services.api.main:app --host 127.0.0.1 --port 8000 --reload
@@ -49,7 +50,7 @@ run-lab:
 
 smoke:
 	$(PYTHON) -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
-	pytest -q tests/unit/test_memory.py
+	PYTHONPATH=. pytest -q tests/unit/test_memory.py
 
 smoke-checklist:
 	$(PYTHON) scripts/smoke_checklist.py

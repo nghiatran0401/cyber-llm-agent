@@ -12,6 +12,8 @@ jobs:
   quality-gate:
     name: Lint, test, and smoke
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
     strategy:
       fail-fast: false
       matrix:
