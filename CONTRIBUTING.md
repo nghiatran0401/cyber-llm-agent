@@ -31,6 +31,8 @@ make smoke
 
 ## Pull Request Standards
 
+See [`docs/pr-checklist.md`](docs/pr-checklist.md) for the full PR merge checklist.
+
 - Keep changes scoped and atomic
 - Add tests for behavior changes
 - Update docs when APIs or usage change

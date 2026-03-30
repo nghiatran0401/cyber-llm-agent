@@ -28,7 +28,7 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
         assert session_id == "s-1"
         return "mocked response", [], "gpt-4o-mini", "completed", 1, "security_analysis_v2.txt", 4.2, "strong"
 
-    monkeypatch.setattr("services.api.main.run_g1_analysis", _fake_run_g1_analysis)
+    monkeypatch.setattr("services.api.routes.run_g1_analysis", _fake_run_g1_analysis)
 
     response = client.post(
         "/api/v1/analyze/g1",
@@ -51,8 +51,8 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
 def test_sandbox_scenarios_endpoint(monkeypatch):
     client = TestClient(app)
 
-    monkeypatch.setattr("services.api.main.Settings.sandbox_enabled", lambda: True)
-    monkeypatch.setattr("services.api.main.get_sandbox_scenarios", lambda: ["sqli", "xss"])
+    monkeypatch.setattr("services.api.routes.Settings.sandbox_enabled", lambda: True)
+    monkeypatch.setattr("services.api.routes.get_sandbox_scenarios", lambda: ["sqli", "xss"])
     response = client.get("/api/v1/sandbox/scenarios")
 
     assert response.status_code == 200
@@ -64,7 +64,7 @@ def test_sandbox_scenarios_endpoint(monkeypatch):
 
 def test_sandbox_endpoint_returns_403_when_disabled(monkeypatch):
     client = TestClient(app)
-    monkeypatch.setattr("services.api.main.Settings.sandbox_enabled", lambda: False)
+    monkeypatch.setattr("services.api.routes.Settings.sandbox_enabled", lambda: False)
 
     response = client.get("/api/v1/sandbox/scenarios")
     assert response.status_code == 403
@@ -97,7 +97,7 @@ def test_workspace_stream_emits_trace_and_final(monkeypatch):
         )
         return "final answer", "gpt-4o-mini", "completed", 2
 
-    monkeypatch.setattr("services.api.main.run_workspace_with_progress", _fake_run_workspace_with_progress)
+    monkeypatch.setattr("services.api.routes.run_workspace_with_progress", _fake_run_workspace_with_progress)
 
     with client.stream(
         "POST",
@@ -144,8 +144,8 @@ def test_metrics_dashboard_endpoint_returns_summary():
 
 def test_auth_middleware_rejects_missing_key(monkeypatch):
     client = TestClient(app)
-    monkeypatch.setattr("services.api.main.Settings.API_AUTH_ENABLED", True)
-    monkeypatch.setattr("services.api.main.Settings.API_AUTH_KEY", "top-secret")
+    monkeypatch.setattr("services.api.middleware.Settings.API_AUTH_ENABLED", True)
+    monkeypatch.setattr("services.api.middleware.Settings.API_AUTH_KEY", "top-secret")
 
     response = client.post("/api/v1/analyze/g1", json={"input": "hello"})
     assert response.status_code == 401
@@ -156,12 +156,12 @@ def test_auth_middleware_rejects_missing_key(monkeypatch):
 
 def test_rate_limit_middleware_returns_429(monkeypatch):
     client = TestClient(app)
-    monkeypatch.setattr("services.api.main.Settings.API_AUTH_ENABLED", False)
-    monkeypatch.setattr("services.api.main.Settings.API_RATE_LIMIT_ENABLED", True)
-    monkeypatch.setattr("services.api.main.Settings.API_RATE_LIMIT_WINDOW_SECONDS", 60)
-    monkeypatch.setattr("services.api.main.Settings.API_RATE_LIMIT_MAX_REQUESTS", 1)
-    monkeypatch.setattr("services.api.main.run_g1_analysis", lambda *_args, **_kwargs: ("ok", [], "gpt-4o-mini"))
-    from services.api.main import _RATE_BUCKETS
+    monkeypatch.setattr("services.api.middleware.Settings.API_AUTH_ENABLED", False)
+    monkeypatch.setattr("services.api.middleware.Settings.API_RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr("services.api.middleware.Settings.API_RATE_LIMIT_WINDOW_SECONDS", 60)
+    monkeypatch.setattr("services.api.middleware.Settings.API_RATE_LIMIT_MAX_REQUESTS", 1)
+    monkeypatch.setattr("services.api.routes.run_g1_analysis", lambda *_args, **_kwargs: ("ok", [], "gpt-4o-mini"))
+    from services.api.middleware import _RATE_BUCKETS
     _RATE_BUCKETS.clear()
 
     first = client.post("/api/v1/analyze/g1", json={"input": "hello"})

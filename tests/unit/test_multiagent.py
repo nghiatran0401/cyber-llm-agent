@@ -2,28 +2,15 @@
 
 import pytest
 
+from src.agents.g2.state import create_initial_state
+from src.agents.g2.nodes import (
+    log_analyzer_node,
+    threat_predictor_node,
+    incident_responder_node,
+    orchestrator_node,
+)
 from src.agents.g2.graph import create_multiagent_workflow
 from src.agents.g2.runner import run_multiagent_with_trace
-from src.agents.g2.nodes import (
-    incident_responder_node,
-    log_analyzer_node,
-    orchestrator_node,
-    threat_predictor_node,
-)
-from src.agents.g2.state import create_initial_state
-
-
-@pytest.fixture(autouse=True)
-def _stub_g2_external_io(monkeypatch):
-    """Avoid real OTX/RAG during unit tests (fast, deterministic)."""
-    monkeypatch.setattr(
-        "src.agents.g2.nodes.fetch_cti_intelligence",
-        lambda _query: "CTI stub: synthetic intelligence for tests.",
-    )
-    monkeypatch.setattr(
-        "src.agents.g2.nodes.retrieve_security_context",
-        lambda _text: "RAG stub for tests.",
-    )
 
 
 class _FakeResponse:

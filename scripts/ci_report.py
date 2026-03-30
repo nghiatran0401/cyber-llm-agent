@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""CI test reporter: reads pytest output from stdin and prints a summary with owner/severity."""
+
+import re
+import sys
+
+OWNER_MAP = {
+    "test_api_endpoints": "Person 1 (Platform)",
+    "test_evaluator": "Person 1 (Platform)",
+    "test_benchmark_runner": "Person 1 (Platform)",
+    "test_scenarios": "Person 1 (Platform)",
+    "test_multiagent": "Person 2 (ReAct)",
+    "test_service_g1_phase2": "Person 2 (ReAct)",
+    "test_state_validator": "Person 2 (ReAct)",
+    "test_prompt_manager": "Person 2 (ReAct)",
+    "test_rag_tools": "Person 3 (RAG)",
+    "test_memory": "Person 4 (Memory)",
+    "test_tools": "Person 5 (Tooling)",
+    "test_sandbox": "Person 5 (Tooling)",
+    "test_agent_flow": "Person 2 (ReAct) + Person 5 (Tooling)",
+}
+
+SEVERITY_MAP = {
+    "test_api_endpoints": "HIGH",
+    "test_multiagent": "HIGH",
+    "test_service_g1_phase2": "HIGH",
+    "test_memory": "HIGH",
+    "test_tools": "MEDIUM",
+    "test_sandbox": "MEDIUM",
+    "test_rag_tools": "MEDIUM",
+    "test_evaluator": "MEDIUM",
+    "test_state_validator": "LOW",
+    "test_prompt_manager": "LOW",
+    "test_benchmark_runner": "LOW",
+    "test_scenarios": "LOW",
+}
+
+FAIL_PATTERN = re.compile(r"FAILED\s+(\S+)::(\S+)")
+
+
+def main():
+    lines = sys.stdin.read()
+    print(lines)
+
+    failures = FAIL_PATTERN.findall(lines)
+    if not failures:
+        print("\n--- CI Report: All tests passed ---")
+        sys.exit(0)
+
+    print("\n--- CI Report: Failures Detected ---")
+    print(f"{'File':<45} {'Test':<55} {'Owner':<35} {'Severity'}")
+    print("-" * 140)
+    for filepath, test_name in failures:
+        module = filepath.split("/")[-1].replace(".py", "")
+        owner = OWNER_MAP.get(module, "Unknown")
+        severity = SEVERITY_MAP.get(module, "UNKNOWN")
+        print(f"{filepath:<45} {test_name:<55} {owner:<35} {severity}")
+
+    print(f"\nTotal failures: {len(failures)}")
+    sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
