@@ -1,7 +1,7 @@
 PYTHON ?= python
 IMAGE ?= cyber-llm-agent:latest
 
-.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci docker-build docker-run
+.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci clean docker-build docker-run docker-up docker-down docker-reset docker-logs
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -32,6 +32,12 @@ lint:
 
 ci: lint test-ci benchmark smoke test-web
 
+clean:
+	rm -rf node_modules
+	rm -rf apps/web/node_modules
+	rm -rf apps/web/.next
+	rm -f .DS_Store apps/web/.DS_Store
+
 run-api:
 	uvicorn services.api.main:app --host 127.0.0.1 --port 8000 --reload
 
@@ -53,3 +59,15 @@ docker-build:
 
 docker-run:
 	docker run --rm -p 8000:8000 --env-file .env $(IMAGE)
+
+docker-up:
+	docker compose up --build -d
+
+docker-down:
+	docker compose down --remove-orphans
+
+docker-reset:
+	docker compose down -v --remove-orphans
+
+docker-logs:
+	docker compose logs -f

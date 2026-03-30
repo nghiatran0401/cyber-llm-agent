@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_LAB_BASE_URL: ${NEXT_PUBLIC_LAB_BASE_URL:-http://localhost:3100}
+        NEXT_PUBLIC_API_KEY: ${NEXT_PUBLIC_API_KEY:-}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      NEXT_PUBLIC_LAB_BASE_URL: ${NEXT_PUBLIC_LAB_BASE_URL:-http://localhost:3100}
+      NEXT_PUBLIC_API_KEY: ${NEXT_PUBLIC_API_KEY:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
