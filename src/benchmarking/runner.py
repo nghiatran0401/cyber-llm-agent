@@ -134,3 +134,7 @@ def main() -> int:
     print(f"Artifacts: {written['json']} | {written['markdown']}")
     print(f"Latest: {written['latest_json']} | {written['latest_markdown']}")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

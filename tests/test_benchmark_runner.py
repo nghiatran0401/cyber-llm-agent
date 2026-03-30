@@ -1,4 +1,4 @@
-"""Unit tests for scripts/run_benchmark.py."""
+"""Unit tests for src.benchmarking.runner CLI and helpers."""
 
 from __future__ import annotations
 
@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from scripts import run_benchmark
+from src.benchmarking.agents import OfflineDeterministicAgent, RealLLMBenchmarkAgent
 from src.benchmarking.evaluator import AgentEvaluator
+from src.benchmarking.reporting import load_latest_report, write_artifacts
+from src.benchmarking.runner import load_dataset, normalize_cases
 
 
 def test_load_dataset_reads_test_cases(tmp_path: Path):
@@ -30,7 +32,7 @@ def test_load_dataset_reads_test_cases(tmp_path: Path):
         encoding="utf-8",
     )
 
-    loaded = run_benchmark._load_dataset(dataset)
+    loaded = load_dataset(dataset)
     assert isinstance(loaded, list)
     assert loaded[0]["id"] == "case_001"
 
@@ -40,7 +42,7 @@ def test_load_dataset_rejects_non_list_test_cases(tmp_path: Path):
     dataset.write_text(json.dumps({"test_cases": {"bad": "shape"}}), encoding="utf-8")
 
     with pytest.raises(ValueError, match="must be a list"):
-        run_benchmark._load_dataset(dataset)
+        load_dataset(dataset)
 
 
 def test_normalize_cases_applies_limit_and_skips_empty_logs():
@@ -61,7 +63,7 @@ def test_normalize_cases_applies_limit_and_skips_empty_logs():
         },
     ]
 
-    normalized = run_benchmark._normalize_cases(raw_cases, case_limit=2)
+    normalized = normalize_cases(raw_cases, case_limit=2)
     assert len(normalized) == 1
     assert normalized[0]["id"] == "case_001"
     assert "Security log/event:" in normalized[0]["prompt"]
@@ -83,19 +85,19 @@ def test_write_artifacts_and_load_latest_report(tmp_path: Path):
         "results": [],
     }
 
-    written = run_benchmark._write_artifacts(tmp_path, report)
+    written = write_artifacts(tmp_path, report)
     assert Path(written["json"]).exists()
     assert Path(written["markdown"]).exists()
     assert Path(written["latest_json"]).exists()
     assert Path(written["latest_markdown"]).exists()
 
-    latest = run_benchmark._load_latest_report(tmp_path)
+    latest = load_latest_report(tmp_path)
     assert latest["benchmark_mode"] == "offline"
     assert latest["total_tests"] == 1
 
 
 def test_offline_agent_and_evaluator_end_to_end():
-    cases = run_benchmark._normalize_cases(
+    cases = normalize_cases(
         [
             {
                 "id": "case_001",
@@ -108,7 +110,7 @@ def test_offline_agent_and_evaluator_end_to_end():
         case_limit=0,
     )
     evaluator = AgentEvaluator()
-    result = evaluator.run_benchmark(run_benchmark._OfflineDeterministicAgent(), cases)
+    result = evaluator.run_benchmark(OfflineDeterministicAgent(), cases)
 
     assert result["total_tests"] == 1
     assert result["average_f1_score"] > 0
@@ -117,4 +119,4 @@ def test_offline_agent_and_evaluator_end_to_end():
 
 def test_real_llm_agent_rejects_unsupported_provider():
     with pytest.raises(ValueError, match="provider=ollama is not implemented"):
-        run_benchmark._RealLLMBenchmarkAgent(agent_mode="g1", provider="ollama")
+        RealLLMBenchmarkAgent(agent_mode="g1", provider="ollama")

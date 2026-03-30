@@ -7,7 +7,7 @@ Only the gates below are kept.
 ## Must Keep (Production)
 
 ### 1) Input Validation
-- **Where:** `services/api/service.py` (`_validate_input`, `_validate_event_payload`)
+- **Where:** `services/api/guardrails.py` (`validate_input`, `validate_event_payload`), called from `g1_service` / `g2_service` / `sandbox_service`
 - **Checks:**
   - non-empty input
   - max request size (`MAX_INPUT_CHARS`)
@@ -26,7 +26,7 @@ Only the gates below are kept.
   - rate limited: `HTTP 429`, `error.code=HTTP_429`, includes `Retry-After`
 
 ### 3) Output Policy Guard
-- **Where:** `services/api/service.py` (`_apply_output_policy_guard`)
+- **Where:** `services/api/guardrails.py` (`apply_output_policy_guard`), invoked from `g1_service` / `g2_service`
 - **Checks:**
   - denylist markers in generated output
 - **Return behavior:**
@@ -34,7 +34,7 @@ Only the gates below are kept.
   - `stop_reason=needs_human`
 
 ### 4) High-Risk Evidence / Human Gating
-- **Where:** `services/api/service.py` (`_apply_action_gating`)
+- **Where:** `services/api/guardrails.py` (`apply_action_gating`), invoked from `g1_service` / `g2_service`
 - **Checks:**
   - if high-risk task, requires minimum evidence markers
   - optional explicit human approval gate
@@ -47,8 +47,8 @@ Only the gates below are kept.
 
 ### 5) Runtime Budget Limits
 - **Where:**
-  - `services/api/service.py` (`_run_single_agent_loop`)
-  - `src/agents/g2/multiagent_system.py` (`run_multiagent_with_trace`)
+  - `services/api/g1_service.py` (`_run_single_agent_loop`)
+  - `src/agents/g2/runner.py` (`run_multiagent_with_trace`)
 - **Checks:**
   - max steps
   - max runtime seconds
@@ -66,7 +66,7 @@ Only the gates below are kept.
 ## Strongly Recommended
 
 ### 7) Prompt-Injection Gate
-- **Where:** `services/api/service.py` (`_detect_prompt_injection`)
+- **Where:** `services/api/guardrails.py` (`detect_prompt_injection`), used from `g1_service` / `g2_service`
 - **Checks:**
   - heuristic marker match on input text
 - **Return behavior:**
@@ -75,7 +75,7 @@ Only the gates below are kept.
   - `stop_reason=needs_human`
 
 ### 8) Critic Gate (Quality Consistency)
-- **Where:** `services/api/service.py` (`_critic_validate_structured_output`)
+- **Where:** `services/api/response_parser.py` (`critic_validate_structured_output`), used from `g1_service`
 - **Checks:**
   - structured output consistency
   - required fields/evidence for high-risk responses

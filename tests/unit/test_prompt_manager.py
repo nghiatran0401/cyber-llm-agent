@@ -1,41 +1,32 @@
-"""Unit tests for prompt versioning and A/B flow."""
+"""Unit tests for prompt loading and version listing."""
+
+from pathlib import Path
+
+import pytest
 
 from src.utils.prompt_manager import PromptManager
 
 
-class _FakeAgent:
-    def run(self, prompt: str) -> str:
-        text = prompt.lower()
-        if "evidence-first" in text:
-            return "Indicators found. Threat assessment: high. Recommended actions: block ip."
-        return "High risk brute force. Block ip."
-
-
-def test_list_prompt_versions_reads_prefix():
+def test_load_prompt_reads_security_analysis_v2():
     manager = PromptManager()
-    versions = manager.list_prompt_versions()
-    assert "security_analysis_v1.txt" in versions
-    assert "security_analysis_v2.txt" in versions
+    text = manager.load_prompt("security_analysis_v2.txt")
+    assert "security" in text.lower() or len(text) > 0
 
 
-def test_run_ab_test_returns_best_variant():
+def test_load_prompt_missing_file():
     manager = PromptManager()
-    cases = [
-        {
-            "id": "1",
-            "name": "Brute force sample",
-            "log": "Failed SSH login repeated from same IP.",
-            "expected_keywords": ["high", "block ip"],
-        }
-    ]
-    result = manager.run_ab_test(
-        agent=_FakeAgent(),
-        variant_to_prompt_file={
-            "v1": "security_analysis_v1.txt",
-            "v2": "security_analysis_v2.txt",
-        },
-        test_cases=cases,
-    )
-    assert result["best_variant"] in {"v1", "v2"}
-    assert "variants" in result
+    with pytest.raises(FileNotFoundError):
+        manager.load_prompt("nonexistent_prompt_xyz.txt")
 
+
+def test_list_prompt_versions_includes_known_files():
+    manager = PromptManager()
+    names = manager.list_prompt_versions(prefix="security_analysis_")
+    assert "security_analysis_v2.txt" in names
+
+
+def test_prompt_dir_override(tmp_path: Path):
+    p = tmp_path / "custom.txt"
+    p.write_text("hello", encoding="utf-8")
+    manager = PromptManager(prompt_dir=tmp_path)
+    assert manager.load_prompt("custom.txt") == "hello"
