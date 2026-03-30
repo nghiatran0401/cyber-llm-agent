@@ -40,7 +40,10 @@ jobs:
       - name: Compile checks
         run: make lint
 
-      - name: Run full test suite (excluding integration tests requiring API key)
+      - name: Run test suite (CI scope; no live API keys)
+        env:
+          EMBEDDING_ENABLED: "false"
+          EMBEDDING_PROVIDER: "openai"
         run: make test-ci
 
       - name: Benchmark evaluation
@@ -51,9 +54,12 @@ jobs:
         run: make benchmark
 
       - name: Smoke checks (compile + memory/session)
+        env:
+          EMBEDDING_ENABLED: "false"
+          EMBEDDING_PROVIDER: "openai"
         run: |
           python -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
-          pytest -q tests/unit/test_memory.py
+          make test-memory
 
       - name: Frontend API integration tests
         run: npm --prefix apps/web run test -- --passWithNoTests

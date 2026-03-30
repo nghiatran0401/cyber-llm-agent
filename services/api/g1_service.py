@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -31,6 +33,20 @@ _AGENT_CACHE: Dict[str, tuple[Any, float]] = {}
 _PROMPT_MANAGER = PromptManager()
 _EVALUATOR = AgentEvaluator()
 
+_SAFE_SESSION_ID = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
+
+
+def _normalize_session_id(session_id: Optional[str]) -> Optional[str]:
+    """Map client session ids to filesystem-safe keys; hash opaque or unsafe values."""
+    if session_id is None:
+        return None
+    s = session_id.strip()
+    if not s:
+        return None
+    if _SAFE_SESSION_ID.fullmatch(s):
+        return s
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
 
 def _prune_agent_cache() -> None:
     now = time.time()
@@ -43,7 +59,8 @@ def _prune_agent_cache() -> None:
 
 
 def _get_or_create_memory_agent(session_id: Optional[str]):
-    cache_key = session_id or "__default__"
+    storage_id = _normalize_session_id(session_id)
+    cache_key = storage_id or "__default__"
     _prune_agent_cache()
     if cache_key not in _AGENT_CACHE:
         _AGENT_CACHE[cache_key] = (
@@ -53,7 +70,7 @@ def _get_or_create_memory_agent(session_id: Optional[str]):
                 max_episodic_items=Settings.MEMORY_MAX_EPISODIC_ITEMS,
                 max_semantic_facts=Settings.MEMORY_MAX_SEMANTIC_FACTS,
                 recall_top_k=Settings.MEMORY_RECALL_TOP_K,
-                session_id=session_id,
+                session_id=storage_id,
                 verbose=False,
             ),
             time.time(),
@@ -76,7 +93,9 @@ def _evaluate_response_rubric(response_text: str) -> Dict[str, Any]:
     return _EVALUATOR.evaluate_rubric(response_text)
 
 
-def _run_single_agent_loop(agent: Any, user_input: str) -> tuple[str, str, int]:
+def _run_single_agent_loop(
+    agent: Any, user_input: str, memory_user_text: str
+) -> tuple[str, str, int]:
     """Execute bounded single-agent loop with deterministic stop reasons."""
     start_time = time.perf_counter()
     response = ""
@@ -88,7 +107,13 @@ def _run_single_agent_loop(agent: Any, user_input: str) -> tuple[str, str, int]:
             stop_reason = "budget_exceeded"
             break
         steps_used = step_idx + 1
-        response = enforce_response_boundaries(agent.run(user_input))
+        response = enforce_response_boundaries(
+            agent.run(
+                user_input,
+                memory_user_text=memory_user_text,
+                routing_text=memory_user_text,
+            )
+        )
         stop_reason = "completed"
         break
 
@@ -129,7 +154,9 @@ def run_g1_analysis(
         )
 
     agent = _get_or_create_memory_agent(session_id)
-    response, stop_reason, steps_used = _run_single_agent_loop(agent, prompted_input)
+    response, stop_reason, steps_used = _run_single_agent_loop(
+        agent, prompted_input, clean_input
+    )
     structured = build_structured_g1_report(response)
     critic_ok, critic_message = critic_validate_structured_output(structured, high_risk=high_risk)
     if not critic_ok:
@@ -200,7 +227,9 @@ def run_g1_analysis_with_progress(
                 selected_model, "needs_human", 0, prompt_version, None, "n/a")
 
     agent = _get_or_create_memory_agent(session_id)
-    response, stop_reason, steps_used = _run_single_agent_loop(agent, prompted_input)
+    response, stop_reason, steps_used = _run_single_agent_loop(
+        agent, prompted_input, clean_input
+    )
     structured = build_structured_g1_report(response)
     critic_ok, critic_message = critic_validate_structured_output(structured, high_risk=high_risk)
     if not critic_ok:

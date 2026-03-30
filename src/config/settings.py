@@ -67,6 +67,15 @@ class Settings:
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
     PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "cyber-llm-knowledge")
 
+    # Embedding configuration
+    EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
+    # openai: uses text-embedding-3-small via existing OPENAI_API_KEY
+    # ollama: uses nomic-embed-text via local Ollama instance
+    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+    OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    EMBEDDING_ENABLED = os.getenv("EMBEDDING_ENABLED", "true").lower() == "true"
+
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
     DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
@@ -155,6 +164,17 @@ class Settings:
             raise ValueError("PINECONE_INDEX_NAME is required (RAG is always enabled).")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
+        # Embedding validation
+        allowed_embedding_providers = {"openai", "ollama"}
+        if cls.EMBEDDING_PROVIDER not in allowed_embedding_providers:
+            raise ValueError(
+                f"EMBEDDING_PROVIDER must be one of {sorted(allowed_embedding_providers)}; "
+                f"got '{cls.EMBEDDING_PROVIDER}'."
+            )
+        if cls.EMBEDDING_ENABLED and cls.EMBEDDING_PROVIDER == "openai" and not cls.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai.")
+        if cls.EMBEDDING_ENABLED and cls.EMBEDDING_PROVIDER == "ollama" and not cls.OLLAMA_BASE_URL:
+            raise ValueError("OLLAMA_BASE_URL is required when EMBEDDING_PROVIDER=ollama.")
         return True
 
     @classmethod

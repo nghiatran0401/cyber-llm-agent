@@ -15,6 +15,7 @@ from src.utils.prompt_templates import load_prompt_template
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
+from src.agents.g1.llm_payload import extract_response_text, extract_user_text
 from src.agents.shared.intent_routing import is_high_risk_intent
 from src.tools.cti_tool import cti_fetch
 from src.tools.log_parser_tool import log_parser
@@ -23,38 +24,6 @@ from src.utils.memory_manager import ConversationMemory
 from src.utils.session_manager import SessionManager
 
 logger = setup_logger(__name__)
-
-# helper function to extract the user text from the invoke payload
-def _extract_user_text_from_invoke_payload(payload: Any) -> str:
-    """Normalize LangChain-style invoke payloads to a single user string."""
-    if isinstance(payload, dict):
-        raw = payload.get("input")
-        if isinstance(raw, str):
-            return raw
-        messages = payload.get("messages")
-        if messages:
-            last = messages[-1]
-            if isinstance(last, tuple) and len(last) == 2:
-                return str(last[1])
-            return str(last)
-    return str(payload)
-
-# helper function to extract the response text from the result
-def _extract_response_text(result: Any) -> str:
-    if isinstance(result, dict):
-        if "output" in result:
-            return str(result["output"])
-        messages = result.get("messages")
-        if messages:
-            last = messages[-1]
-            if hasattr(last, "content"):
-                return str(last.content)
-            if isinstance(last, tuple) and len(last) == 2:
-                return str(last[1])
-            return str(last)
-    if hasattr(result, "content"):
-        return str(result.content)
-    return str(result)
 
 
 def _create_tool_agent(model_name: str, verbose: bool = True):
@@ -95,7 +64,7 @@ class _AdaptiveSecurityAgent:
     def invoke(self, payload: Any, *, routing_text: Optional[str] = None) -> Any:
         """Route to the appropriate model and invoke the underlying agent."""
 
-        user_text = routing_text if routing_text is not None else _extract_user_text_from_invoke_payload(payload)
+        user_text = routing_text if routing_text is not None else extract_user_text(payload)
         is_high_risk = is_high_risk_intent(user_text)
         selected_agent = self.strong_agent if is_high_risk else self.fast_agent
         return selected_agent.invoke(payload)
@@ -110,6 +79,7 @@ class G1Agent:
         max_messages: int = 12,
         max_episodic_items: int = 30,
         max_semantic_facts: int = 80,
+        max_context_chars: int = 4000,
         recall_top_k: int = 3,
         session_id: Optional[str] = None,
         backend_agent: Optional[Any] = None,
@@ -122,6 +92,7 @@ class G1Agent:
             max_messages=max_messages,
             max_episodic_items=max_episodic_items,
             max_semantic_facts=max_semantic_facts,
+            max_context_chars=max_context_chars,
             recall_top_k=recall_top_k,
         )
         self.session_manager = SessionManager()
@@ -139,35 +110,66 @@ class G1Agent:
         else:
             logger.info("Created new session: %s", self.session_id)
 
-    def invoke(self, payload: Any):
-        """Invoke the backend with memory-aware context injection."""
-        user_text = _extract_user_text_from_invoke_payload(payload)
-        context_block = self.memory.render_context(query=user_text)
+    def invoke(
+        self,
+        payload: Any,
+        *,
+        memory_user_text: Optional[str] = None,
+        routing_text: Optional[str] = None,
+    ):
+        """Invoke the backend with memory-aware context injection.
+
+        ``memory_user_text`` / ``routing_text`` default to the payload's user string.
+        When the API wraps the analyst message in a large service prompt, pass the
+        cleaned user utterance for recall, routing, and stored turns so memory and
+        model tier stay aligned with trace metadata.
+        """
+        agent_input = extract_user_text(payload)
+        memory_key = memory_user_text if memory_user_text is not None else agent_input
+        route_on = routing_text if routing_text is not None else memory_key
+
+        context_block = self.memory.render_context(query=memory_key)
+        logger.debug(
+            "Memory context size: %d chars, %d episodic, %d semantic",
+            len(context_block),
+            len(self.memory.episodic_memories),
+            len(self.memory.semantic_facts),
+        )
         augmented_prompt = (
             "Use this conversation context when answering.\n\n"
             f"{context_block}\n\n"
-            f"Current user request:\n{user_text}"
+            f"Current user request:\n{agent_input}"
         )
 
         invoke_payload = {"messages": [("user", augmented_prompt)]}
         backend = self.backend_agent
         if isinstance(backend, _AdaptiveSecurityAgent):
-            result = backend.invoke(invoke_payload, routing_text=user_text)
+            result = backend.invoke(invoke_payload, routing_text=route_on)
         else:
             result = backend.invoke(invoke_payload)
 
-        answer_text = _extract_response_text(result)
+        answer_text = extract_response_text(result)
 
-        self.memory.add_turn("user", user_text)
+        self.memory.add_turn("user", memory_key)
         self.memory.add_turn("assistant", answer_text)
-        self.memory.update_long_term_from_turn(user_text=user_text, assistant_text=answer_text)
+        self.memory.update_long_term_from_turn(user_text=memory_key, assistant_text=answer_text)
         self._persist()
         return result
 
-    def run(self, user_input: str) -> str:
+    def run(
+        self,
+        user_input: str,
+        *,
+        memory_user_text: Optional[str] = None,
+        routing_text: Optional[str] = None,
+    ) -> str:
         """Convenience method returning plain text output."""
-        result = self.invoke({"input": user_input})
-        return _extract_response_text(result)
+        result = self.invoke(
+            {"input": user_input},
+            memory_user_text=memory_user_text,
+            routing_text=routing_text,
+        )
+        return extract_response_text(result)
 
     def _persist(self):
         self.session_manager.save_session(self.session_id, self.memory.get_state())
@@ -178,6 +180,7 @@ def create_g1_agent(
     max_messages: int = 12,
     max_episodic_items: int = 30,
     max_semantic_facts: int = 80,
+    max_context_chars: int = 4000,
     recall_top_k: int = 3,
     session_id: Optional[str] = None,
     verbose: bool = True,
@@ -188,6 +191,7 @@ def create_g1_agent(
         max_messages=max_messages,
         max_episodic_items=max_episodic_items,
         max_semantic_facts=max_semantic_facts,
+        max_context_chars=max_context_chars,
         recall_top_k=recall_top_k,
         session_id=session_id,
         verbose=verbose,
