@@ -32,15 +32,9 @@ from .schemas import (
     StepTrace,
     WorkspaceStreamRequest,
 )
-from .service import (
-    analyze_sandbox_event,
-    get_sandbox_scenarios,
-    run_chat,
-    run_g1_analysis,
-    run_g2_analysis,
-    run_workspace_with_progress,
-    simulate_sandbox_event,
-)
+from .g1_service import run_chat, run_g1_analysis, run_workspace_with_progress
+from .g2_service import run_g2_analysis
+from .sandbox_service import analyze_sandbox_event, get_sandbox_scenarios, simulate_sandbox_event
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):

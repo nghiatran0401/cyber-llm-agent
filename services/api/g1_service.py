@@ -6,7 +6,7 @@ import json
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.agents.g1.agent_with_memory import create_agent_with_memory
+from src.agents.g1.g1_agent import create_g1_agent
 from src.config.settings import Settings
 from src.benchmarking.evaluator import AgentEvaluator
 from src.utils.prompt_manager import PromptManager
@@ -47,7 +47,7 @@ def _get_or_create_memory_agent(session_id: Optional[str]):
     _prune_agent_cache()
     if cache_key not in _AGENT_CACHE:
         _AGENT_CACHE[cache_key] = (
-            create_agent_with_memory(
+            create_g1_agent(
                 memory_type="buffer",
                 max_messages=12,
                 max_episodic_items=Settings.MEMORY_MAX_EPISODIC_ITEMS,

@@ -54,6 +54,7 @@ class Settings:
     # CTI (AlienVault OTX)
     OTX_API_KEY = os.getenv("OTX_API_KEY", "")
     OTX_BASE_URL = os.getenv("OTX_BASE_URL", "https://otx.alienvault.com/api/v1").rstrip("/")
+    CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").strip().lower()
     CTI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("CTI_REQUEST_TIMEOUT_SECONDS", "10"))
     CTI_MAX_RETRIES = int(os.getenv("CTI_MAX_RETRIES", "2"))
     CTI_RETRY_BACKOFF_SECONDS = float(os.getenv("CTI_RETRY_BACKOFF_SECONDS", "0.5"))
@@ -61,6 +62,7 @@ class Settings:
     CTI_TOP_RESULTS = int(os.getenv("CTI_TOP_RESULTS", "5"))
 
     # RAG (LangChain + Pinecone) — always enabled; tune retrieval depth here if needed
+    ENABLE_RAG = os.getenv("ENABLE_RAG", "true").lower() == "true"
     RAG_MAX_RESULTS = 3
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
     PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "cyber-llm-knowledge")
@@ -105,6 +107,8 @@ class Settings:
             raise ValueError("MAX_TOKENS must be greater than 0.")
         if not cls.OTX_API_KEY:
             raise ValueError("OTX_API_KEY is required.")
+        if cls.CTI_PROVIDER != "otx":
+            raise ValueError("CTI_PROVIDER must be 'otx'.")
         if cls.CTI_REQUEST_TIMEOUT_SECONDS <= 0:
             raise ValueError("CTI_REQUEST_TIMEOUT_SECONDS must be greater than 0.")
         if cls.CTI_MAX_RETRIES < 0:
