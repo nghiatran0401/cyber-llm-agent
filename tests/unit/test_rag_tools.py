@@ -26,8 +26,14 @@ def test_rag_ingest_and_retrieve(monkeypatch, tmp_path: Path):
     mock_pc.list_indexes.return_value = [{"name": "test-index"}]
     monkeypatch.setattr("src.tools.rag_tools._get_pinecone_client", lambda: mock_pc)
 
-    with patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
+    mock_doc = MagicMock()
+    mock_doc.page_content = "Brute force attacks include repeated failed login attempts."
+    mock_doc.metadata = {"source": str(knowledge_dir / "note.md")}
+
+    with patch("src.tools.rag_tools.DirectoryLoader") as mock_loader_cls, \
+         patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
          patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
+        mock_loader_cls.return_value.load.return_value = [mock_doc]
         mock_embed_cls.return_value = MagicMock()
         mock_vs_cls.from_documents.return_value = MagicMock()
         ingest_result = ingest_knowledge_base()
