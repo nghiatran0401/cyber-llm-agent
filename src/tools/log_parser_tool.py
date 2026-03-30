@@ -112,6 +112,13 @@ def parse_system_log(log_file_path: str) -> str:
             duration_ms=duration_ms, entries_count=len(relevant_logs), input_val=log_file_path,
         ))
 
+    except UnicodeDecodeError as e:
+        duration_ms = int((perf_counter() - start) * 1000)
+        logger.error("Encoding error reading log file: %s", log_file_path)
+        return serialize_tool_result(build_tool_result(
+            ok=False, tool="LogParser", error=f"Encoding error reading log file: {e}",
+            error_type="encoding_error", duration_ms=duration_ms, input_val=log_file_path,
+        ))
     except ValueError as e:
         duration_ms = int((perf_counter() - start) * 1000)
         error_type = "path_traversal" if "outside" in str(e).lower() else "validation_error"
@@ -133,13 +140,6 @@ def parse_system_log(log_file_path: str) -> str:
         return serialize_tool_result(build_tool_result(
             ok=False, tool="LogParser", error=f"Permission denied reading log file: {log_file_path}",
             error_type="permission_denied", duration_ms=duration_ms, input_val=log_file_path,
-        ))
-    except UnicodeDecodeError as e:
-        duration_ms = int((perf_counter() - start) * 1000)
-        logger.error("Encoding error reading log file: %s", log_file_path)
-        return serialize_tool_result(build_tool_result(
-            ok=False, tool="LogParser", error=f"Encoding error reading log file: {e}",
-            error_type="encoding_error", duration_ms=duration_ms, input_val=log_file_path,
         ))
     except Exception as e:
         duration_ms = int((perf_counter() - start) * 1000)
