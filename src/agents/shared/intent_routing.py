@@ -1,20 +1,17 @@
 """
-Purpose: Shared semantic intent routing for model selection
+Purpose: Shared semantic intent routing for model selection using Semantic Router
 What it does:
 - Defines high-risk and standard intent routes
 - Lazily initializes embedding encoder and router layer
 - Classifies user prompts to drive adaptive model choice
 """
+# https://github.com/aurelio-labs/semantic-router
 
 from semantic_router import Route, SemanticRouter
 from semantic_router.encoders import OpenAIEncoder
-
 from src.config.settings import Settings
-from src.utils.logger import setup_logger
 
-logger = setup_logger(__name__)
-
-# Define the "high risk" intent route
+# High risk intent route
 high_risk_route = Route(
     name="high_risk",
     utterances=[
@@ -36,7 +33,7 @@ high_risk_route = Route(
     ],
 )
 
-# Standard route for logging, checking, or basic explanations
+# Standard route for general queries
 standard_route = Route(
     name="standard",
     utterances=[
@@ -64,10 +61,13 @@ def _get_route_layer() -> SemanticRouter:
     global _encoder, _route_layer
 
     if _route_layer is None:
-        logger.info("Initializing Semantic Router layer...")
-        # Use a lightweight embedding model for routing
         _encoder = OpenAIEncoder(name="text-embedding-3-small", openai_api_key=Settings.OPENAI_API_KEY)
-        _route_layer = SemanticRouter(encoder=_encoder, routes=[high_risk_route, standard_route])
+        # Ensure LocalIndex is populated from in-code routes at startup.
+        _route_layer = SemanticRouter(
+            encoder=_encoder,
+            routes=[high_risk_route, standard_route],
+            auto_sync="local",
+        )
 
     return _route_layer
 
@@ -80,21 +80,6 @@ def is_high_risk_intent(user_text: str) -> bool:
     if not user_text or not str(user_text).strip():
         return False
 
-    try:
-        layer = _get_route_layer()
-        route_choice = layer(user_text)
-
-        # If it matches the high risk route, return True
-        is_high_risk = route_choice.name == "high_risk"
-
-        if route_choice.name:
-            logger.info(f"Semantic Router classified prompt as: {route_choice.name}")
-        else:
-            logger.info("Semantic Router did not confidently match a route, defaulting to standard.")
-
-        return is_high_risk
-
-    except Exception as e:
-        logger.error(f"Error during Semantic Routing: {e}", exc_info=True)
-        # Fallback to standard if routing fails
-        return False
+    layer = _get_route_layer()
+    route_choice = layer(user_text)
+    return route_choice.name == "high_risk"

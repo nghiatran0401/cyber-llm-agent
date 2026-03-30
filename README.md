@@ -36,11 +36,64 @@ Input (Logs / Chat / Sandbox Event)
     -> Findings + Threat Prediction + Response Plan
 ```
 
+## G1 End-to-End Path (Single Agent)
+
+This section is the practical "how G1 works" guide for teammates and evaluators.
+
+### G1 endpoints
+
+- `POST /api/v1/analyze/g1` - synchronous JSON analysis response
+- `POST /api/v1/chat` with `mode=g1` - synchronous chat-style response
+- `POST /api/v1/workspace/stream` with `mode=g1` - streaming SSE progress + final output
+- `POST /api/v1/sandbox/analyze` with `mode=g1` - sandbox event converted to analysis prompt, then routed through G1
+
+### Request lifecycle
+
+1. API middleware applies optional auth/rate-limit checks.
+2. Input is validated and sanitized.
+3. Prompt injection guard runs first (`SafetyGuard` trace step).
+4. Service prompt template is applied (`PROMPT_VERSION_G1`).
+5. `G1Agent` loads session memory context and builds an augmented prompt.
+6. Adaptive routing picks fast/strong model via semantic intent routing.
+7. Agent executes with tools:
+   - `LogParser`
+   - `CTIFetch` (AlienVault OTX)
+   - `RAGRetriever` (Pinecone-backed semantic retrieval)
+8. Post-processing applies:
+   - structured output parse
+   - critic validation
+   - action gating for high-risk decisions
+   - output policy guard
+9. API returns final content + metadata (`stop_reason`, model, timing, token/cost estimates, optional trace).
+
+### Two prompt layers in G1
+
+- Service-layer analysis prompt version (`PROMPT_VERSION_G1`, typically `prompts/security_analysis_v2.txt`)
+- Agent system prompt (`prompts/g1/system_prompt.txt`)
+
+### Session and memory behavior
+
+- `session_id` enables continuity across turns.
+- Memory state is persisted under `data/sessions/`.
+- Memory capacity/recall is controlled via `MEMORY_*` and `SESSION_RETENTION_DAYS`.
+
+### `stop_reason` values you will see
+
+- `completed` - normal completion
+- `needs_human` - blocked/escalated by injection guard, critic/action gate, or output policy guard
+- `budget_exceeded` - runtime/step budget reached
+- `error` - request-level failure (for example auth/rate-limit or unhandled API error paths)
+
+### Streaming vs non-streaming
+
+- `analyze/g1` and `chat` are synchronous.
+- `workspace/stream` emits step events (`trace`) and a final event over SSE.
+
 ## Quick Start (Local)
 
 ### 1) Prerequisites
 
-- Python 3.10+
+- Python **3.10–3.13** (`langchain-pinecone` does not support 3.14+ yet; use 3.12 if unsure)
 - OpenAI API key
 - Node.js 20+ (for Next.js frontend)
 - Docker (optional, recommended)
@@ -118,15 +171,16 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 - Basic rate limiting can be enabled with `API_RATE_LIMIT_ENABLED=true`.
 - Agent run-loop safety caps are controlled by:
   - `MAX_AGENT_STEPS`
-  - `MAX_TOOL_CALLS`
   - `MAX_RUNTIME_SECONDS`
+- Workflow/task caps (mainly multi-step workflow behavior) include:
+  - `MAX_TOOL_CALLS`
   - `MAX_WORKER_TASKS`
 - Memory retention and recall controls:
   - `MEMORY_MAX_EPISODIC_ITEMS`
   - `MEMORY_MAX_SEMANTIC_FACTS`
   - `MEMORY_RECALL_TOP_K`
   - `SESSION_RETENTION_DAYS`
-- Prompt version controls:
+- Prompt version controls (filenames under `prompts/`; canonical analysis template is `security_analysis_v2.txt`):
   - `PROMPT_VERSION_G1`
   - `PROMPT_VERSION_G2`
 - Optional rubric evaluation:
@@ -139,13 +193,9 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 - Runtime metrics endpoint:
   - `GET /api/v1/metrics`
   - `GET /api/v1/metrics/dashboard` for summary + recent runs
-- `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
-- `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
-- Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.
-- RAG retrieval supports `lexical`, `semantic`, and `hybrid` modes:
-  - `RAG_RETRIEVAL_MODE=hybrid`
-  - `RAG_EMBEDDING_DIMS=96`
-  - `RAG_SEMANTIC_CANDIDATES=8`
+- CTI uses AlienVault OTX only; `OTX_API_KEY` is required. Timeout/retry limits use `CTI_*` settings.
+- G1 picks `FAST_MODEL_NAME` vs `STRONG_MODEL_NAME` from semantic risk routing (always on).
+- RAG (Pinecone semantic retrieval) is always enabled. Put knowledge files under `data/knowledge/`, set `PINECONE_API_KEY` / `PINECONE_INDEX_NAME` in `.env`, then **ingest** those files into Pinecone (see below). The API does **not** auto-ingest on startup; run ingest after you add or change docs, or whenever the index is empty.
 - CTI tool input supports:
   - threat-type queries (example: `ransomware`)
   - IOC queries (example: `ioc:ip:1.2.3.4`, `ioc:domain:example.com`, `ioc:url:https://bad.example`, `ioc:hash:<sha256>`)
@@ -154,16 +204,30 @@ The container runs the FastAPI backend and reads runtime config from `.env`.
 ### Local RAG quick check
 
 1. Add one or more `.md`/`.txt` knowledge files under `data/knowledge/`.
-2. Set `ENABLE_RAG=true` in `.env`.
-3. Ask a G1/G2 question containing known terms from those files.
-4. Confirm the answer includes retrieval citations and scored matches from the `RAGRetriever` tool output.
+2. Configure Pinecone credentials in `.env` (`PINECONE_API_KEY`, `PINECONE_INDEX_NAME`).
+3. **Ingest into Pinecone** (required before retrieval can see new files; repeat when knowledge changes):
+
+   ```bash
+   # From the repository root, with dependencies installed (`make install`)
+   PYTHONPATH=. python -c "from src.tools.rag_tools import ingest_knowledge_base; print(ingest_knowledge_base())"
+   ```
+
+4. Ask a G1/G2 question containing known terms from those files.
+5. Confirm the answer includes retrieval citations from the `RAGRetriever` tool output.
 
 ## OTX Rollout Guidance
 
-- Keep `CTI_PROVIDER=otx` with a valid key in each environment.
+- Keep a valid `OTX_API_KEY` in each environment.
 - Enable and verify OTX first in local dev, then staging, then production.
 - Monitor timeout/rate-limit trends before broad rollout (`CTI_REQUEST_TIMEOUT_SECONDS`, `CTI_MAX_RETRIES`).
 - When OTX is unavailable, CTI returns a deterministic fallback report instead of failing the workflow.
+- Quick runtime verification (from repo root, in your app env):
+
+  ```bash
+  PYTHONPATH=. python -c "from src.tools.cti_tool import fetch_cti_intelligence; print(fetch_cti_intelligence('ioc:ip:8.8.8.8'))"
+  ```
+
+  Expect `Source: AlienVault OTX` for a healthy live lookup.
 
 ## Quality Gate
 

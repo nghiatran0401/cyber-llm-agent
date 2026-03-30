@@ -2,15 +2,28 @@
 
 import pytest
 
-from src.agents.g2.multiagent_system import (
-    create_initial_state,
-    log_analyzer_node,
-    threat_predictor_node,
+from src.agents.g2.graph import create_multiagent_workflow
+from src.agents.g2.runner import run_multiagent_with_trace
+from src.agents.g2.nodes import (
     incident_responder_node,
+    log_analyzer_node,
     orchestrator_node,
-    create_multiagent_workflow,
-    run_multiagent_with_trace,
+    threat_predictor_node,
 )
+from src.agents.g2.state import create_initial_state
+
+
+@pytest.fixture(autouse=True)
+def _stub_g2_external_io(monkeypatch):
+    """Avoid real OTX/RAG during unit tests (fast, deterministic)."""
+    monkeypatch.setattr(
+        "src.agents.g2.nodes.fetch_cti_intelligence",
+        lambda _query: "CTI stub: synthetic intelligence for tests.",
+    )
+    monkeypatch.setattr(
+        "src.agents.g2.nodes.retrieve_security_context",
+        lambda _text: "RAG stub for tests.",
+    )
 
 
 class _FakeResponse:
@@ -83,7 +96,7 @@ def test_run_multiagent_with_trace_returns_four_steps():
 
 def test_run_multiagent_with_trace_stops_when_step_budget_exceeded(monkeypatch):
     llm = _FakeLLM()
-    monkeypatch.setattr("src.agents.g2.multiagent_system.Settings.MAX_AGENT_STEPS", 2)
+    monkeypatch.setattr("src.agents.g2.runner.Settings.MAX_AGENT_STEPS", 2)
     traced = run_multiagent_with_trace("Failed login and scan patterns detected.", llm=llm)
 
     assert traced["stop_reason"] == "budget_exceeded"

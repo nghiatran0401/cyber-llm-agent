@@ -2,8 +2,6 @@
 from unittest.mock import mock_open, patch
 from pathlib import Path
 
-import requests
-
 from src.tools.log_parser_tool import parse_system_log
 from src.tools.cti_tool import fetch_cti_intelligence
 
@@ -43,30 +41,49 @@ def test_log_parser_no_security_entries():
                 assert "No security-relevant" in result or "not found" in result.lower()
 
 
-class _FakeResponse:
-    def __init__(self, status_code: int, payload: dict):
-        self.status_code = status_code
-        self._payload = payload
+class _OTXThreatOk:
+    def search_pulses(self, query, max_results=25):
+        return {
+            "results": [
+                {"name": "RansomPulse", "tags": ["ransomware", "windows"], "indicators": [1, 2]},
+                {"name": "LockerCampaign", "tags": ["extortion"], "indicators": [1]},
+            ]
+        }
 
-    def json(self):
-        return self._payload
+    def get_indicator_details_by_section(self, *args, **kwargs):
+        raise AssertionError("not used for threat search")
+
+
+class _OTXIocOk:
+    def search_pulses(self, query, max_results=25):
+        raise AssertionError("not used for IOC")
+
+    def get_indicator_details_by_section(self, indicator_type, indicator, section="general"):
+        return {
+            "type": "IPv4",
+            "reputation": 5,
+            "pulse_info": {"pulses": [{"name": "PulseOne"}, {"name": "PulseTwo"}]},
+        }
+
+
+class _OTXRaises:
+    def __init__(self, exc):
+        self._exc = exc
+
+    def search_pulses(self, query, max_results=25):
+        raise self._exc
+
+    def get_indicator_details_by_section(self, *args, **kwargs):
+        raise self._exc
 
 
 def test_cti_fetch_otx_threat_type_success(monkeypatch):
     """OTX provider resolves threat-type search and formats output."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_BASE_URL", "https://otx.test/api/v1")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
     monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_TOP_RESULTS", 3)
-    with patch("src.tools.cti_tool.requests.get", return_value=_FakeResponse(200, {
-        "results": [
-            {"name": "RansomPulse", "tags": ["ransomware", "windows"], "indicators": [1, 2]},
-            {"name": "LockerCampaign", "tags": ["extortion"], "indicators": [1]},
-        ]
-    })):
-        result = fetch_cti_intelligence("ransomware")
+    monkeypatch.setattr("src.tools.cti_tool._get_otx", lambda: _OTXThreatOk())
+    result = fetch_cti_intelligence("ransomware")
     assert "Source: AlienVault OTX" in result
     assert "Found 2 pulse result(s)" in result
     assert "RansomPulse" in result
@@ -74,17 +91,10 @@ def test_cti_fetch_otx_threat_type_success(monkeypatch):
 
 def test_cti_fetch_otx_ioc_success(monkeypatch):
     """OTX provider resolves IOC lookups and reports pulse linkage."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_BASE_URL", "https://otx.test/api/v1")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    with patch("src.tools.cti_tool.requests.get", return_value=_FakeResponse(200, {
-        "type": "IPv4",
-        "reputation": 5,
-        "pulse_info": {"pulses": [{"name": "PulseOne"}, {"name": "PulseTwo"}]},
-    })):
-        result = fetch_cti_intelligence("ioc:ip:1.2.3.4")
+    monkeypatch.setattr("src.tools.cti_tool._get_otx", lambda: _OTXIocOk())
+    result = fetch_cti_intelligence("ioc:ip:1.2.3.4")
     assert "Query: ioc:ip:1.2.3.4" in result
     assert "Associated pulses: 2" in result
     assert "PulseOne" in result
@@ -92,30 +102,25 @@ def test_cti_fetch_otx_ioc_success(monkeypatch):
 
 def test_cti_fetch_otx_timeout_fallback(monkeypatch):
     """Timeouts degrade safely to fallback response."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
+    import requests
+
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    with patch("src.tools.cti_tool.requests.get", side_effect=requests.Timeout()):
-        result = fetch_cti_intelligence("phishing")
+    monkeypatch.setattr("src.tools.cti_tool._get_otx", lambda: _OTXRaises(requests.Timeout()))
+    result = fetch_cti_intelligence("phishing")
     assert "Source: CTI Fallback" in result
     assert "temporarily unavailable" in result.lower()
 
 
 def test_cti_fetch_otx_http_429_fallback(monkeypatch):
-    """Rate-limit responses use deterministic fallback text."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
+    """Upstream errors use deterministic fallback text."""
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    with patch("src.tools.cti_tool.requests.get", return_value=_FakeResponse(429, {})):
-        result = fetch_cti_intelligence("ddos")
+    monkeypatch.setattr("src.tools.cti_tool._get_otx", lambda: _OTXRaises(RuntimeError("429")))
+    result = fetch_cti_intelligence("ddos")
     assert "Source: CTI Fallback" in result
 
 
 def test_cti_fetch_invalid_ioc_input(monkeypatch):
     """Malformed IOC input yields a deterministic error."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
     result = fetch_cti_intelligence("ioc:ip:")
     assert "error:" in result.lower()
@@ -123,17 +128,23 @@ def test_cti_fetch_invalid_ioc_input(monkeypatch):
 
 def test_cti_fetch_output_sanitized_and_truncated(monkeypatch):
     """External text is sanitized and bounded by CTI_MAX_RESPONSE_CHARS."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
+
+    class _OTXTruncate:
+        def search_pulses(self, query, max_results=25):
+            return {
+                "results": [
+                    {"name": "Bad\x00PulseName", "tags": ["x"], "indicators": [1]},
+                    {"name": "AnotherVeryLongPulseNameThatShouldContributeToTruncation", "tags": ["y"], "indicators": [1]},
+                ]
+            }
+
+        def get_indicator_details_by_section(self, *args, **kwargs):
+            raise AssertionError("not used")
+
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
     monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RESPONSE_CHARS", 160)
-    with patch("src.tools.cti_tool.requests.get", return_value=_FakeResponse(200, {
-        "results": [
-            {"name": "Bad\x00PulseName", "tags": ["x"], "indicators": [1]},
-            {"name": "AnotherVeryLongPulseNameThatShouldContributeToTruncation", "tags": ["y"], "indicators": [1]},
-        ]
-    })):
-        result = fetch_cti_intelligence("malware")
+    monkeypatch.setattr("src.tools.cti_tool._get_otx", lambda: _OTXTruncate())
+    result = fetch_cti_intelligence("malware")
     assert "\x00" not in result
     assert len(result) <= 160
 

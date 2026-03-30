@@ -1,3 +1,4 @@
+# Python: use 3.10–3.13. langchain-pinecone (and peers) declare Requires-Python <3.14, so 3.14+ cannot install yet.
 # Core LangChain (use latest stable, test compatibility)
 langchain>=0.1.0
 langchain-openai>=0.0.5
@@ -21,6 +22,7 @@ uvicorn>=0.30.0
 # Utilities
 python-dotenv>=1.0.0
 requests>=2.31.0
+OTXv2>=1.5.12
 beautifulsoup4>=4.12.0
 pandas>=2.1.0
 matplotlib>=3.8.0

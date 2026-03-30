@@ -74,7 +74,7 @@ Main reality today:
 - `.github/workflows/ci.yml`
 - `Makefile`
 - `scripts/smoke_checklist.py`
-- `scripts/run_benchmark.py`
+- `src/benchmarking/runner.py` (run as `python -m src.benchmarking.runner`)
 
 ## 7) How You Know You Are Succeeding
 
