@@ -25,9 +25,11 @@ Run these before opening a pull request:
 
 ```bash
 make lint
-make test
+make test-ci
 make smoke
 ```
+
+Use `make test` when you want the full suite including integration tests (requires `OPENAI_API_KEY` where applicable).
 
 ## Pull Request Standards
 

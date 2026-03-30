@@ -135,8 +135,10 @@ def run_g1_analysis(
     if not critic_ok:
         response = enforce_response_boundaries(f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence.")
         stop_reason = "needs_human"
-    evidence_count = count_evidence_markers(response)
-    response, stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
+        evidence_count = count_evidence_markers(response)
+    else:
+        evidence_count = count_evidence_markers(response)
+        response, stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
     policy_ok, policy_status = apply_output_policy_guard(response)
     if not policy_ok:
         response = "Output policy blocked this response due to potentially unsafe content. Please narrow the request to defensive security analysis."
@@ -204,8 +206,10 @@ def run_g1_analysis_with_progress(
     if not critic_ok:
         response = enforce_response_boundaries(f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence.")
         stop_reason = "needs_human"
-    evidence_count = count_evidence_markers(response)
-    response, stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
+        evidence_count = count_evidence_markers(response)
+    else:
+        evidence_count = count_evidence_markers(response)
+        response, stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
     policy_ok, policy_status = apply_output_policy_guard(response)
     if not policy_ok:
         response = "Output policy blocked this response due to potentially unsafe content. Please narrow the request to defensive security analysis."

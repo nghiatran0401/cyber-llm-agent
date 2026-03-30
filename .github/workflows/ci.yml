@@ -50,7 +50,7 @@ jobs:
           BENCHMARK_PROVIDER: openai
         run: make benchmark
 
-      - name: Smoke checks (excluding multiagent regression)
+      - name: Smoke checks (compile + memory/session)
         run: |
           python -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
           pytest -q tests/unit/test_memory.py

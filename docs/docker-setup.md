@@ -1,15 +1,21 @@
 # Docker Setup Guide
 
-This project is designed to run as a three-service Docker Compose stack:
+The recommended way to run the full stack (API + web + OWASP lab) is [Docker Compose](https://docs.docker.com/compose/) from the repository root.
 
-- `api` (FastAPI) on `http://localhost:8000`
-- `web` (Next.js) on `http://localhost:3000`
-- `lab` (OWASP vulnerable lab + dashboard) on `http://localhost:3100`
+## What runs
+
+| Service | Image context | Port | Description |
+|---------|---------------|------|-------------|
+| `api` | Root `Dockerfile` | 8000 | FastAPI (`services.api.main:app`) |
+| `web` | `apps/web` | 3000 | Next.js production server |
+| `lab` | `apps/vuln-lab` | 3100 | Intentionally vulnerable training lab + dashboard |
+
+The API container mounts host `./data/sessions` and `./data/logs` so sessions and logs survive restarts. The lab container mounts `./data/logs` to `/lab-data` for JSONL telemetry (the lab image does not include the full monorepo, so paths are set via `LAB_*_FILE` in `docker-compose.yml`).
 
 ## Prerequisites
 
-- Docker Desktop (or Docker Engine + Compose plugin)
-- A configured `.env` file in repository root
+- Docker Desktop (macOS/Windows) or Docker Engine + Compose plugin (Linux)
+- A root `.env` file (copy from `.env.example` and fill in secrets)
 
 ## First-time setup
 
@@ -17,6 +23,7 @@ This project is designed to run as a three-service Docker Compose stack:
 
 ```bash
 cp .env.example .env
+# Edit .env: OPENAI_API_KEY, OTX_API_KEY, PINECONE_API_KEY (required at API startup)
 docker compose up --build -d
 ```
 
@@ -29,43 +36,36 @@ docker compose up --build -d
 
 ## Daily commands
 
-Start stack:
-
-```bash
-docker compose up -d
-```
-
-Follow logs:
-
-```bash
-docker compose logs -f
-```
-
-Stop stack:
-
-```bash
-docker compose down --remove-orphans
-```
-
-Hard reset (remove volumes too):
-
-```bash
-docker compose down -v --remove-orphans
-```
+| Goal | Command |
+|------|---------|
+| Start (reuse build) | `docker compose up -d` |
+| Follow logs | `docker compose logs -f` |
+| Stop | `docker compose down --remove-orphans` |
+| Hard reset (containers + anonymous volumes Compose created) | `docker compose down -v --remove-orphans` |
 
 ## URLs
 
 - Web workspace: `http://localhost:3000`
 - API docs: `http://localhost:8000/docs`
-- Lab app: `http://localhost:3100`
-- Lab dashboard scenarios API: `http://localhost:3100/api/dashboard/scenarios`
+- Lab: `http://localhost:3100`
+- Lab dashboard (JSON): `http://localhost:3100/api/dashboard/scenarios`
 
-## Optional Make shortcuts
+## Compose-specific behavior
 
-If your environment has `make` installed:
+- **`CTI_API_BASE` for the lab** is fixed to `http://api:8000` inside Compose so the lab reaches the API by service name. Your root `.env` may still use `CTI_API_BASE=http://127.0.0.1:8000` for local `make run-lab` on the host; that value is not used for the lab service in Compose.
+- **Frontend public URLs** default to `http://localhost:8000` and `http://localhost:3100` for `NEXT_PUBLIC_*` at build time. Override in `.env` if your browser cannot use `localhost`.
 
-- `make docker-up`
-- `make docker-down`
-- `make docker-reset`
-- `make docker-logs`
-- `make clean` (removes local cache/install artifacts)
+## Single-container API only
+
+To build and run only the Python API image (no Compose):
+
+```bash
+make docker-build
+make docker-run
+```
+
+This maps port 8000 and passes `--env-file .env`.
+
+## Make targets (optional)
+
+See the root `Makefile` for `docker-build`, `docker-run`, and local dev targets (`run-api`, `run-web`, `run-lab`).

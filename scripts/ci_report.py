@@ -36,11 +36,20 @@ SEVERITY_MAP = {
 }
 
 FAIL_PATTERN = re.compile(r"FAILED\s+(\S+)::(\S+)")
+COLLECTION_ERROR_MARKERS = (
+    "ERROR collecting",
+    "errors during collection",
+    "Interrupted:",
+)
 
 
 def main():
     lines = sys.stdin.read()
     print(lines)
+
+    if any(m in lines for m in COLLECTION_ERROR_MARKERS):
+        print("\n--- CI Report: Collection or run errors detected ---")
+        sys.exit(1)
 
     failures = FAIL_PATTERN.findall(lines)
     if not failures:

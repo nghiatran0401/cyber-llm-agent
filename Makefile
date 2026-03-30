@@ -16,7 +16,7 @@ test:
 	pytest -q
 
 test-ci:
-	pytest -q --ignore=tests/integration/test_agent_flow.py --tb=short 2>&1 | $(PYTHON) scripts/ci_report.py
+	$(PYTHON) scripts/run_test_ci.py
 
 test-web:
 	npm --prefix apps/web run test
