@@ -2,6 +2,7 @@
 
 import pytest
 
+from src.config.settings import Settings
 from src.agents.g2.state import create_initial_state
 from src.agents.g2.nodes import (
     log_analyzer_node,
@@ -88,8 +89,11 @@ def test_run_multiagent_with_trace_returns_four_steps():
         assert "output_summary" in item
 
 
-def test_run_multiagent_with_trace_matches_canonical_sequence():
+def test_run_multiagent_with_trace_matches_canonical_sequence(monkeypatch):
+    """Worker plan length must stay deterministic: live CTI/RAG text can add extra planner keywords."""
     llm = _FakeLLM()
+    monkeypatch.setattr(Settings, "OTX_API_KEY", "")
+    monkeypatch.setattr(Settings, "ENABLE_RAG", False)
     traced = run_multiagent_with_trace("Failed login and scan patterns detected.", llm=llm)
 
     assert [item["step"] for item in traced["trace"]] == [

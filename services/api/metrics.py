@@ -18,6 +18,10 @@ _METRICS_STATE = {
     "cost_total_est_usd": 0.0,
     "tool_calls_total": 0,
     "tool_fail_total": 0,
+    "duplicate_tool_calls_total": 0,
+    "semantic_duplicate_tool_calls_total": 0,
+    "cached_tool_reuses_total": 0,
+    "cooldown_skips_total": 0,
     "by_endpoint": defaultdict(int),
     "by_mode": defaultdict(int),
     "by_stop_reason": defaultdict(int),
@@ -46,6 +50,10 @@ def record_metric(
     cost_est_usd: float = 0.0,
     tool_calls: int = 0,
     tool_fail: int = 0,
+    duplicate_tool_calls: int = 0,
+    semantic_duplicate_tool_calls: int = 0,
+    cached_tool_reuses: int = 0,
+    cooldown_skips: int = 0,
     run_id: str | None = None,
     model: str | None = None,
 ) -> None:
@@ -56,6 +64,10 @@ def record_metric(
         _METRICS_STATE["cost_total_est_usd"] += max(0.0, float(cost_est_usd))
         _METRICS_STATE["tool_calls_total"] += max(0, int(tool_calls))
         _METRICS_STATE["tool_fail_total"] += max(0, int(tool_fail))
+        _METRICS_STATE["duplicate_tool_calls_total"] += max(0, int(duplicate_tool_calls))
+        _METRICS_STATE["semantic_duplicate_tool_calls_total"] += max(0, int(semantic_duplicate_tool_calls))
+        _METRICS_STATE["cached_tool_reuses_total"] += max(0, int(cached_tool_reuses))
+        _METRICS_STATE["cooldown_skips_total"] += max(0, int(cooldown_skips))
         _METRICS_STATE["by_endpoint"][endpoint] += 1
         _METRICS_STATE["by_mode"][mode or "none"] += 1
         _METRICS_STATE["by_stop_reason"][stop_reason or ("completed" if success else "error")] += 1
@@ -77,6 +89,10 @@ def record_metric(
                 "cost_est_usd": round(float(cost_est_usd), 6),
                 "tool_calls": int(tool_calls),
                 "tool_fail": int(tool_fail),
+                "duplicate_tool_calls": int(duplicate_tool_calls),
+                "semantic_duplicate_tool_calls": int(semantic_duplicate_tool_calls),
+                "cached_tool_reuses": int(cached_tool_reuses),
+                "cooldown_skips": int(cooldown_skips),
             }
         )
 
@@ -95,6 +111,10 @@ def get_snapshot() -> dict:
             "cost_total_est_usd": float(_METRICS_STATE["cost_total_est_usd"]),
             "tool_calls_total": int(_METRICS_STATE["tool_calls_total"]),
             "tool_fail_total": int(_METRICS_STATE["tool_fail_total"]),
+            "duplicate_tool_calls_total": int(_METRICS_STATE["duplicate_tool_calls_total"]),
+            "semantic_duplicate_tool_calls_total": int(_METRICS_STATE["semantic_duplicate_tool_calls_total"]),
+            "cached_tool_reuses_total": int(_METRICS_STATE["cached_tool_reuses_total"]),
+            "cooldown_skips_total": int(_METRICS_STATE["cooldown_skips_total"]),
             "by_endpoint": dict(_METRICS_STATE["by_endpoint"]),
             "by_mode": dict(_METRICS_STATE["by_mode"]),
             "by_stop_reason": dict(_METRICS_STATE["by_stop_reason"]),

@@ -176,7 +176,7 @@ def test_g1_marks_budget_exceeded_when_tool_budget_is_hit(monkeypatch):
 
 def test_g1_reuses_semantically_equivalent_tool_calls(monkeypatch):
     class _SemanticReuseAgent:
-        def run(self, _input: str) -> str:
+        def run(self, _input: str, **_kwargs) -> str:
             first = execute_tool_with_runtime_controls(
                 "CTIFetch",
                 "possible ransomware activity",

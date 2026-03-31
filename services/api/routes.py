@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
@@ -42,6 +43,13 @@ from .sandbox_service import (
 logger = setup_logger(__name__)
 
 router = APIRouter(prefix="/api/v1")
+
+_RUN_CONTROL_TOOL_CALLS_RE = re.compile(r"tool_calls_used=(\d+)")
+_RUN_CONTROL_DUPLICATES_RE = re.compile(r"duplicate_tool_calls=(\d+)")
+_RUN_CONTROL_SEMANTIC_DUPLICATES_RE = re.compile(r"semantic_duplicate_tool_calls=(\d+)")
+_RUN_CONTROL_CACHE_REUSES_RE = re.compile(r"cached_tool_reuses=(\d+)")
+_RUN_CONTROL_COOLDOWN_SKIPS_RE = re.compile(r"cooldown_skips=(\d+)")
+_RUN_CONTROL_TOOL_FAILURES_RE = re.compile(r"tool_failures=(\d+)")
 
 _OWASP_MITRE_MAP = {
     "A01_BrokenAccessControl": {
@@ -95,8 +103,14 @@ def _extract_text_payload(value) -> str:
     return str(value or "")
 
 
-def _derive_tool_stats(result, trace) -> tuple[int, int, int]:
+def _derive_tool_stats(result, trace) -> tuple[int, int, int, int, int, int, int]:
     statuses: dict[str, bool] = {}
+    budget_tool_calls = 0
+    duplicate_tool_calls = 0
+    semantic_duplicate_tool_calls = 0
+    cached_tool_reuses = 0
+    cooldown_skips = 0
+    explicit_tool_failures = 0
     if isinstance(result, dict):
         for key, tool_name in (
             ("log_evidence", "LogParser"),
@@ -117,35 +131,73 @@ def _derive_tool_stats(result, trace) -> tuple[int, int, int]:
 
     for item in trace or []:
         step_name = item.get("step") if isinstance(item, dict) else getattr(item, "step", "")
+        input_summary = item.get("input_summary", "") if isinstance(item, dict) else getattr(item, "input_summary", "")
+        output_summary = item.get("output_summary", "") if isinstance(item, dict) else getattr(item, "output_summary", "")
         if step_name == "WorkerTask":
             statuses.setdefault("WorkerTask", True)
+        if step_name == "RunControl":
+            match = _RUN_CONTROL_TOOL_CALLS_RE.search(str(output_summary))
+            if match:
+                budget_tool_calls = max(budget_tool_calls, int(match.group(1)))
+            duplicate_match = _RUN_CONTROL_DUPLICATES_RE.search(str(input_summary))
+            if duplicate_match:
+                duplicate_tool_calls = max(duplicate_tool_calls, int(duplicate_match.group(1)))
+            semantic_duplicate_match = _RUN_CONTROL_SEMANTIC_DUPLICATES_RE.search(str(input_summary))
+            if semantic_duplicate_match:
+                semantic_duplicate_tool_calls = max(
+                    semantic_duplicate_tool_calls, int(semantic_duplicate_match.group(1))
+                )
+            cache_reuse_match = _RUN_CONTROL_CACHE_REUSES_RE.search(str(input_summary))
+            if cache_reuse_match:
+                cached_tool_reuses = max(cached_tool_reuses, int(cache_reuse_match.group(1)))
+            cooldown_skip_match = _RUN_CONTROL_COOLDOWN_SKIPS_RE.search(str(input_summary))
+            if cooldown_skip_match:
+                cooldown_skips = max(cooldown_skips, int(cooldown_skip_match.group(1)))
+            failure_match = _RUN_CONTROL_TOOL_FAILURES_RE.search(str(output_summary))
+            if not failure_match:
+                failure_match = _RUN_CONTROL_TOOL_FAILURES_RE.search(str(input_summary))
+            if failure_match:
+                explicit_tool_failures = max(explicit_tool_failures, int(failure_match.group(1)))
 
-    tool_calls = len(statuses)
+    tool_calls = max(len(statuses), budget_tool_calls)
     tool_success = sum(1 for ok in statuses.values() if ok)
-    tool_fail = max(0, tool_calls - tool_success)
-    return tool_calls, tool_success, tool_fail
+    tool_fail = max(explicit_tool_failures, max(0, tool_calls - tool_success))
+    return (
+        tool_calls,
+        tool_success,
+        tool_fail,
+        duplicate_tool_calls,
+        semantic_duplicate_tool_calls,
+        cached_tool_reuses,
+        cooldown_skips,
+    )
+
+
+def _enrich_trace_step(item, *, run_id: str, step_index: int) -> StepTrace:
+    """Normalize one trace step for API responses and SSE streaming."""
+    if hasattr(item, "model_dump"):
+        payload = item.model_dump()
+    elif isinstance(item, dict):
+        payload = dict(item)
+    else:
+        payload = {
+            "step": "Unknown",
+            "what_it_does": "",
+            "prompt_preview": "",
+            "input_summary": "",
+            "output_summary": "",
+        }
+    payload["run_id"] = run_id
+    payload["step_id"] = payload.get("step_id") or f"{run_id}-s{step_index:03d}"
+    if payload.get("step") in {"WorkerTask", "SingleAgentExecution", "LogAnalyzer", "ThreatPredictor"}:
+        payload["tool_call_id"] = payload.get("tool_call_id") or f"{run_id}-t{step_index:03d}"
+    return StepTrace(**payload)
 
 
 def _enrich_trace(trace, run_id: str):
     enriched: list[StepTrace] = []
     for idx, item in enumerate(trace or [], start=1):
-        if hasattr(item, "model_dump"):
-            payload = item.model_dump()
-        elif isinstance(item, dict):
-            payload = dict(item)
-        else:
-            payload = {
-                "step": "Unknown",
-                "what_it_does": "",
-                "prompt_preview": "",
-                "input_summary": "",
-                "output_summary": "",
-            }
-        payload["run_id"] = run_id
-        payload["step_id"] = payload.get("step_id") or f"{run_id}-s{idx:03d}"
-        if payload.get("step") in {"WorkerTask", "SingleAgentExecution", "LogAnalyzer", "ThreatPredictor"}:
-            payload["tool_call_id"] = payload.get("tool_call_id") or f"{run_id}-t{idx:03d}"
-        enriched.append(StepTrace(**payload))
+        enriched.append(_enrich_trace_step(item, run_id=run_id, step_index=idx))
     return enriched
 
 
@@ -171,7 +223,15 @@ def _build_success_response(
     output_tokens_est = _estimate_tokens(_extract_text_payload(result))
     total_tokens_est = input_tokens_est + output_tokens_est
     cost_est_usd = round((total_tokens_est / 1000) * 0.0005, 6)
-    tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=enriched_trace)
+    (
+        tool_calls,
+        tool_success,
+        tool_fail,
+        duplicate_tool_calls,
+        semantic_duplicate_tool_calls,
+        cached_tool_reuses,
+        cooldown_skips,
+    ) = _derive_tool_stats(result=result, trace=enriched_trace)
 
     if endpoint:
         record_metric(
@@ -184,6 +244,10 @@ def _build_success_response(
             cost_est_usd=cost_est_usd,
             tool_calls=tool_calls,
             tool_fail=tool_fail,
+            duplicate_tool_calls=duplicate_tool_calls,
+            semantic_duplicate_tool_calls=semantic_duplicate_tool_calls,
+            cached_tool_reuses=cached_tool_reuses,
+            cooldown_skips=cooldown_skips,
             run_id=run_id,
             model=model,
         )
@@ -200,6 +264,10 @@ def _build_success_response(
         cost_est_usd=cost_est_usd,
         tool_calls=tool_calls,
         tool_fail=tool_fail,
+        duplicate_tool_calls=duplicate_tool_calls,
+        semantic_duplicate_tool_calls=semantic_duplicate_tool_calls,
+        cached_tool_reuses=cached_tool_reuses,
+        cooldown_skips=cooldown_skips,
     )
     return ApiResponse(
         ok=True,
@@ -313,6 +381,7 @@ def metrics() -> ApiResponse:
     snap = get_snapshot()
     requests_total = snap["requests_total"]
     avg_duration_ms = round(snap["duration_total_ms"] / requests_total, 2) if requests_total else 0.0
+    avg_tool_calls_per_run = round(snap["tool_calls_total"] / requests_total, 4) if requests_total else 0.0
     return ApiResponse(
         ok=True,
         result={
@@ -326,6 +395,11 @@ def metrics() -> ApiResponse:
             "cost_total_est_usd": round(snap["cost_total_est_usd"], 6),
             "tool_calls_total": snap["tool_calls_total"],
             "tool_fail_total": snap["tool_fail_total"],
+            "duplicate_tool_calls_total": snap["duplicate_tool_calls_total"],
+            "semantic_duplicate_tool_calls_total": snap["semantic_duplicate_tool_calls_total"],
+            "cached_tool_reuses_total": snap["cached_tool_reuses_total"],
+            "cooldown_skips_total": snap["cooldown_skips_total"],
+            "avg_tool_calls_per_run": avg_tool_calls_per_run,
             "by_endpoint": snap["by_endpoint"],
             "by_mode": snap["by_mode"],
             "by_stop_reason": snap["by_stop_reason"],
@@ -344,6 +418,7 @@ def metrics_dashboard() -> ApiResponse:
     success_rate = round((snap["success_total"] / requests_total) * 100, 2) if requests_total else 0.0
     avg_duration_ms = round(snap["duration_total_ms"] / requests_total, 2) if requests_total else 0.0
     avg_tokens = round(snap["tokens_total_est"] / requests_total, 2) if requests_total else 0.0
+    avg_tool_calls_per_run = round(snap["tool_calls_total"] / requests_total, 4) if requests_total else 0.0
 
     return ApiResponse(
         ok=True,
@@ -356,10 +431,15 @@ def metrics_dashboard() -> ApiResponse:
                 "avg_duration_ms": avg_duration_ms,
                 "avg_tokens_est": avg_tokens,
                 "cost_total_est_usd": round(snap["cost_total_est_usd"], 6),
+                "avg_tool_calls_per_run": avg_tool_calls_per_run,
             },
             "breakdown": {
                 "by_mode": snap["by_mode"],
                 "by_stop_reason": snap["by_stop_reason"],
+                "duplicate_tool_calls_total": snap["duplicate_tool_calls_total"],
+                "semantic_duplicate_tool_calls_total": snap["semantic_duplicate_tool_calls_total"],
+                "cached_tool_reuses_total": snap["cached_tool_reuses_total"],
+                "cooldown_skips_total": snap["cooldown_skips_total"],
             },
             "recent_runs": snap["recent_runs"][:25],
         },
@@ -515,6 +595,7 @@ def chat(payload: ChatRequest) -> ApiResponse:
 def workspace_stream(payload: WorkspaceStreamRequest):
     """Stream progress events for workspace requests (SSE)."""
     request_id = str(uuid4())
+    run_id = request_id
     event_queue: Queue[dict] = Queue()
     start_time = perf_counter()
     def _put_event(event_type: str, **data):
@@ -522,8 +603,15 @@ def workspace_stream(payload: WorkspaceStreamRequest):
 
     def _runner():
         try:
+            trace_for_metrics: list[StepTrace] = []
+            step_index = 0
+
             def _on_step(step: StepTrace):
-                _put_event("trace", step=step.model_dump())
+                nonlocal step_index
+                step_index += 1
+                enriched = _enrich_trace_step(step, run_id=run_id, step_index=step_index)
+                trace_for_metrics.append(enriched)
+                _put_event("trace", step=enriched.model_dump())
 
             result, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
                 _normalize_workspace_result(
@@ -538,12 +626,19 @@ def workspace_stream(payload: WorkspaceStreamRequest):
             )
 
             duration_ms = int((perf_counter() - start_time) * 1000)
-            run_id = request_id
             input_tokens_est = _estimate_tokens(payload.input)
             output_tokens_est = _estimate_tokens(_extract_text_payload(result))
             total_tokens_est = input_tokens_est + output_tokens_est
             cost_est_usd = round((total_tokens_est / 1000) * 0.0005, 6)
-            tool_calls, tool_success, tool_fail = _derive_tool_stats(result=result, trace=[])
+            (
+                tool_calls,
+                tool_success,
+                tool_fail,
+                duplicate_tool_calls,
+                semantic_duplicate_tool_calls,
+                cached_tool_reuses,
+                cooldown_skips,
+            ) = _derive_tool_stats(result=result, trace=trace_for_metrics)
             record_metric(
                 endpoint="/api/v1/workspace/stream",
                 duration_ms=duration_ms,
@@ -554,6 +649,10 @@ def workspace_stream(payload: WorkspaceStreamRequest):
                 cost_est_usd=cost_est_usd,
                 tool_calls=tool_calls,
                 tool_fail=tool_fail,
+                duplicate_tool_calls=duplicate_tool_calls,
+                semantic_duplicate_tool_calls=semantic_duplicate_tool_calls,
+                cached_tool_reuses=cached_tool_reuses,
+                cooldown_skips=cooldown_skips,
                 run_id=run_id,
                 model=model,
             )
@@ -568,6 +667,10 @@ def workspace_stream(payload: WorkspaceStreamRequest):
                 cost_est_usd=cost_est_usd,
                 tool_calls=tool_calls,
                 tool_fail=tool_fail,
+                duplicate_tool_calls=duplicate_tool_calls,
+                semantic_duplicate_tool_calls=semantic_duplicate_tool_calls,
+                cached_tool_reuses=cached_tool_reuses,
+                cooldown_skips=cooldown_skips,
             )
             _put_event(
                 "final",
