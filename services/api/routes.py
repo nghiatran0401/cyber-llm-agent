@@ -128,6 +128,12 @@ def _derive_tool_stats(result, trace) -> tuple[int, int, int, int, int, int, int
         statuses["CTIFetch"] = True
     if "#chunk-" in result_text and "RAGRetriever" not in statuses:
         statuses["RAGRetriever"] = True
+    if (
+        "RAGRetriever" not in statuses
+        and "retrieved context" in result_text
+        and "citations:" in result_text
+    ):
+        statuses["RAGRetriever"] = True
 
     for item in trace or []:
         step_name = item.get("step") if isinstance(item, dict) else getattr(item, "step", "")

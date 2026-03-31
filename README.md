@@ -118,6 +118,7 @@ make run-lab          # http://127.0.0.1:3100 (optional)
 | `make ci` | Lint + CI tests + benchmark + smoke + web tests (heavy; mirrors most of CI locally) |
 | `make validate-traces` | Trace validation helper (see `scripts/validate_traces.py`) |
 | `make release-gate` | Release checklist script (see `scripts/release_gate.py`) |
+| `make rag-build-index` / `make rag-verify` | Local MITRE Chroma index (when `RAG_VECTOR_BACKEND=chroma`) |
 
 **CI on GitHub** (Python 3.10 + 3.11): `.github/workflows/ci.yml` runs `make lint`, `make test-ci`, `make benchmark`, memory smoke, and web tests.
 
@@ -137,9 +138,11 @@ make run-lab          # http://127.0.0.1:3100 (optional)
 
 ---
 
-## RAG (Pinecone)
+## RAG (Pinecone or optional local Chroma)
 
 RAG is **on** by default. The API does **not** ingest documents on startup.
+
+**Default (`RAG_VECTOR_BACKEND=pinecone`):** cloud index over `data/knowledge/`.
 
 1. Add `.md` / `.txt` files under `data/knowledge/`.  
 2. Set Pinecone env vars in `.env`.  
@@ -150,6 +153,8 @@ RAG is **on** by default. The API does **not** ingest documents on startup.
    ```
 
 4. Re-ingest after you change knowledge files or switch indexes.
+
+**Optional (`RAG_VECTOR_BACKEND=chroma`):** local Chroma + sentence-transformers over MITRE-style markdown in `data/mitre/` (see `data/mitre/README.md`). Build with `make rag-build-index` or `python3 scripts/rag_build_index.py`. Pinecone keys are not required when this backend is selected and `ENABLE_RAG=true`. The standalone CLI lives at `scripts/rag_cli.py`.
 
 ---
 

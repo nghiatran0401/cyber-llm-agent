@@ -1,7 +1,7 @@
 PYTHON ?= python3
 IMAGE ?= cyber-llm-agent:latest
 
-.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci validate-traces release-gate docker-build docker-run test-memory
+.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci validate-traces release-gate docker-build docker-run test-memory rag-build-index rag-verify rag-benchmark
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -35,6 +35,16 @@ benchmark-report:
 
 lint:
 	$(PYTHON) -m py_compile src/agents/g1/*.py src/agents/g2/*.py src/agents/shared/*.py services/api/*.py
+	$(PYTHON) -m compileall -q src/rag src/tools/rag_tools.py
+
+rag-build-index:
+	$(PYTHON) scripts/rag_build_index.py
+
+rag-verify:
+	$(PYTHON) scripts/rag_verify_index.py
+
+rag-benchmark:
+	$(PYTHON) scripts/rag_benchmark.py
 
 ci: lint test-ci benchmark smoke test-web
 

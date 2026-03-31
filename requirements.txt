@@ -8,6 +8,10 @@ langchain-pinecone>=0.2.0
 langchain-text-splitters>=0.3.2
 pinecone-client>=6.0.0
 
+# Local MITRE RAG (RAG_VECTOR_BACKEND=chroma): Chroma + sentence-transformers embeddings
+chromadb>=0.4.22
+sentence-transformers>=2.2.0
+
 # Log Parsing & Routing Upgrades
 pygrok>=1.0.0
 semantic-router>=0.1.12

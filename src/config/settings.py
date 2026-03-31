@@ -61,11 +61,18 @@ class Settings:
     CTI_MAX_RESPONSE_CHARS = int(os.getenv("CTI_MAX_RESPONSE_CHARS", "3000"))
     CTI_TOP_RESULTS = int(os.getenv("CTI_TOP_RESULTS", "5"))
 
-    # RAG (LangChain + Pinecone) — always enabled; tune retrieval depth here if needed
+    # RAG — default cloud Pinecone over data/knowledge; optional local Chroma + MITRE markdown
     ENABLE_RAG = os.getenv("ENABLE_RAG", "true").lower() == "true"
-    RAG_MAX_RESULTS = 3
+    RAG_VECTOR_BACKEND = os.getenv("RAG_VECTOR_BACKEND", "pinecone").strip().lower()
+    RAG_MAX_RESULTS = int(os.getenv("RAG_MAX_RESULTS", "3"))
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
     PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "cyber-llm-knowledge")
+    # Local MITRE / Chroma (used when RAG_VECTOR_BACKEND=chroma); paths set after DATA_DIR
+    RAG_CHROMA_COLLECTION = os.getenv("RAG_CHROMA_COLLECTION", "mitre_attack")
+    RAG_EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    RAG_TOP_K = int(os.getenv("RAG_TOP_K", "8"))
+    RAG_DISTANCE_THRESHOLD = float(os.getenv("RAG_DISTANCE_THRESHOLD", "0.7"))
+    RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.25"))
 
     # Embedding configuration
     EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
@@ -84,7 +91,11 @@ class Settings:
     BENCHMARKS_DIR = DATA_DIR / "benchmarks"
     CTI_FEEDS_DIR = DATA_DIR / "cti_feeds"
     KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", DATA_DIR / "knowledge"))
-    
+    _rag_data_raw = os.getenv("RAG_DATA_PATH", "").strip()
+    _rag_chroma_raw = os.getenv("RAG_CHROMA_PATH", "").strip()
+    RAG_DATA_PATH = Path(_rag_data_raw) if _rag_data_raw else DATA_DIR / "mitre"
+    RAG_CHROMA_PATH = Path(_rag_chroma_raw) if _rag_chroma_raw else DATA_DIR / "chroma_db"
+
     # Ensure directories exist
     @classmethod
     def ensure_directories(cls):
@@ -95,6 +106,8 @@ class Settings:
         cls.BENCHMARKS_DIR.mkdir(exist_ok=True)
         cls.CTI_FEEDS_DIR.mkdir(exist_ok=True)
         cls.KNOWLEDGE_DIR.mkdir(exist_ok=True)
+        cls.RAG_DATA_PATH.mkdir(parents=True, exist_ok=True)
+        cls.RAG_CHROMA_PATH.mkdir(parents=True, exist_ok=True)
     
     @classmethod
     def validate(cls):
@@ -158,12 +171,21 @@ class Settings:
             raise ValueError("PROMPT_VERSION_G1 must not be empty.")
         if not cls.PROMPT_VERSION_G2.strip():
             raise ValueError("PROMPT_VERSION_G2 must not be empty.")
-        if not cls.PINECONE_API_KEY:
-            raise ValueError("PINECONE_API_KEY is required (RAG is always enabled).")
-        if not cls.PINECONE_INDEX_NAME:
-            raise ValueError("PINECONE_INDEX_NAME is required (RAG is always enabled).")
+        allowed_rag_backends = {"pinecone", "chroma"}
+        if cls.RAG_VECTOR_BACKEND not in allowed_rag_backends:
+            raise ValueError(
+                f"RAG_VECTOR_BACKEND must be one of {sorted(allowed_rag_backends)}; "
+                f"got '{cls.RAG_VECTOR_BACKEND}'."
+            )
+        if cls.ENABLE_RAG and cls.RAG_VECTOR_BACKEND == "pinecone":
+            if not cls.PINECONE_API_KEY:
+                raise ValueError("PINECONE_API_KEY is required when RAG_VECTOR_BACKEND=pinecone.")
+            if not cls.PINECONE_INDEX_NAME:
+                raise ValueError("PINECONE_INDEX_NAME is required when RAG_VECTOR_BACKEND=pinecone.")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
+        if cls.RAG_TOP_K <= 0:
+            raise ValueError("RAG_TOP_K must be greater than 0.")
         # Embedding validation
         allowed_embedding_providers = {"openai", "ollama"}
         if cls.EMBEDDING_PROVIDER not in allowed_embedding_providers:

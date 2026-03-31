@@ -208,10 +208,10 @@ def run_checklist() -> int:
             rag_tools,
             "retrieve_security_context",
             return_value=(
-                "Retrieved Context (mode=pinecone_semantic):\n"
-                "- Match 1 [source=data/knowledge/security.md]: brute force login attempts\n"
+                "Retrieved Context (source=pinecone_semantic):\n"
+                "- Match 1 [score=1.0000] [source=data/knowledge/security.md#1]: brute force login attempts\n"
                 "Citations:\n"
-                "- data/knowledge/security.md"
+                "- data/knowledge/security.md#1"
             ),
         ):
             ingest_message = rag_tools.ingest_knowledge_base()
