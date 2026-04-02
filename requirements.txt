@@ -8,10 +8,6 @@ langchain-pinecone>=0.2.0
 langchain-text-splitters>=0.3.2
 pinecone-client>=6.0.0
 
-# Local MITRE RAG (RAG_VECTOR_BACKEND=chroma): Chroma + sentence-transformers embeddings
-chromadb>=0.4.22
-sentence-transformers>=2.2.0
-
 # Log Parsing & Routing Upgrades
 pygrok>=1.0.0
 semantic-router>=0.1.12
@@ -31,12 +27,6 @@ beautifulsoup4>=4.12.0
 pandas>=2.1.0
 matplotlib>=3.8.0
 numpy>=1.26.0
-
-# Embedding support
-# ollama is only needed for local runs with EMBEDDING_PROVIDER=ollama
-# It uses urllib (stdlib) to call the Ollama HTTP API — no extra package needed.
-# If you prefer the official SDK, uncomment:
-# ollama>=0.1.0
 
 # Testing
 pytest>=7.4.0

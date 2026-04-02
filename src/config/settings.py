@@ -20,66 +20,29 @@ class Settings:
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
 
-    # Environment
-    ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-    ENABLE_SANDBOX = os.getenv("ENABLE_SANDBOX", "false").lower() == "true"
     ALLOWED_LOG_EXTENSIONS = {".txt", ".log", ".json", ".jsonl"}
 
-    # API security and startup controls
-    API_AUTH_ENABLED = os.getenv("API_AUTH_ENABLED", "false").lower() == "true"
-    API_AUTH_KEY = os.getenv("API_AUTH_KEY", "")
-    API_RATE_LIMIT_ENABLED = os.getenv("API_RATE_LIMIT_ENABLED", "false").lower() == "true"
-    API_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("API_RATE_LIMIT_WINDOW_SECONDS", "60"))
-    API_RATE_LIMIT_MAX_REQUESTS = int(os.getenv("API_RATE_LIMIT_MAX_REQUESTS", "60"))
-    VALIDATE_ON_STARTUP = os.getenv("VALIDATE_ON_STARTUP", "true").lower() == "true"
-    AGENT_CACHE_TTL_SECONDS = int(os.getenv("AGENT_CACHE_TTL_SECONDS", "3600"))
-    AGENT_CACHE_MAX_SIZE = int(os.getenv("AGENT_CACHE_MAX_SIZE", "100"))
     MAX_AGENT_STEPS = int(os.getenv("MAX_AGENT_STEPS", "12"))
     MAX_TOOL_CALLS = int(os.getenv("MAX_TOOL_CALLS", "8"))
     MAX_RUNTIME_SECONDS = int(os.getenv("MAX_RUNTIME_SECONDS", "60"))
     MAX_WORKER_TASKS = int(os.getenv("MAX_WORKER_TASKS", "4"))
-    MEMORY_MAX_EPISODIC_ITEMS = int(os.getenv("MEMORY_MAX_EPISODIC_ITEMS", "30"))
-    MEMORY_MAX_SEMANTIC_FACTS = int(os.getenv("MEMORY_MAX_SEMANTIC_FACTS", "80"))
-    MEMORY_RECALL_TOP_K = int(os.getenv("MEMORY_RECALL_TOP_K", "3"))
-    SESSION_RETENTION_DAYS = int(os.getenv("SESSION_RETENTION_DAYS", "30"))
     PROMPT_VERSION_G1 = os.getenv("PROMPT_VERSION_G1", "security_analysis_v2.txt")
     PROMPT_VERSION_G2 = os.getenv("PROMPT_VERSION_G2", "security_analysis_v2.txt")
     ENABLE_RUBRIC_EVAL = os.getenv("ENABLE_RUBRIC_EVAL", "true").lower() == "true"
-    ENABLE_PROMPT_INJECTION_GUARD = os.getenv("ENABLE_PROMPT_INJECTION_GUARD", "true").lower() == "true"
     ENABLE_OUTPUT_POLICY_GUARD = os.getenv("ENABLE_OUTPUT_POLICY_GUARD", "true").lower() == "true"
     REQUIRE_HUMAN_APPROVAL_HIGH_RISK = os.getenv("REQUIRE_HUMAN_APPROVAL_HIGH_RISK", "false").lower() == "true"
     MIN_EVIDENCE_FOR_HIGH_RISK = int(os.getenv("MIN_EVIDENCE_FOR_HIGH_RISK", "1"))
 
-    # CTI (AlienVault OTX)
+    # CTI — API key only; OTX URL and limits are fixed in src/tools/cti_tool.py
     OTX_API_KEY = os.getenv("OTX_API_KEY", "")
-    OTX_BASE_URL = os.getenv("OTX_BASE_URL", "https://otx.alienvault.com/api/v1").rstrip("/")
-    CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").strip().lower()
-    CTI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("CTI_REQUEST_TIMEOUT_SECONDS", "10"))
-    CTI_MAX_RETRIES = int(os.getenv("CTI_MAX_RETRIES", "2"))
-    CTI_RETRY_BACKOFF_SECONDS = float(os.getenv("CTI_RETRY_BACKOFF_SECONDS", "0.5"))
-    CTI_MAX_RESPONSE_CHARS = int(os.getenv("CTI_MAX_RESPONSE_CHARS", "3000"))
-    CTI_TOP_RESULTS = int(os.getenv("CTI_TOP_RESULTS", "5"))
 
-    # RAG — default cloud Pinecone over data/knowledge; optional local Chroma + MITRE markdown
+    # RAG — Pinecone + OpenAI embeddings over data/knowledge
     ENABLE_RAG = os.getenv("ENABLE_RAG", "true").lower() == "true"
-    RAG_VECTOR_BACKEND = os.getenv("RAG_VECTOR_BACKEND", "pinecone").strip().lower()
     RAG_MAX_RESULTS = int(os.getenv("RAG_MAX_RESULTS", "3"))
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
     PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "cyber-llm-knowledge")
-    # Local MITRE / Chroma (used when RAG_VECTOR_BACKEND=chroma); paths set after DATA_DIR
-    RAG_CHROMA_COLLECTION = os.getenv("RAG_CHROMA_COLLECTION", "mitre_attack")
-    RAG_EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-    RAG_TOP_K = int(os.getenv("RAG_TOP_K", "8"))
-    RAG_DISTANCE_THRESHOLD = float(os.getenv("RAG_DISTANCE_THRESHOLD", "0.7"))
-    RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.25"))
 
-    # Embedding configuration
-    EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
-    # openai: uses text-embedding-3-small via existing OPENAI_API_KEY
-    # ollama: uses nomic-embed-text via local Ollama instance
-    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+    # Memory recall embeddings (OpenAI; uses OPENAI_API_KEY)
     OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     EMBEDDING_ENABLED = os.getenv("EMBEDDING_ENABLED", "true").lower() == "true"
 
@@ -91,10 +54,6 @@ class Settings:
     BENCHMARKS_DIR = DATA_DIR / "benchmarks"
     CTI_FEEDS_DIR = DATA_DIR / "cti_feeds"
     KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", DATA_DIR / "knowledge"))
-    _rag_data_raw = os.getenv("RAG_DATA_PATH", "").strip()
-    _rag_chroma_raw = os.getenv("RAG_CHROMA_PATH", "").strip()
-    RAG_DATA_PATH = Path(_rag_data_raw) if _rag_data_raw else DATA_DIR / "mitre"
-    RAG_CHROMA_PATH = Path(_rag_chroma_raw) if _rag_chroma_raw else DATA_DIR / "chroma_db"
 
     # Ensure directories exist
     @classmethod
@@ -106,19 +65,10 @@ class Settings:
         cls.BENCHMARKS_DIR.mkdir(exist_ok=True)
         cls.CTI_FEEDS_DIR.mkdir(exist_ok=True)
         cls.KNOWLEDGE_DIR.mkdir(exist_ok=True)
-        cls.RAG_DATA_PATH.mkdir(parents=True, exist_ok=True)
-        cls.RAG_CHROMA_PATH.mkdir(parents=True, exist_ok=True)
     
     @classmethod
     def validate(cls):
         """Validate that required settings are present."""
-        allowed_envs = {"development", "staging", "production"}
-        if cls.ENVIRONMENT not in allowed_envs:
-            raise ValueError(
-                f"ENVIRONMENT must be one of {sorted(allowed_envs)}; got '{cls.ENVIRONMENT}'."
-            )
-        if cls.ENVIRONMENT == "production" and cls.ENABLE_SANDBOX:
-            raise ValueError("ENABLE_SANDBOX must be false when ENVIRONMENT=production.")
         if not cls.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is required. Set it in .env file.")
         if not cls.FAST_MODEL_NAME or not cls.STRONG_MODEL_NAME:
@@ -129,28 +79,6 @@ class Settings:
             raise ValueError("MAX_TOKENS must be greater than 0.")
         if not cls.OTX_API_KEY:
             raise ValueError("OTX_API_KEY is required.")
-        if cls.CTI_PROVIDER != "otx":
-            raise ValueError("CTI_PROVIDER must be 'otx'.")
-        if cls.CTI_REQUEST_TIMEOUT_SECONDS <= 0:
-            raise ValueError("CTI_REQUEST_TIMEOUT_SECONDS must be greater than 0.")
-        if cls.CTI_MAX_RETRIES < 0:
-            raise ValueError("CTI_MAX_RETRIES must be greater than or equal to 0.")
-        if cls.CTI_RETRY_BACKOFF_SECONDS < 0:
-            raise ValueError("CTI_RETRY_BACKOFF_SECONDS must be greater than or equal to 0.")
-        if cls.CTI_MAX_RESPONSE_CHARS <= 0:
-            raise ValueError("CTI_MAX_RESPONSE_CHARS must be greater than 0.")
-        if cls.CTI_TOP_RESULTS <= 0:
-            raise ValueError("CTI_TOP_RESULTS must be greater than 0.")
-        if cls.API_RATE_LIMIT_WINDOW_SECONDS <= 0:
-            raise ValueError("API_RATE_LIMIT_WINDOW_SECONDS must be greater than 0.")
-        if cls.API_RATE_LIMIT_MAX_REQUESTS <= 0:
-            raise ValueError("API_RATE_LIMIT_MAX_REQUESTS must be greater than 0.")
-        if cls.API_AUTH_ENABLED and not cls.API_AUTH_KEY:
-            raise ValueError("API_AUTH_KEY is required when API_AUTH_ENABLED=true.")
-        if cls.AGENT_CACHE_TTL_SECONDS <= 0:
-            raise ValueError("AGENT_CACHE_TTL_SECONDS must be greater than 0.")
-        if cls.AGENT_CACHE_MAX_SIZE <= 0:
-            raise ValueError("AGENT_CACHE_MAX_SIZE must be greater than 0.")
         if cls.MAX_AGENT_STEPS <= 0:
             raise ValueError("MAX_AGENT_STEPS must be greater than 0.")
         if cls.MAX_TOOL_CALLS <= 0:
@@ -159,52 +87,20 @@ class Settings:
             raise ValueError("MAX_RUNTIME_SECONDS must be greater than 0.")
         if cls.MAX_WORKER_TASKS <= 0:
             raise ValueError("MAX_WORKER_TASKS must be greater than 0.")
-        if cls.MEMORY_MAX_EPISODIC_ITEMS <= 0:
-            raise ValueError("MEMORY_MAX_EPISODIC_ITEMS must be greater than 0.")
-        if cls.MEMORY_MAX_SEMANTIC_FACTS <= 0:
-            raise ValueError("MEMORY_MAX_SEMANTIC_FACTS must be greater than 0.")
-        if cls.MEMORY_RECALL_TOP_K <= 0:
-            raise ValueError("MEMORY_RECALL_TOP_K must be greater than 0.")
-        if cls.SESSION_RETENTION_DAYS <= 0:
-            raise ValueError("SESSION_RETENTION_DAYS must be greater than 0.")
         if not cls.PROMPT_VERSION_G1.strip():
             raise ValueError("PROMPT_VERSION_G1 must not be empty.")
         if not cls.PROMPT_VERSION_G2.strip():
             raise ValueError("PROMPT_VERSION_G2 must not be empty.")
-        allowed_rag_backends = {"pinecone", "chroma"}
-        if cls.RAG_VECTOR_BACKEND not in allowed_rag_backends:
-            raise ValueError(
-                f"RAG_VECTOR_BACKEND must be one of {sorted(allowed_rag_backends)}; "
-                f"got '{cls.RAG_VECTOR_BACKEND}'."
-            )
-        if cls.ENABLE_RAG and cls.RAG_VECTOR_BACKEND == "pinecone":
+        if cls.ENABLE_RAG:
             if not cls.PINECONE_API_KEY:
-                raise ValueError("PINECONE_API_KEY is required when RAG_VECTOR_BACKEND=pinecone.")
+                raise ValueError("PINECONE_API_KEY is required when ENABLE_RAG=true.")
             if not cls.PINECONE_INDEX_NAME:
-                raise ValueError("PINECONE_INDEX_NAME is required when RAG_VECTOR_BACKEND=pinecone.")
+                raise ValueError("PINECONE_INDEX_NAME is required when ENABLE_RAG=true.")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
-        if cls.RAG_TOP_K <= 0:
-            raise ValueError("RAG_TOP_K must be greater than 0.")
-        # Embedding validation
-        allowed_embedding_providers = {"openai", "ollama"}
-        if cls.EMBEDDING_PROVIDER not in allowed_embedding_providers:
-            raise ValueError(
-                f"EMBEDDING_PROVIDER must be one of {sorted(allowed_embedding_providers)}; "
-                f"got '{cls.EMBEDDING_PROVIDER}'."
-            )
-        if cls.EMBEDDING_ENABLED and cls.EMBEDDING_PROVIDER == "openai" and not cls.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai.")
-        if cls.EMBEDDING_ENABLED and cls.EMBEDDING_PROVIDER == "ollama" and not cls.OLLAMA_BASE_URL:
-            raise ValueError("OLLAMA_BASE_URL is required when EMBEDDING_PROVIDER=ollama.")
+        if cls.EMBEDDING_ENABLED and not cls.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY is required when EMBEDDING_ENABLED=true.")
         return True
-
-    @classmethod
-    def sandbox_enabled(cls) -> bool:
-        """Allow sandbox only in non-production environments."""
-        if cls.ENVIRONMENT == "production":
-            return False
-        return cls.ENABLE_SANDBOX
 
     @classmethod
     def is_high_risk_task(cls, user_text: str) -> bool:
