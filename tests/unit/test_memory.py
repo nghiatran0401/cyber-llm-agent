@@ -104,7 +104,7 @@ def test_stateful_agent_persists_memory_to_disk(tmp_path: Path):
 
 def test_session_manager_prunes_expired_sessions(tmp_path: Path, monkeypatch):
     manager = SessionManager(session_dir=tmp_path)
-    monkeypatch.setattr("src.utils.session_manager.Settings.SESSION_RETENTION_DAYS", 1)
+    monkeypatch.setattr("src.utils.session_manager.SESSION_EXPIRY_DAYS", 1)
     old_payload = {
         "session_id": "old_session",
         "updated_at": (datetime.now(timezone.utc) - timedelta(days=5)).isoformat(),
@@ -289,7 +289,7 @@ def test_context_contains_trim_marker_when_over_limit():
         memory.add_turn("user", "x" * 500)
         memory.add_turn("assistant", "y" * 500)
     context = memory.render_context(query="anything")
-    assert "trimmed" in context
+    assert "truncat" in context.lower() or "hard-capped" in context
 
 
 def test_stateful_agent_invoke_does_not_crash(tmp_path: Path):

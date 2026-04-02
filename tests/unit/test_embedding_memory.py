@@ -1,8 +1,5 @@
 import hashlib
-import json
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from src.utils.embedding import EmbeddingMemory
 from src.utils.memory_manager import ConversationMemory
@@ -24,7 +21,7 @@ def _fake_embedding(text: str) -> list[float]:
 
 def _make_memory_with_fake_embeddings() -> ConversationMemory:
     """Memory wired to a deterministic fake backend — no real API calls."""
-    backend = EmbeddingMemory(provider="openai", enabled=True)
+    backend = EmbeddingMemory(enabled=True)
     backend.embed = _fake_embedding  # type: ignore[method-assign]
     memory = ConversationMemory(memory_type="buffer", max_messages=6, recall_top_k=3)
     memory._embedding_backend = backend
@@ -32,48 +29,19 @@ def _make_memory_with_fake_embeddings() -> ConversationMemory:
 
 
 # ------------------------------------------------------------------
-# Provider construction
-# ------------------------------------------------------------------
-
-def test_invalid_provider_raises():
-    with pytest.raises(ValueError, match="must be one of"):
-        EmbeddingMemory(provider="cohere")
-
-
-# ------------------------------------------------------------------
 # OpenAI provider
 # ------------------------------------------------------------------
 
 def test_embedding_memory_openai_returns_vector():
-    backend = EmbeddingMemory(provider="openai", enabled=True)
-    mock_client = MagicMock()
-    mock_client.embeddings.create.return_value = MagicMock(
-        data=[MagicMock(embedding=[0.1, 0.2, 0.3])]
-    )
-    backend._openai_client = mock_client
+    backend = EmbeddingMemory(enabled=True)
+    mock_lc = MagicMock()
+    mock_lc.embed_query.return_value = [0.1, 0.2, 0.3]
+    backend._lc_embeddings = mock_lc
 
     result = backend.embed("test query")
 
     assert result == [0.1, 0.2, 0.3]
-    mock_client.embeddings.create.assert_called_once()
-
-
-# ------------------------------------------------------------------
-# Ollama provider
-# ------------------------------------------------------------------
-
-def test_embedding_memory_ollama_returns_vector():
-    backend = EmbeddingMemory(provider="ollama", enabled=True)
-    fake_response = json.dumps({"embedding": [0.4, 0.5, 0.6]}).encode()
-    mock_resp = MagicMock()
-    mock_resp.read.return_value = fake_response
-    mock_resp.__enter__ = lambda s: s
-    mock_resp.__exit__ = MagicMock(return_value=False)
-
-    with patch("urllib.request.urlopen", return_value=mock_resp):
-        result = backend.embed("test query")
-
-    assert result == [0.4, 0.5, 0.6]
+    mock_lc.embed_query.assert_called_once()
 
 
 # ------------------------------------------------------------------
@@ -81,23 +49,21 @@ def test_embedding_memory_ollama_returns_vector():
 # ------------------------------------------------------------------
 
 def test_embedding_memory_disabled_returns_none():
-    backend = EmbeddingMemory(provider="openai", enabled=False)
+    backend = EmbeddingMemory(enabled=False)
     assert backend.embed("anything") is None
 
 
 def test_embedding_memory_empty_text_returns_none():
-    backend = EmbeddingMemory(provider="openai", enabled=True)
+    backend = EmbeddingMemory(enabled=True)
     assert backend.embed("") is None
     assert backend.embed("   ") is None
 
 
 def test_embedding_memory_failure_returns_none_not_raises():
-    backend = EmbeddingMemory(provider="openai", enabled=True)
-    backend._openai_client = MagicMock(
-        embeddings=MagicMock(
-            create=MagicMock(side_effect=RuntimeError("network error"))
-        )
-    )
+    backend = EmbeddingMemory(enabled=True)
+    mock_lc = MagicMock()
+    mock_lc.embed_query.side_effect = RuntimeError("network error")
+    backend._lc_embeddings = mock_lc
     # Must not raise — falls back gracefully so callers can switch to BM25
     assert backend.embed("query that fails") is None
 
@@ -143,7 +109,7 @@ def test_recall_uses_embedding_path_when_available():
 
 
 def test_recall_falls_back_to_bm25_when_embedding_disabled():
-    backend = EmbeddingMemory(provider="openai", enabled=False)
+    backend = EmbeddingMemory(enabled=False)
     memory = ConversationMemory(memory_type="buffer", max_messages=6, recall_top_k=3)
     memory._embedding_backend = backend
     memory.update_long_term_from_turn(

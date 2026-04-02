@@ -153,12 +153,8 @@ class _FakeResponse:
 
 def test_cti_fetch_otx_threat_type_success(monkeypatch):
     """OTX provider resolves threat-type search and returns envelope."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_BASE_URL", "https://otx.test/api/v1")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_TOP_RESULTS", 3)
+    monkeypatch.setattr("src.tools.cti_tool.OTX_BASE_URL", "https://otx.test/api/v1")
     with patch("src.tools.cti_tool.requests.get", return_value=_FakeResponse(200, {
         "results": [
             {"name": "RansomPulse", "tags": ["ransomware", "windows"], "indicators": [1, 2]},
@@ -176,11 +172,8 @@ def test_cti_fetch_otx_threat_type_success(monkeypatch):
 
 def test_cti_fetch_otx_ioc_success(monkeypatch):
     """OTX provider resolves IOC lookups and reports pulse linkage."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_BASE_URL", "https://otx.test/api/v1")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr("src.tools.cti_tool.OTX_BASE_URL", "https://otx.test/api/v1")
     with patch("src.tools.cti_tool.requests.get", return_value=_FakeResponse(200, {
         "type": "IPv4",
         "reputation": 5,
@@ -195,11 +188,10 @@ def test_cti_fetch_otx_ioc_success(monkeypatch):
 
 def test_cti_fetch_otx_timeout_fallback(monkeypatch):
     """Timeouts degrade safely to fallback response."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_MAX_RETRIES", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_REQUEST_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_RETRY_BACKOFF_SECONDS", 0)
     with patch("src.tools.cti_tool.requests.get", side_effect=requests.Timeout()):
         result = fetch_cti_intelligence("phishing")
     envelope = _parse_envelope(result)
@@ -210,11 +202,10 @@ def test_cti_fetch_otx_timeout_fallback(monkeypatch):
 
 def test_cti_fetch_otx_http_429_fallback(monkeypatch):
     """Rate-limit responses use deterministic fallback text."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_MAX_RETRIES", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_REQUEST_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_RETRY_BACKOFF_SECONDS", 0)
     with patch("src.tools.cti_tool.requests.get", return_value=_FakeResponse(429, {})):
         result = fetch_cti_intelligence("ddos")
     envelope = _parse_envelope(result)
@@ -224,7 +215,6 @@ def test_cti_fetch_otx_http_429_fallback(monkeypatch):
 
 def test_cti_fetch_invalid_ioc_input(monkeypatch):
     """Malformed IOC input yields a deterministic error envelope."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
     result = fetch_cti_intelligence("ioc:ip:")
     envelope = _parse_envelope(result)
@@ -234,11 +224,10 @@ def test_cti_fetch_invalid_ioc_input(monkeypatch):
 
 def test_cti_fetch_output_sanitized_and_truncated(monkeypatch):
     """External text is sanitized and bounded by CTI_MAX_RESPONSE_CHARS."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RESPONSE_CHARS", 160)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_MAX_RETRIES", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_MAX_RESPONSE_CHARS", 160)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_RETRY_BACKOFF_SECONDS", 0)
     with patch("src.tools.cti_tool.requests.get", return_value=_FakeResponse(200, {
         "results": [
             {"name": "Bad\x00PulseName", "tags": ["x"], "indicators": [1]},
@@ -256,12 +245,10 @@ def test_cti_fetch_output_sanitized_and_truncated(monkeypatch):
 
 def test_cti_fetch_http_500_retries_then_fallback(monkeypatch):
     """HTTP 500 triggers retries then fallback."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_BASE_URL", "https://otx.test/api/v1")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 2)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr("src.tools.cti_tool.OTX_BASE_URL", "https://otx.test/api/v1")
+    monkeypatch.setattr("src.tools.cti_tool.CTI_REQUEST_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_RETRY_BACKOFF_SECONDS", 0)
     mock_get = MagicMock(return_value=_FakeResponse(500, {}))
     with patch("src.tools.cti_tool.requests.get", mock_get):
         result = fetch_cti_intelligence("ransomware")
@@ -273,12 +260,11 @@ def test_cti_fetch_http_500_retries_then_fallback(monkeypatch):
 
 def test_cti_fetch_json_parse_error(monkeypatch):
     """Malformed JSON response triggers fallback."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "test-key")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_BASE_URL", "https://otx.test/api/v1")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr("src.tools.cti_tool.OTX_BASE_URL", "https://otx.test/api/v1")
+    monkeypatch.setattr("src.tools.cti_tool.CTI_MAX_RETRIES", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_REQUEST_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_RETRY_BACKOFF_SECONDS", 0)
     bad_response = MagicMock()
     bad_response.status_code = 200
     bad_response.json.side_effect = ValueError("bad json")
@@ -299,11 +285,10 @@ def test_cti_fetch_empty_query():
 
 def test_cti_fetch_missing_api_key(monkeypatch):
     """Missing API key still uses fallback gracefully."""
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_PROVIDER", "otx")
     monkeypatch.setattr("src.tools.cti_tool.Settings.OTX_API_KEY", "")
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_MAX_RETRIES", 0)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_REQUEST_TIMEOUT_SECONDS", 1)
-    monkeypatch.setattr("src.tools.cti_tool.Settings.CTI_RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_MAX_RETRIES", 0)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_REQUEST_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr("src.tools.cti_tool.CTI_RETRY_BACKOFF_SECONDS", 0)
     with patch("src.tools.cti_tool.requests.get", side_effect=requests.ConnectionError("refused")):
         result = fetch_cti_intelligence("phishing")
     envelope = _parse_envelope(result)

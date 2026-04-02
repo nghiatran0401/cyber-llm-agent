@@ -32,9 +32,9 @@ def test_rag_ingest_and_retrieve(monkeypatch, tmp_path: Path):
 
     with patch("src.tools.rag_tools.DirectoryLoader") as mock_loader_cls, \
          patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
-         patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
+         patch("src.tools.rag_tools.create_openai_embeddings") as mock_embed_factory:
         mock_loader_cls.return_value.load.return_value = [mock_doc]
-        mock_embed_cls.return_value = MagicMock()
+        mock_embed_factory.return_value = MagicMock()
         mock_vs_cls.from_documents.return_value = MagicMock()
         ingest_result = ingest_knowledge_base()
 
@@ -45,8 +45,8 @@ def test_rag_ingest_and_retrieve(monkeypatch, tmp_path: Path):
     mock_doc.metadata = {"source": str(knowledge_dir / "note.md")}
 
     with patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
-         patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
-        mock_embed_cls.return_value = MagicMock()
+         patch("src.tools.rag_tools.create_openai_embeddings") as mock_embed_factory:
+        mock_embed_factory.return_value = MagicMock()
         mock_retriever = MagicMock()
         mock_retriever.invoke.return_value = [mock_doc]
         mock_vs_cls.return_value.as_retriever.return_value = mock_retriever
@@ -66,8 +66,8 @@ def test_rag_retrieve_empty_index(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("src.tools.rag_tools.Settings.RAG_MAX_RESULTS", 2)
 
     with patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
-         patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
-        mock_embed_cls.return_value = MagicMock()
+         patch("src.tools.rag_tools.create_openai_embeddings") as mock_embed_factory:
+        mock_embed_factory.return_value = MagicMock()
         mock_retriever = MagicMock()
         mock_retriever.invoke.return_value = []
         mock_vs_cls.return_value.as_retriever.return_value = mock_retriever
@@ -79,6 +79,7 @@ def test_rag_retrieve_empty_index(monkeypatch, tmp_path: Path):
 def test_rag_citation_format(monkeypatch, tmp_path: Path):
     knowledge_dir = tmp_path / "knowledge"
     knowledge_dir.mkdir(parents=True, exist_ok=True)
+    (knowledge_dir / "ops.md").write_text("Ops runbook", encoding="utf-8")
 
     monkeypatch.setattr("src.tools.rag_tools.Settings.ENABLE_RAG", True)
     monkeypatch.setattr("src.tools.rag_tools.Settings.KNOWLEDGE_DIR", knowledge_dir)
@@ -93,8 +94,8 @@ def test_rag_citation_format(monkeypatch, tmp_path: Path):
     mock_doc.metadata = {"source": str(knowledge_dir / "ops.md")}
 
     with patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
-         patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
-        mock_embed_cls.return_value = MagicMock()
+         patch("src.tools.rag_tools.create_openai_embeddings") as mock_embed_factory:
+        mock_embed_factory.return_value = MagicMock()
         mock_retriever = MagicMock()
         mock_retriever.invoke.return_value = [mock_doc]
         mock_vs_cls.return_value.as_retriever.return_value = mock_retriever
@@ -103,3 +104,4 @@ def test_rag_citation_format(monkeypatch, tmp_path: Path):
     assert "Citations:" in retrieved
     citation_lines = [line for line in retrieved.splitlines() if line.startswith("- ") and "ops.md" in line]
     assert citation_lines
+    assert any("#chunk-" in line for line in citation_lines)
