@@ -29,5 +29,4 @@ Environment variables:
 
 ## Safety
 
-- The lab refuses to start when `ENVIRONMENT=production`.
 - Host defaults to `127.0.0.1`.

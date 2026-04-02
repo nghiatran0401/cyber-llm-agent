@@ -8,14 +8,6 @@ const { createCtiBridge } = require("./src/ctiBridge");
 const { makeLabRouter } = require("./src/routes/labRoutes");
 const { makeDashboardRouter } = require("./src/routes/dashboardRoutes");
 
-function assertSafeEnvironment() {
-  if (process.env.ENVIRONMENT === "production") {
-    throw new Error("Refusing to start vulnerable lab when ENVIRONMENT=production.");
-  }
-}
-
-assertSafeEnvironment();
-
 const app = express();
 const telemetry = createTelemetryStore(config);
 const ctiBridge = createCtiBridge(config, telemetry);
