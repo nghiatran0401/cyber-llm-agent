@@ -118,5 +118,5 @@ def test_offline_agent_and_evaluator_end_to_end():
 
 
 def test_real_llm_agent_rejects_unsupported_provider():
-    with pytest.raises(ValueError, match="provider=ollama is not implemented"):
-        RealLLMBenchmarkAgent(agent_mode="g1", provider="ollama")
+    with pytest.raises(ValueError, match="Only provider=openai"):
+        RealLLMBenchmarkAgent(agent_mode="g1", provider="anthropic")

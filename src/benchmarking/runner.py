@@ -30,9 +30,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--provider",
-        choices=("openai", "ollama"),
+        choices=("openai",),
         default="openai",
-        help="LLM provider for real-llm mode. Ollama reserved for future extension.",
+        help="LLM provider for real-llm mode (OpenAI only).",
     )
     parser.add_argument(
         "--dataset",

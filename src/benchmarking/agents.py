@@ -53,7 +53,7 @@ class RealLLMBenchmarkAgent:
     def __init__(self, agent_mode: str, provider: str):
         if provider != "openai":
             raise ValueError(
-                "provider=ollama is not implemented yet. Use provider=openai for now."
+                f"Only provider=openai is supported for benchmarks; got {provider!r}."
             )
         self.agent_mode = agent_mode
 
