@@ -31,7 +31,7 @@ Main files in this scope:
 - `apps/web/components/TracePanel.tsx`
 - `apps/web/lib/monitor-contract.ts`
 - `tests/unit/test_react_runtime.py`
-- `tests/unit/test_service_g1_phase2.py`
+- `tests/unit/test_g1_service.py`
 - `tests/unit/test_multiagent.py`
 - `tests/unit/test_api_endpoints.py`
 
@@ -92,7 +92,7 @@ Main files involved:
 - `services/api/schemas.py`
 - `src/agents/g2/multiagent_system.py`
 - `tests/unit/test_react_runtime.py`
-- `tests/unit/test_service_g1_phase2.py`
+- `tests/unit/test_g1_service.py`
 - `tests/unit/test_multiagent.py`
 - `Makefile`
 - `docs/trace-contract.md`
@@ -132,7 +132,7 @@ Main files involved:
 - `src/agents/g2/runner.py`
 - `src/agents/g2/state.py`
 - `tests/unit/test_react_runtime.py`
-- `tests/unit/test_service_g1_phase2.py`
+- `tests/unit/test_g1_service.py`
 - `tests/unit/test_multiagent.py`
 - `tests/unit/test_api_endpoints.py`
 
@@ -268,8 +268,8 @@ Still open:
 
 Verified:
 1. `python -m py_compile` passed for the currently modified backend and test files.
-2. `py -m pytest -q tests/unit/test_react_runtime.py tests/unit/test_service_g1_phase2.py tests/unit/test_multiagent.py` passed (`18 passed`).
-3. `py -m pytest -q tests/unit/test_react_runtime.py tests/unit/test_service_g1_phase2.py tests/unit/test_multiagent.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py tests/unit/test_tools.py` passed (`50 passed`).
+2. `py -m pytest -q tests/unit/test_react_runtime.py tests/unit/test_g1_service.py tests/unit/test_multiagent.py` passed (`18 passed`).
+3. `py -m pytest -q tests/unit/test_react_runtime.py tests/unit/test_g1_service.py tests/unit/test_multiagent.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py tests/unit/test_tools.py` passed (`50 passed`).
 4. Live local API validation passed for:
    - `GET /api/v1/health`
    - `POST /api/v1/analyze/g1` on prompt-injection input

@@ -4,7 +4,7 @@ This document lists the active policy/safety gates and what each one returns.
 
 Only the gates below are kept.
 
-## Must Keep (Production)
+## Active gates
 
 ### 1) Input Validation
 - **Where:** `services/api/guardrails.py` (`validate_input`, `validate_event_payload`), called from `g1_service` / `g2_service` / `sandbox_service`
@@ -16,16 +16,7 @@ Only the gates below are kept.
   - raises `ValueError`
   - API returns `HTTP 400` with standard error envelope
 
-### 2) API Auth / Rate Limit
-- **Where:** `services/api/main.py` middleware (`request_guardrails`)
-- **Checks:**
-  - API key when `API_AUTH_ENABLED=true`
-  - request burst/window when `API_RATE_LIMIT_ENABLED=true`
-- **Return behavior:**
-  - invalid/missing API key: `HTTP 401`, `error.code=HTTP_401`
-  - rate limited: `HTTP 429`, `error.code=HTTP_429`, includes `Retry-After`
-
-### 3) Output Policy Guard
+### 2) Output Policy Guard
 - **Where:** `services/api/guardrails.py` (`apply_output_policy_guard`), invoked from `g1_service` / `g2_service`
 - **Checks:**
   - denylist markers in generated output
@@ -33,7 +24,7 @@ Only the gates below are kept.
   - replaces output with safe blocked message
   - `stop_reason=needs_human`
 
-### 4) High-Risk Evidence / Human Gating
+### 3) High-Risk Evidence / Human Gating
 - **Where:** `services/api/guardrails.py` (`apply_action_gating`), invoked from `g1_service` / `g2_service`
 - **Checks:**
   - if high-risk task, requires minimum evidence markers
@@ -45,7 +36,7 @@ Only the gates below are kept.
   - otherwise:
     - `stop_reason=completed`
 
-### 5) Runtime Budget Limits
+### 4) Runtime Budget Limits
 - **Where:**
   - `services/api/g1_service.py` (`_run_single_agent_loop`)
   - `src/agents/g2/runner.py` (`run_multiagent_with_trace`)
@@ -56,16 +47,10 @@ Only the gates below are kept.
   - budget hit: `stop_reason=budget_exceeded`
   - otherwise normal completion path
 
-### 6) Sandbox Disabled In Production
-- **Where:** `services/api/main.py` (`_require_sandbox_enabled`)
-- **Checks:**
-  - sandbox endpoints blocked when environment disallows sandbox
-- **Return behavior:**
-  - `HTTP 403`, `error.code=HTTP_403`
-
 ## Strongly Recommended
 
-### 7) Prompt-Injection Gate
+### 5) Prompt-Injection Gate
+- **Always on** — there is no environment variable to disable it.
 - **Where:** `services/api/guardrails.py` (`detect_prompt_injection`), used from `g1_service` / `g2_service`
 - **Checks:**
   - heuristic marker match on input text
@@ -74,7 +59,7 @@ Only the gates below are kept.
   - safe warning message returned
   - `stop_reason=needs_human`
 
-### 8) Critic Gate (Quality Consistency)
+### 6) Critic Gate (Quality Consistency)
 - **Where:** `services/api/response_parser.py` (`critic_validate_structured_output`), used from `g1_service`
 - **Checks:**
   - structured output consistency

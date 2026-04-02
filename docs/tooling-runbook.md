@@ -29,7 +29,7 @@ Operational guide for debugging and maintaining the agent tool layer.
 | Fallback report returned | OTX API timeout/error | Check OTX API status, verify `OTX_API_KEY` |
 | `error_type: empty_query` | Empty input to tool | Agent bug — check prompt template |
 | `error_type: invalid_ioc_format` | Wrong IOC syntax | Format: `ioc:<type>:<value>` where type ∈ {ip, domain, hostname, url, hash} |
-| `meta.retries > 0` in success | Transient OTX errors | Monitor; increase `CTI_MAX_RETRIES` if frequent |
+| `meta.retries > 0` in success | Transient OTX errors | Monitor; tune retry limits in `src/tools/cti_tool.py` if frequent |
 | All requests returning fallback | API key invalid/expired | Rotate `OTX_API_KEY` in `.env` |
 
 ### OWASPSandbox
@@ -67,15 +67,9 @@ All tool outputs are JSON strings with this shape:
 |---------|---------|---------|
 | `LOGS_DIR` | `data/logs` | LogParser |
 | `ALLOWED_LOG_EXTENSIONS` | `.log,.txt,.json,.jsonl` | LogParser |
-| `CTI_PROVIDER` | `otx` | CTIFetch |
 | `OTX_API_KEY` | (required) | CTIFetch |
-| `OTX_BASE_URL` | `https://otx.alienvault.com/api/v1` | CTIFetch |
-| `CTI_REQUEST_TIMEOUT_SECONDS` | `10` | CTIFetch |
-| `CTI_MAX_RETRIES` | `2` | CTIFetch |
-| `CTI_RETRY_BACKOFF_SECONDS` | `0.5` | CTIFetch |
-| `CTI_MAX_RESPONSE_CHARS` | `3000` | CTIFetch |
-| `CTI_TOP_RESULTS` | `5` | CTIFetch |
-| `ENABLE_SANDBOX` | `false` | OWASPSandbox |
+
+CTIFetch OTX base URL, timeout, retries, response cap, and pulse limit are fixed in `src/tools/cti_tool.py`.
 
 ## Adding a New Tool
 

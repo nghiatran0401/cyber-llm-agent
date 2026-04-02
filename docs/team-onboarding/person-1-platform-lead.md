@@ -30,7 +30,7 @@ Main reality today:
 ## 3) What Is Already Implemented
 
 - FastAPI routes for health, readiness, analyze/chat, streaming, sandbox, metrics.
-- Basic auth/rate-limit middleware hooks.
+- FastAPI middleware (CORS, error envelope).
 - Unified API response schemas.
 - CI workflow running lint/test/benchmark/web tests.
 - Makefile with standard dev commands.

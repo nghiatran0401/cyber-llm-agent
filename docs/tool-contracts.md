@@ -61,7 +61,7 @@ Every tool function returns `json.dumps(ToolResult)`. This is the standardized s
 **Function**: `fetch_cti_intelligence(threat_type: str) -> str`
 **Source**: `src/tools/cti_tool.py`
 
-**Success**: `data` is a formatted report string from `_format_cti_report()`. Contains Source, Query, Summary, Top Observations, Recommended Actions, Confidence.
+**Success**: `data` is a short multi-line report: `Source` (AlienVault OTX or CTI Fallback), `Query`, `Summary`, plus pulse lines or IOC fields (`Associated pulses`, etc.). Text is control-stripped and length-capped in `cti_tool.py`.
 
 **Fallback**: When OTX is unavailable, returns `ok: true` with fallback report in `data` and `meta.retries` set to max. The fallback content is deterministic and usable by the agent.
 
@@ -71,7 +71,6 @@ Every tool function returns `json.dumps(ToolResult)`. This is the standardized s
 |------------|---------|
 | `empty_query` | Empty threat_type input |
 | `invalid_ioc_format` | Malformed `ioc:` prefix |
-| `unsupported_provider` | CTI_PROVIDER != "otx" |
 | `timeout` | Request timeout (handled via fallback) |
 | `rate_limited` | HTTP 429 (handled via fallback) |
 

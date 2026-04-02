@@ -81,7 +81,7 @@ These metrics are useful because they convert ReAct quality into observable coun
 Run:
 
 ```powershell
-py -m pytest -q tests/unit/test_react_runtime.py tests/unit/test_service_g1_phase2.py tests/unit/test_multiagent.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py
+py -m pytest -q tests/unit/test_react_runtime.py tests/unit/test_g1_service.py tests/unit/test_multiagent.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py
 ```
 
 These tests cover:

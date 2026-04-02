@@ -21,6 +21,5 @@ Use private contact channels for initial disclosure. If no private channel is av
 
 - No secrets committed to source control
 - `.env` remains local only
-- Sandbox mode is disabled in production by default
-- Input size and file-type validation are enabled in UI entry points
+- Input size and file-type validation are enabled on API entry points
 - CI runs tests on every push and pull request

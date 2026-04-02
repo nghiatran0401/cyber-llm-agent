@@ -7,10 +7,10 @@ The recommended way to run the full stack (API + web + OWASP lab) is [Docker Com
 | Service | Image context | Port | Description |
 |---------|---------------|------|-------------|
 | `api` | Root `Dockerfile` | 8000 | FastAPI (`services.api.main:app`) |
-| `web` | `apps/web` | 3000 | Next.js production server |
+| `web` | `apps/web` | 3000 | Next.js (`next start` after build) |
 | `lab` | `apps/vuln-lab` | 3100 | Intentionally vulnerable training lab + dashboard |
 
-The API container mounts host `./data/sessions` and `./data/logs` so sessions and logs survive restarts. The lab container mounts `./data/logs` to `/lab-data` for JSONL telemetry (the lab image does not include the full monorepo, so paths are set via `LAB_*_FILE` in `docker-compose.yml`).
+The API container mounts host `./data/sessions`, `./data/logs`, and `./data/knowledge` so sessions, logs, and the RAG knowledge corpus stay in sync with the repo. The lab container mounts `./data/logs` to `/lab-data` for JSONL telemetry (the lab image does not include the full monorepo, so paths are set via `LAB_*_FILE` in `docker-compose.yml`).
 
 ## Prerequisites
 
@@ -68,4 +68,4 @@ This maps port 8000 and passes `--env-file .env`.
 
 ## Make targets (optional)
 
-See the root `Makefile` for `docker-build`, `docker-run`, and local dev targets (`run-api`, `run-web`, `run-lab`).
+See the root `Makefile` for `docker-build`, `docker-run`, `docker-up`, `docker-down`, `docker-reset`, `docker-logs`, and local dev targets (`run-api`, `run-web`, `run-lab`).

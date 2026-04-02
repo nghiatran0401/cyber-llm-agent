@@ -20,12 +20,9 @@
 | `test_health_endpoint_returns_standard_envelope` | PASS |
 | `test_g1_endpoint_uses_service_layer` | PASS |
 | `test_sandbox_scenarios_endpoint` | PASS |
-| `test_sandbox_endpoint_returns_403_when_disabled` | PASS |
 | `test_workspace_stream_emits_trace_and_final` | PASS |
 | `test_metrics_endpoint_returns_aggregates` | PASS |
 | `test_metrics_dashboard_endpoint_returns_summary` | PASS |
-| `test_auth_middleware_rejects_missing_key` | PASS |
-| `test_rate_limit_middleware_returns_429` | PASS |
 
 ### `tests/unit/test_memory.py` — Owner: Person 4 (Memory)
 
@@ -130,7 +127,7 @@
 | `test_rag_retrieve_empty_index` | RESTORED |
 | `test_rag_citation_format` | RESTORED |
 
-### `tests/unit/test_service_g1_phase2.py` — Owner: Person 2 (ReAct)
+### `tests/unit/test_g1_service.py` — Owner: Person 2 (ReAct)
 
 **Was:** Excluded because service layer refactored from `service.py` to `g1_service.py`.
 **Fix applied:** Updated imports and monkeypatch targets to `services.api.g1_service`.

@@ -1,6 +1,6 @@
-# Release Quality Gate
+# Quality gate (optional)
 
-> Defines what "shippable" means for this sprint. Person 1 (Platform Lead) runs this checklist before any release tag.
+> Manual checklist when you want extra confidence beyond `make ci`. This repo is oriented toward local development, not production rollout.
 
 ## 1. Automated Gates (all must pass)
 

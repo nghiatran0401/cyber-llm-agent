@@ -8,8 +8,8 @@
 |-----------|-----------|----------|--------------|
 | Output format | ToolResult JSON envelope | ToolResult JSON envelope | Plain dict (not a LangChain tool) |
 | Error handling | 5 typed error categories | 3 error types + fallback | ValueError + OSError with logging |
-| Retry logic | None (local I/O) | Up to `CTI_MAX_RETRIES` with exponential backoff | N/A |
-| Timeout handling | None (local I/O) | `CTI_REQUEST_TIMEOUT_SECONDS` | N/A |
+| Retry logic | None (local I/O) | Up to 2 retries with backoff (see `src/tools/cti_tool.py`) | N/A |
+| Timeout handling | None (local I/O) | 10s per request (see `src/tools/cti_tool.py`) | N/A |
 | Input validation | Path traversal + extension check | IOC format regex + empty check | Scenario key validation |
 | Output sanitization | None needed (structured JSON) | Control char stripping + truncation | None needed |
 | Test count | 11 tests (7 happy + 4 unhappy) | 10 tests (6 happy + 4 unhappy) | 7 tests (4 happy + 3 unhappy) |

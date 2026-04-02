@@ -55,24 +55,21 @@ The project does **not** currently use a lower-level trace format such as:
 - `content`
 - `ts`
 
-Instead, the practical production contract in this repository is the human-readable `StepTrace` model above.
+Instead, the practical runtime contract in this repository is the human-readable `StepTrace` model above.
 
 ## Canonical execution sequences
 
 These sequences are the current golden traces validated by unit tests.
 
-### G1 canonical sequence
+### G1 canonical sequence (user-facing Technical Trace)
 
-1. `InputPreparation`
-2. `RoutingPolicy`
-3. `PromptVersion`
-4. `SafetyGuard`
-5. `SingleAgentExecution`
-6. `RunControl`
-7. `StructuredOutput`
-8. `CriticReview`
-9. `PolicyGuard`
-10. `RubricEvaluation`
+The API returns a short trace intended for the workspace UI. Deeper steps (full templates, rubric) stay in server logic and response `meta` (for example `rubric_score`), not in `trace`.
+
+1. `SafetyCheck` — injection heuristic; on block, trace stops here (only this step).
+2. `ModelRouting` — which OpenAI model was selected.
+3. `Analysis` — agent run; `prompt_preview` names template files only (no full prompt bodies).
+4. `OutputReview` — critic + policy outcome in plain language.
+5. `ExecutionSummary` — budgets, tool counters, stop reason (same `k=v` shape the metrics helper understands as `ExecutionSummary` or legacy `RunControl`).
 
 ### G2 canonical sequence
 
