@@ -1,25 +1,24 @@
 """Structured logging for agent operations."""
-import logging
 import json
+import logging
 from datetime import datetime
-from pathlib import Path
-from src.config.settings import Settings
+
+_DEFAULT_LOG_LEVEL = "INFO"
 
 
-def setup_logger(name: str, level: str = None) -> logging.Logger:
+def setup_logger(name: str, level: str | None = None) -> logging.Logger:
     """Setup structured logger.
-    
+
     Args:
         name: Logger name (typically __name__)
-        level: Logging level (defaults to Settings.LOG_LEVEL)
-    
+        level: Logging level name (defaults to INFO)
+
     Returns:
         Configured logger instance
     """
     logger = logging.getLogger(name)
-    
-    # Use provided level or default from settings
-    log_level = level or Settings.LOG_LEVEL
+
+    log_level = level or _DEFAULT_LOG_LEVEL
     logger.setLevel(getattr(logging, log_level.upper()))
     
     # Avoid adding handlers multiple times
@@ -37,17 +36,7 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
     )
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    
-    # File handler (optional, for production)
-    if Settings.ENVIRONMENT == "production":
-        log_file = Settings.DATA_DIR / "logs" / f"{name}.log"
-        log_file.parent.mkdir(exist_ok=True)
-        
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-    
+
     return logger
 
 

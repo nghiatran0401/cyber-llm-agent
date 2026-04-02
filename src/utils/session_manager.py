@@ -9,6 +9,9 @@ from typing import Any, Dict, Optional
 
 from src.config.settings import Settings
 
+# Session JSON files older than this (by `updated_at`) are deleted on prune.
+SESSION_EXPIRY_DAYS = 30
+
 
 class SessionManager:
     """Load and save conversational sessions as JSON."""
@@ -71,8 +74,8 @@ class SessionManager:
             return {}
 
     def prune_expired_sessions(self):
-        """Delete expired session files based on retention policy."""
-        retention_seconds = max(1, Settings.SESSION_RETENTION_DAYS) * 24 * 60 * 60
+        """Delete session files whose ``updated_at`` is older than ``SESSION_EXPIRY_DAYS``."""
+        retention_seconds = max(1, SESSION_EXPIRY_DAYS) * 24 * 60 * 60
         now = datetime.now(timezone.utc)
         for session_file in self.session_dir.glob("*.json"):
             if session_file.name.endswith(".corrupt.json"):

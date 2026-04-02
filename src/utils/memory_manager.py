@@ -1,3 +1,5 @@
+"""Conversation memory manager for short-term and long-term memory."""
+
 from __future__ import annotations
 
 import math
@@ -31,7 +33,7 @@ class ConversationMemory:
     max_summary_chars: int = 1200
     max_episodic_items: int = 30
     max_semantic_facts: int = 80
-    max_context_chars: int = 4000
+    max_context_chars: int = 10_000
     recall_top_k: int = 3
     messages: List[Dict[str, str]] = field(default_factory=list)
     running_summary: str = ""
@@ -139,7 +141,13 @@ class ConversationMemory:
         }
 
     def render_context(self, query: str = "") -> str:
-        """Render conversation context for prompt injection, capped at max_context_chars."""
+        """Render conversation context for prompt injection, capped at max_context_chars.
+
+        When over budget, **drop oldest chat turns first** so the latest user/assistant
+        exchange stays intact. The previous implementation took the head+tail of the whole
+        blob, which often removed the middle of a long triage answer and broke follow-ups
+        (\"what's VPN?\" with no VPN in context).
+        """
         if (
             not self.messages
             and not self.running_summary
@@ -148,27 +156,66 @@ class ConversationMemory:
         ):
             return "No prior conversation context."
 
-        chunks: List[str] = []
-        if self.running_summary:
-            chunks.append(f"Conversation summary so far:\n{self.running_summary}")
-        if self.messages:
-            rendered = "\n".join(
-                f"{msg['role'].upper()}: {msg['content']}" for msg in self.messages
-            )
-            chunks.append(f"Recent conversation:\n{rendered}")
         recalled = self.retrieve_relevant_memories(query)
+        recall_chunk = ""
         if recalled:
-            chunks.append(
-                "Relevant long-term memory:\n" + "\n".join(f"- {item}" for item in recalled)
+            recall_chunk = "Relevant long-term memory:\n" + "\n".join(
+                f"- {item}" for item in recalled
             )
 
-        full_context = "\n\n".join(chunks)
+        summary_chunk = ""
+        if self.running_summary:
+            summary_chunk = f"Conversation summary so far:\n{self.running_summary}"
+
+        sep = "\n\n"
+        recent_header = "Recent conversation:\n"
+
+        def _build_full_context(recent_body: str) -> str:
+            blocks: List[str] = []
+            if summary_chunk:
+                blocks.append(summary_chunk)
+            if recent_body:
+                blocks.append(recent_header + recent_body)
+            if recall_chunk:
+                blocks.append(recall_chunk)
+            return sep.join(blocks)
+
+        recent_body = ""
+        if self.messages:
+            msgs = list(self.messages)
+            while msgs:
+                body = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in msgs)
+                if len(_build_full_context(body)) <= self.max_context_chars:
+                    recent_body = body
+                    break
+                if len(msgs) >= 2:
+                    if len(msgs) == 2:
+                        # Dropping both would leave no recent context; keep latest turn.
+                        msgs = [msgs[-1]]
+                    else:
+                        msgs = msgs[2:]
+                    continue
+                role = msgs[0]["role"].upper()
+                raw = msgs[0]["content"]
+                head = f"{role}: "
+                lo, hi = 0, len(raw)
+                best = head + raw[: min(len(raw), 400)] + "\n...[truncated]..."
+                while lo <= hi:
+                    mid = (lo + hi) // 2
+                    suffix = "\n...[truncated]..." if mid < len(raw) else ""
+                    piece = head + raw[:mid] + suffix
+                    if len(_build_full_context(piece)) <= self.max_context_chars:
+                        best = piece
+                        lo = mid + 1
+                    else:
+                        hi = mid - 1
+                recent_body = best
+                break
+
+        full_context = _build_full_context(recent_body)
         if len(full_context) > self.max_context_chars:
-            half = self.max_context_chars // 2
             full_context = (
-                full_context[:half]
-                + "\n...[context trimmed for length]...\n"
-                + full_context[-half:]
+                full_context[: self.max_context_chars - 40].rstrip() + "\n...[context hard-capped]..."
             )
         return full_context
 
