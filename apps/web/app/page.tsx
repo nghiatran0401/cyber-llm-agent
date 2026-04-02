@@ -62,10 +62,15 @@ export default function WorkspacePage() {
     [modelMode, trace, currentStep, runStatus],
   );
 
+  function clearLogAttachment() {
+    setLogPayload("");
+    setLogFileName("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function onUploadLogs(file: File | null) {
     if (!file) {
-      setLogPayload("");
-      setLogFileName("");
+      clearLogAttachment();
       return;
     }
 
@@ -110,6 +115,10 @@ export default function WorkspacePage() {
       },
     ]);
     setDraft("");
+    // One-shot attachment: otherwise the same file is re-appended on every later send in this tab.
+    setLogPayload("");
+    setLogFileName("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
 
     try {
       let finalText = "";
@@ -179,22 +188,44 @@ export default function WorkspacePage() {
   return (
     <main className="grid h-[calc(100dvh-120px)] gap-4 overflow-hidden lg:grid-cols-[minmax(0,1fr)_520px]">
       <section className="panel flex h-full flex-col overflow-hidden">
-        <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
-          <div>
+        <div className="mb-3 flex flex-wrap items-start gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">CyberAI Assistant</p>
-            <p className="text-xs text-slate-600 dark:text-slate-400">Use chat + logs to produce incident-ready analysis.</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Logs attach for the next send only. Use New chat between unrelated demos so G1 memory does not mix scenarios.
+            </p>
           </div>
-          <label className="ml-auto text-xs text-slate-600 dark:text-slate-400">
-            Mode
-            <select
-              className="ml-2 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 shadow-sm focus:border-cyan-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              value={modelMode}
-              onChange={(event) => setModelMode(event.target.value as AgentMode)}
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <button
+              type="button"
+              className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-cyan-400"
+              onClick={() => {
+                workspaceSessionIdRef.current = newWorkspaceSessionId();
+                setMessages([]);
+                setTrace([]);
+                setLastResultText("");
+                setDraft("");
+                clearLogAttachment();
+                setError("");
+                setRunStatus("idle");
+                setCurrentStep("");
+                setLiveStatus("Waiting for request...");
+              }}
             >
-              <option value="g1">G1 (Single Agent)</option>
-              <option value="g2">G2 (Multiagent)</option>
-            </select>
-          </label>
+              New chat
+            </button>
+            <label className="text-xs text-slate-600 dark:text-slate-400">
+              Mode
+              <select
+                className="ml-2 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 shadow-sm focus:border-cyan-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                value={modelMode}
+                onChange={(event) => setModelMode(event.target.value as AgentMode)}
+              >
+                <option value="g1">G1 (Single Agent)</option>
+                <option value="g2">G2 (Multiagent)</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
@@ -247,8 +278,17 @@ export default function WorkspacePage() {
               onChange={(event) => void onUploadLogs(event.target.files?.[0] ?? null)}
             />
             {logFileName ? (
-              <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 py-1 pl-3 pr-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                 {logFileName}
+                <button
+                  type="button"
+                  className="rounded-full px-2 py-0.5 text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                  onClick={clearLogAttachment}
+                  title="Remove attached logs"
+                  aria-label="Remove attached logs"
+                >
+                  ×
+                </button>
               </span>
             ) : null}
           </div>

@@ -14,17 +14,13 @@ function asTrace(step: string): StepTrace {
 }
 
 describe("deriveMonitorState", () => {
-  it("counts required G1 steps without optional SafetyGuard", () => {
+  it("counts required G1 steps (matches API StepTrace keys)", () => {
     const trace = [
-      asTrace("InputPreparation"),
-      asTrace("RoutingPolicy"),
-      asTrace("PromptVersion"),
-      asTrace("SingleAgentExecution"),
-      asTrace("RunControl"),
-      asTrace("StructuredOutput"),
-      asTrace("CriticReview"),
-      asTrace("PolicyGuard"),
-      asTrace("RubricEvaluation"),
+      asTrace("SafetyCheck"),
+      asTrace("ModelRouting"),
+      asTrace("Analysis"),
+      asTrace("OutputReview"),
+      asTrace("ExecutionSummary"),
     ];
 
     const state = deriveMonitorState({
@@ -40,7 +36,7 @@ describe("deriveMonitorState", () => {
   });
 
   it("marks incomplete phases as skipped on completed run", () => {
-    const trace = [asTrace("InputPreparation"), asTrace("RoutingPolicy")];
+    const trace = [asTrace("SafetyCheck")];
     const state = deriveMonitorState({
       mode: "g1",
       trace,
