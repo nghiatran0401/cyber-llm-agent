@@ -1,7 +1,5 @@
 """Log Parser Tool: reads log files and extracts security-relevant entries via Grok."""
 
-import json
-import re
 from pathlib import Path
 from time import perf_counter
 
@@ -48,14 +46,7 @@ def _resolve_safe_log_path(log_file_path: str) -> Path:
 
 
 def parse_system_log(log_file_path: str) -> str:
-    """Parse system logs and extract security-relevant entries using Grok.
-
-    Args:
-        log_file_path: Path to the log file (relative to data/logs or absolute).
-
-    Returns:
-        JSON string containing a ToolResult envelope with structured log entries.
-    """
+    """Parse system logs and extract security-relevant entries using Grok."""
     start = perf_counter()
     try:
         log_path = _resolve_safe_log_path(log_file_path)
@@ -156,6 +147,6 @@ log_parser = Tool(
     description=(
         "Parses system log files and extracts security-relevant entries using Grok patterns. "
         "Input should be a file path under data/logs/ (relative or absolute). "
-        "Returns structured JSON with fields like timestamp, level, message, and raw line."
+        "Returns a ToolResult envelope with structured log entries."
     ),
 )

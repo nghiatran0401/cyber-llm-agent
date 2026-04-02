@@ -1,29 +1,20 @@
-"""RAG helpers: Pinecone (default) or optional local Chroma + MITRE markdown.
-
-``RAG_VECTOR_BACKEND`` selects the stack:
-- ``pinecone``: LangChain + OpenAI embeddings over ``data/knowledge`` (cloud index).
-- ``chroma``: sentence-transformers + Chroma over ``RAG_DATA_PATH`` (typically MITRE .md files).
-
-Tool entrypoints return human-readable strings; use ``get_rag_result`` for structured access.
-"""
+"""RAG helpers: Pinecone + OpenAI embeddings over data/knowledge."""
 
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from langchain_core.tools import Tool
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 
 from src.config.settings import Settings
-from src.rag.config import reset_rag_config_cache
+from src.utils.embedding import create_openai_embeddings
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -52,21 +43,6 @@ class RAGResult:
     retrieval_latency_ms: float | None = None
 
 
-def _use_chroma_backend() -> bool:
-    return Settings.RAG_VECTOR_BACKEND == "chroma"
-
-
-def _sync_chroma_env_from_app() -> None:
-    """Align subprocess RAG config with ``src.config.settings.Settings``."""
-    os.environ["RAG_DATA_PATH"] = str(Settings.RAG_DATA_PATH)
-    os.environ["RAG_CHROMA_PATH"] = str(Settings.RAG_CHROMA_PATH)
-    os.environ["RAG_CHROMA_COLLECTION"] = Settings.RAG_CHROMA_COLLECTION
-    os.environ["RAG_EMBEDDING_MODEL"] = Settings.RAG_EMBEDDING_MODEL
-    os.environ["RAG_TOP_K"] = str(Settings.RAG_TOP_K)
-    os.environ["RAG_DISTANCE_THRESHOLD"] = str(Settings.RAG_DISTANCE_THRESHOLD)
-    reset_rag_config_cache()
-
-
 def _get_pinecone_client() -> Pinecone:
     if not Settings.PINECONE_API_KEY:
         raise ValueError("PINECONE_API_KEY is not set.")
@@ -74,22 +50,10 @@ def _get_pinecone_client() -> Pinecone:
 
 
 def ingest_knowledge_base() -> str:
-    """Build or refresh the active RAG index (Pinecone or local Chroma)."""
+    """Build or refresh the Pinecone index from ``data/knowledge``."""
     if not Settings.ENABLE_RAG:
         return "RAG is disabled."
 
-    if _use_chroma_backend():
-        try:
-            _sync_chroma_env_from_app()
-            from src.rag.ingestion.index_builder import build_mitre_index
-
-            build_mitre_index()
-            return "MITRE RAG index build completed (Chroma)."
-        except Exception as exc:  # pragma: no cover
-            logger.error("Chroma RAG ingestion failed: %s", exc, exc_info=True)
-            return f"RAG ingestion failed: {exc}"
-
-    logger.info("Starting knowledge base ingestion to Pinecone...")
     pc = _get_pinecone_client()
     index_name = Settings.PINECONE_INDEX_NAME
 
@@ -121,9 +85,8 @@ def ingest_knowledge_base() -> str:
         add_start_index=True,
     )
     chunks = text_splitter.split_documents(docs)
-    embeddings = OpenAIEmbeddings(openai_api_key=Settings.OPENAI_API_KEY)
+    embeddings = create_openai_embeddings()
 
-    logger.info("Uploading %s chunks to Pinecone index '%s'...", len(chunks), index_name)
     PineconeVectorStore.from_documents(chunks, embeddings, index_name=index_name)
 
     msg = f"RAG index refreshed using Pinecone. Processed {len(docs)} documents into {len(chunks)} chunks."
@@ -133,15 +96,41 @@ def ingest_knowledge_base() -> str:
 
 def _build_chunks_from_pinecone_docs(docs) -> List[RAGChunk]:
     chunks: List[RAGChunk] = []
+    knowledge_dir = Path(Settings.KNOWLEDGE_DIR)
+    base_dir = Path(Settings.BASE_DIR)
+
+    def _normalize_source_file(raw_source: object) -> Optional[str]:
+        source = str(raw_source or "").strip()
+        if not source:
+            return None
+        source_path = Path(source)
+
+        # Prefer exact existing file under data/knowledge.
+        if source_path.is_file():
+            try:
+                relative_to_knowledge = source_path.relative_to(knowledge_dir)
+                return str(Path("data/knowledge") / relative_to_knowledge)
+            except ValueError:
+                try:
+                    return str(source_path.relative_to(base_dir))
+                except ValueError:
+                    return str(source_path)
+
+        # Fallback: try basename lookup within knowledge dir (for stale absolute paths).
+        candidate = knowledge_dir / source_path.name
+        if candidate.is_file():
+            return str(Path("data/knowledge") / source_path.name)
+        return None
+
     for idx, doc in enumerate(docs, start=1):
-        source = doc.metadata.get("source", "unknown")
-        if str(Settings.BASE_DIR) in str(source):
-            source = str(Path(source).relative_to(Settings.BASE_DIR))
+        source = _normalize_source_file(doc.metadata.get("source"))
+        if source is None:
+            continue
         chunks.append(
             RAGChunk(
                 text=doc.page_content,
                 source_file=str(source),
-                chunk_id=str(idx),
+                chunk_id=f"chunk-{idx}",
                 score=max(0.0, 1.0 - (idx - 1) * 0.05),
             )
         )
@@ -191,7 +180,7 @@ def format_rag_result(result: RAGResult, *, source_label: str) -> str:
 
 
 def get_rag_result(query: str) -> RAGResult:
-    """Structured retrieval for both backends (for benchmarks and tests)."""
+    """Structured Pinecone retrieval."""
     start = time.perf_counter()
     clean_query = (query or "").strip()
     if not clean_query:
@@ -199,49 +188,8 @@ def get_rag_result(query: str) -> RAGResult:
     if not Settings.ENABLE_RAG:
         return _make_result(query=clean_query, status="error", error_message="RAG is disabled.")
 
-    if _use_chroma_backend():
-        _sync_chroma_env_from_app()
-        from src.rag.retrieval.reranker import simple_rerank
-        from src.rag.retrieval.retriever import retrieve_mitre_contexts
-
-        try:
-            contexts = retrieve_mitre_contexts(clean_query)
-            latency_ms = (time.perf_counter() - start) * 1000
-            if not contexts:
-                return _make_result(query=clean_query, status="no_results", latency_ms=latency_ms)
-
-            ranked = simple_rerank(contexts)
-            filtered = [c for c in ranked if c.score >= Settings.RAG_MIN_SCORE]
-            if not filtered:
-                return _make_result(query=clean_query, status="no_results", latency_ms=latency_ms)
-
-            top = filtered[: Settings.RAG_MAX_RESULTS]
-            chunks: List[RAGChunk] = []
-            for idx, ctx in enumerate(top):
-                meta = ctx.metadata or {}
-                source = meta.get("source") or meta.get("source_file") or "unknown"
-                chunk_id = meta.get("chunk_id") or meta.get("id") or f"chunk_{idx}"
-                chunks.append(
-                    RAGChunk(
-                        text=ctx.document,
-                        source_file=str(source),
-                        chunk_id=str(chunk_id),
-                        score=float(ctx.score),
-                    )
-                )
-            return _make_result(query=clean_query, status="ok", chunks=chunks, latency_ms=latency_ms)
-        except Exception as exc:  # pragma: no cover
-            latency_ms = (time.perf_counter() - start) * 1000
-            logger.error("Chroma RAG retrieval failed: %s", exc, exc_info=True)
-            return _make_result(
-                query=clean_query,
-                status="error",
-                error_message=str(exc),
-                latency_ms=latency_ms,
-            )
-
     try:
-        embeddings = OpenAIEmbeddings(openai_api_key=Settings.OPENAI_API_KEY)
+        embeddings = create_openai_embeddings()
         vectorstore = PineconeVectorStore(
             index_name=Settings.PINECONE_INDEX_NAME,
             embedding=embeddings,
@@ -251,8 +199,15 @@ def get_rag_result(query: str) -> RAGResult:
         latency_ms = (time.perf_counter() - start) * 1000
         if not docs:
             return _make_result(query=clean_query, status="no_results", latency_ms=latency_ms)
-        chunks = _build_chunks_from_pinecone_docs(docs)
-        return _make_result(query=clean_query, status="ok", chunks=chunks, latency_ms=latency_ms)
+        rag_chunks = _build_chunks_from_pinecone_docs(docs)
+        if not rag_chunks:
+            return _make_result(
+                query=clean_query,
+                status="no_results",
+                error_message="No valid knowledge-file citations in retrieval results.",
+                latency_ms=latency_ms,
+            )
+        return _make_result(query=clean_query, status="ok", chunks=rag_chunks, latency_ms=latency_ms)
     except Exception as exc:  # pragma: no cover
         latency_ms = (time.perf_counter() - start) * 1000
         logger.error("Pinecone RAG retrieval failed: %s", exc, exc_info=True)
@@ -265,18 +220,17 @@ def get_rag_result(query: str) -> RAGResult:
 
 
 def retrieve_security_context(query: str) -> str:
-    """LangChain tool entry: formatted retrieval string."""
+    """Retrieves threat-relevant context from the Pinecone knowledge index."""
     result = get_rag_result(query)
-    label = "chroma" if _use_chroma_backend() else "pinecone_semantic"
-    return format_rag_result(result, source_label=label)
+    return format_rag_result(result, source_label="pinecone_semantic")
 
 
 rag_ingest = Tool(
     name="RAGIngest",
     func=ingest_knowledge_base,
     description=(
-        "Builds or refreshes the RAG index: Pinecone over data/knowledge when RAG_VECTOR_BACKEND=pinecone, "
-        "or local Chroma over MITRE .md files under RAG_DATA_PATH when RAG_VECTOR_BACKEND=chroma."
+        "Builds or refreshes the Pinecone semantic index from documents under data/knowledge "
+        "(.md, .txt, .log, .json, .jsonl)."
     ),
 )
 
@@ -284,7 +238,7 @@ rag_retriever = Tool(
     name="RAGRetriever",
     func=retrieve_security_context,
     description=(
-        "Retrieves threat-relevant context from the configured RAG backend (Pinecone semantic index or "
-        "local Chroma MITRE index). Input: question, log snippet, or IOC text."
+        "Retrieves threat-relevant context from the Pinecone knowledge index. "
+        "Input: question, log snippet, or IOC text."
     ),
 )
