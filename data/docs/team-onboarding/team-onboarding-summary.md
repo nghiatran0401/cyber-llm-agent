@@ -26,6 +26,8 @@ Main goal for the next 4 weeks: improve quality and reliability while each membe
 - Person 4: Memory Owner (session memory, recall relevance, persistence)
 - Person 5: Tooling Owner (CTI, log parser, sandbox/lab reliability)
 
+**Consolidated worklogs (summary table + one file per person):** [`docs/team-worklogs/README.md`](../../../docs/team-worklogs/README.md)
+
 ## Baseline -> 4-Week Target Scores
 
 - Platform: 6.5 -> 8.5
