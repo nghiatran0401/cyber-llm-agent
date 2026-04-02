@@ -8,6 +8,8 @@ services:
     volumes:
       - ./data/sessions:/app/data/sessions
       - ./data/logs:/app/data/logs
+      # Same knowledge corpus as host (ingest + RAG tooling see KNOWLEDGE_DIR, default data/knowledge).
+      - ./data/knowledge:/app/data/knowledge
     ports:
       - "8000:8000"
     healthcheck:
@@ -25,11 +27,9 @@ services:
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
         NEXT_PUBLIC_LAB_BASE_URL: ${NEXT_PUBLIC_LAB_BASE_URL:-http://localhost:3100}
-        NEXT_PUBLIC_API_KEY: ${NEXT_PUBLIC_API_KEY:-}
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
       NEXT_PUBLIC_LAB_BASE_URL: ${NEXT_PUBLIC_LAB_BASE_URL:-http://localhost:3100}
-      NEXT_PUBLIC_API_KEY: ${NEXT_PUBLIC_API_KEY:-}
     ports:
       - "3000:3000"
     depends_on:
