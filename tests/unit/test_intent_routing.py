@@ -8,6 +8,7 @@ from src.agents.shared import intent_routing
 
 
 def test_get_route_layer_initializes_with_local_auto_sync(monkeypatch):
+    monkeypatch.setattr(intent_routing.Settings, "OPENROUTER_API_KEY", "sk-test-stub")
     captured = {}
 
     class _FakeChoice:
@@ -22,6 +23,7 @@ def test_get_route_layer_initializes_with_local_auto_sync(monkeypatch):
 
     monkeypatch.setattr(intent_routing, "_route_layer", None)
     monkeypatch.setattr(intent_routing, "_encoder", None)
+    monkeypatch.setattr(intent_routing, "_routing_unavailable", False)
     monkeypatch.setattr(intent_routing, "OpenAIEncoder", lambda **_kwargs: object())
     monkeypatch.setattr(intent_routing, "SemanticRouter", _FakeRouter)
 
@@ -42,8 +44,10 @@ class _DeterministicEncoder(DenseEncoder):
 
 
 def test_get_route_layer_builds_ready_local_index(monkeypatch):
+    monkeypatch.setattr(intent_routing.Settings, "OPENROUTER_API_KEY", "sk-test-stub")
     monkeypatch.setattr(intent_routing, "_route_layer", None)
     monkeypatch.setattr(intent_routing, "_encoder", None)
+    monkeypatch.setattr(intent_routing, "_routing_unavailable", False)
     monkeypatch.setattr(intent_routing, "OpenAIEncoder", lambda **_kwargs: _DeterministicEncoder())
 
     layer = intent_routing._get_route_layer()
@@ -51,8 +55,10 @@ def test_get_route_layer_builds_ready_local_index(monkeypatch):
 
 
 def test_is_high_risk_intent_uses_semantic_router_index(monkeypatch):
+    monkeypatch.setattr(intent_routing.Settings, "OPENROUTER_API_KEY", "sk-test-stub")
     monkeypatch.setattr(intent_routing, "_route_layer", None)
     monkeypatch.setattr(intent_routing, "_encoder", None)
+    monkeypatch.setattr(intent_routing, "_routing_unavailable", False)
     monkeypatch.setattr(intent_routing, "OpenAIEncoder", lambda **_kwargs: _DeterministicEncoder())
 
     assert intent_routing.is_high_risk_intent("there is a ransomware infection on the network")

@@ -1,91 +1,19 @@
-# Benchmark Evaluation Methodology
+﻿# RAG Benchmark Evaluation
 
-This document defines how benchmark evaluation is executed and how results should be used for Option D evidence.
+Lightweight, deterministic cases to spot regressions in retrieval quality and citation wiring. Each case specifies the query, the expected source file(s) that should be cited, and a minimum acceptable similarity score.
 
-## Objectives
+| # | Query | Expected source file(s) | Min score |
+| - | ----- | ----------------------- | --------- |
+| 1 | "credential dumping" | T1003_OS_Credential_Dumping.md | 0.40 |
+| 2 | "sql injection prevention" | mitre_attack_quickmap.md, owasp_top10_web_playbook.md | 0.35 |
+| 3 | "ransomware response actions" | ransomware_response.md | 0.35 |
+| 4 | "web login brute force detection" | network_ioc_triage.md, authentication_abuse.md | 0.30 |
+| 5 | "post-incident review template" | post_incident_review_template.md | 0.30 |
 
-- Provide repeatable evaluation for cybersecurity-agent behavior.
-- Keep CI evaluation lightweight and deterministic.
-- Support real-LLM staging runs for demonstration and report evidence.
+## How to run
 
-## Dataset
+```
+python scripts/rag_benchmark.py
+```
 
-- Canonical dataset: `data/benchmarks/threat_cases.json`
-- Schema:
-  - `id`
-  - `name`
-  - `log`
-  - `expected_keywords`
-  - `unexpected_keywords`
-
-## Execution Modes
-
-### 1) Offline mode (default, CI-safe)
-
-- Command: `make benchmark`
-- Uses deterministic offline adapter in `src/benchmarking/agents.py`
-- Purpose: benchmark pipeline presence and artifact generation
-
-### 2) Real-LLM mode (staging/manual)
-
-- Command:
-  - `BENCHMARK_MODE=real-llm BENCHMARK_AGENT_MODE=g1 BENCHMARK_PROVIDER=openai make benchmark`
-  - `BENCHMARK_MODE=real-llm BENCHMARK_AGENT_MODE=g2 BENCHMARK_PROVIDER=openai make benchmark`
-- Uses real runtime paths:
-  - G1: `run_g1_analysis(...)`
-  - G2: `run_g2_analysis(...)`
-- Required environment:
-  - `OPENAI_API_KEY`
-  - `OTX_API_KEY`
-
-## Metrics
-
-Computed by `src/benchmarking/evaluator.py`:
-
-- `precision`
-- `recall`
-- `f1_score`
-- `latency_seconds`
-- `tokens_approx`
-
-Aggregate outputs:
-
-- `average_precision`
-- `average_recall`
-- `average_f1_score`
-- `average_latency_seconds`
-- `total_tests`
-
-## Artifacts
-
-Every benchmark run writes:
-
-- `data/benchmarks/results/latest.json`
-- `data/benchmarks/results/latest.md`
-- Timestamped JSON/Markdown snapshots in the same directory
-
-Human-readable summary command:
-
-- `make benchmark-report`
-
-## CI Integration
-
-The CI workflow includes a named `Benchmark evaluation` step that runs `make benchmark` in offline mode.
-
-- This is a presence-only gate.
-- The job fails only if benchmark execution itself fails.
-- Metric thresholds are intentionally not enforced yet.
-
-## Option D Evidence Mapping
-
-Use benchmark artifacts in project documentation to support:
-
-- evaluation against benchmark datasets,
-- analysis/discussion of experimental results,
-- demonstration scenarios for G1 and G2.
-
-Recommended report attachment per milestone:
-
-1. latest benchmark markdown summary,
-2. one timestamped JSON artifact,
-3. short interpretation notes (what improved/regressed and why).
+Outputs per-case pass/fail, score details, and a summary exit code (non-zero on failure).

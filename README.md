@@ -1,224 +1,352 @@
 # Cyber LLM SOC Assistant
 
-An AI assistant for security operations: it turns logs and natural-language questions into structured findings, threat-oriented predictions, and incident-response style guidance—with **step-by-step traces** so analysts can see how conclusions were reached.
+Production-oriented AI assistant for security teams. It analyzes logs, predicts likely attack progression, and generates practical incident response recommendations with transparent reasoning.
 
----
+## Why This Exists
 
-## Who this is for
+Security operations teams face alert fatigue and slow triage. This project helps by:
 
-- **SOC / IR analysts** triaging alerts and logs  
-- **Students and builders** learning agentic security workflows (optional OWASP lab)  
-- **Teams** who want a small but real **FastAPI + Next.js** codebase with two agent modes (single-agent vs multi-step workflow)
+- turning raw logs into structured, actionable findings
+- showing live step-by-step agent reasoning for trust and explainability
+- supporting training workflows with an optional local OWASP sandbox
 
-**Team onboarding** (roles, tracks, honest status): [`docs/team-onboarding/team-onboarding-summary.md`](docs/team-onboarding/team-onboarding-summary.md).
+## Core Capabilities
 
----
+- **G1 Single Agent**
+  - Tool-enabled analysis with adaptive model routing
+  - Memory/session support for better multi-turn context
+- **G2 Multiagent Workflow**
+  - `LogAnalyzer` -> `ThreatPredictor` -> `IncidentResponder` -> `Orchestrator`
+  - Each step contributes to a final executive-ready summary
+- **FastAPI Backend**
+  - API endpoints for G1/G2/chat/sandbox workflows
+  - Optional API key auth + rate limiting middleware
+  - Health (`/api/v1/health`) and readiness (`/api/v1/ready`) probes
+  - OpenAPI docs for typed integration (`/api/v1/*`)
+- **Next.js Web Frontend**
+  - Next.js + Tailwind + TypeScript app in `apps/web`
+  - Unified ChatGPT-style workspace combining chat + log analysis
+  - OWASP sandbox view with live trace
 
-## What you get (at a glance)
+## Architecture (High Level)
 
-| Piece | What it does |
-|-------|----------------|
-| **G1** | Single agent with tools (log parser, CTI, RAG), memory/sessions, adaptive model routing |
-| **G2** | Multi-agent pipeline: log analysis → threat prediction → incident response → orchestrated summary |
-| **API** | FastAPI service under `services/api/` — analyze, chat, streaming workspace, sandbox, metrics, health |
-| **Web** | Next.js app in `apps/web` — workspace UI with traces |
-| **Lab** | Deliberately vulnerable OWASP-style app in `apps/vuln-lab` (training only; not for production) |
+```text
+Input (Logs / Chat / Sandbox Event)
+    -> Agent Runtime (G1 or G2 pipeline)
+    -> Findings + Threat Prediction + Response Plan
+```
 
-Frozen HTTP and tool contracts live in [`docs/contracts.md`](docs/contracts.md) and [`docs/tool-contracts.md`](docs/tool-contracts.md).
+## Quick Start (Local)
 
----
+### 1) Prerequisites
 
-## Prerequisites
+- Python 3.10-3.12 (NumPy and several deps do not yet support 3.13/3.14)
+- OpenRouter API key (e.g., free `arcee-ai/trinity-mini:free` model)
+- Node.js 20+ (for Next.js frontend)
+- Docker (optional, recommended)
 
-- **Python 3.10–3.13** (see `requirements.txt` header; some deps exclude 3.14+ today)  
-- **Node.js 20+** (for the web app and lab)  
-- **Docker + Docker Compose** (recommended for the full three-service stack)  
-- **API keys** (see below): OpenAI, AlienVault OTX, Pinecone (RAG)
-
----
-
-## Configuration (start here)
-
-1. Copy the template and edit values:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Required in `.env`** (validated when the API starts — see `src/config/settings.py`):
-
-   - `OPENAI_API_KEY`
-   - `OTX_API_KEY`
-   - `PINECONE_API_KEY` and `PINECONE_INDEX_NAME`
-
-3. **Local web app** (when not using Docker for the frontend):
-
-   ```bash
-   cp apps/web/.env.local.example apps/web/.env.local
-   ```
-
-   Point `NEXT_PUBLIC_API_BASE_URL` at your API (default `http://127.0.0.1:8000`). If you enable `API_AUTH_ENABLED`, set `NEXT_PUBLIC_API_KEY` to match `API_AUTH_KEY`.
-
-`.env.example` is kept in sync with the Python settings model; optional keys are documented inline there.
-
----
-
-## Running the system
-
-### Option A — Docker Compose (recommended)
-
-Runs **API (8000)**, **web (3000)**, and **lab (3100)** together.
+### 2) Configure environment
 
 ```bash
 cp .env.example .env
-# fill secrets, then:
-docker compose up --build -d
+# Update .env values (OPENROUTER_API_KEY is required)
 ```
 
-- Web: `http://localhost:3000`  
-- API docs: `http://localhost:8000/docs`  
-- Lab: `http://localhost:3100`  
+### Windows quick start (PowerShell)
 
-**Operator details** (volumes, lab ↔ API networking, URL overrides): [`docs/docker-setup.md`](docs/docker-setup.md).
+```powershell
+python --version           # verify 3.10-3.12
+python -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 
-**API-only container** (no Compose):
+# Run FastAPI backend
+python services/api/main.py
+
+# (Optional) run tests
+python -m pytest
+```
+
+`.env` is the single source of truth for app configuration.
+
+### 3) Install dependencies (no tests)
+
+With `make` (macOS/Linux/Git Bash):
+```bash
+make install
+make install-web
+```
+
+Without `make` (PowerShell):
+```powershell
+python -m pip install -r requirements.txt
+npm --prefix apps/web install
+```
+
+### 4) Run the API service
+
+With `make`:
+```bash
+make run-api
+```
+
+Without `make` (PowerShell):
+```powershell
+uvicorn services.api.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Open `http://127.0.0.1:8000/docs` for OpenAPI docs.
+
+### 5) Run the Next.js frontend
+
+With `make`:
+```bash
+make install-web
+cp apps/web/.env.local.example apps/web/.env.local
+make run-web
+```
+
+Without `make` (PowerShell):
+```powershell
+npm --prefix apps/web install
+copy apps/web/.env.local.example apps/web/.env.local
+npm --prefix apps/web run dev
+```
+
+Open `http://127.0.0.1:3000`.
+
+The web app expects the FastAPI backend at `NEXT_PUBLIC_API_BASE_URL` (default `http://127.0.0.1:8000`).
+
+### 6) Run the OWASP vulnerable lab + plain dashboard
+
+With `make`:
+```bash
+make install-lab
+make run-lab
+```
+
+Without `make` (PowerShell):
+```powershell
+npm --prefix apps/vuln-lab install
+npm --prefix apps/vuln-lab run dev
+```
+
+Open:
+
+- `http://127.0.0.1:3100` for vulnerable pages
+- `http://127.0.0.1:3100/dashboard` for live telemetry/detections
+
+### Optional: tests & benchmarks
+
+With `make`:
+```bash
+make test
+make test-web
+make benchmark
+make benchmark-report
+make smoke
+make smoke-checklist
+```
+
+Without `make` (PowerShell):
+```powershell
+python -m pytest -q
+npm --prefix apps/web run test
+python scripts/run_benchmark.py --mode offline --agent-mode g1 --provider openrouter --dataset data/benchmarks/threat_cases.json --output-dir data/benchmarks/results
+python scripts/run_benchmark.py --output-dir data/benchmarks/results --report-from-latest
+python -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
+python scripts/smoke_checklist.py
+```
+## Run with Docker
 
 ```bash
 make docker-build
 make docker-run
 ```
 
-### Option B — Local development (no Docker)
-
-Install dependencies, then run each process in its own terminal:
-
+Without `make` (PowerShell or Bash):
 ```bash
-make install          # Python deps
-make install-web      # Next.js deps
-make install-lab      # Lab deps (optional)
-
-make run-api          # http://127.0.0.1:8000
-make run-web          # http://127.0.0.1:3000
-make run-lab          # http://127.0.0.1:3100 (optional)
+docker build -t cyber-llm-agent:latest .
+docker run --rm -p 8000:8000 --env-file .env cyber-llm-agent:latest
 ```
 
----
+The container runs the FastAPI backend and reads runtime config from `.env`.
 
-## Everyday commands (Make)
+## Configuration Notes
 
-| Command | Purpose |
-|---------|---------|
-| `make lint` | Byte-compile critical Python packages (fast sanity check) |
-| `make test` | Full pytest suite (includes integration tests if not skipped) |
-| `make test-ci` | Same set as CI: all tests except `tests/integration/test_agent_flow.py` (needs real `OPENAI_API_KEY`) |
-| `make test-web` | Frontend unit tests (Vitest) |
-| `make benchmark` / `make benchmark-report` | Offline benchmark pipeline (CI-safe defaults) |
-| `make smoke` | Quick compile + memory/session smoke tests |
-| `make smoke-checklist` | Scripted API checklist (auth, rate limit, core routes) |
-| `make ci` | Lint + CI tests + benchmark + smoke + web tests (heavy; mirrors most of CI locally) |
-| `make validate-traces` | Trace validation helper (see `scripts/validate_traces.py`) |
-| `make release-gate` | Release checklist script (see `scripts/release_gate.py`) |
-| `make rag-build-index` / `make rag-verify` | Local MITRE Chroma index (when `RAG_VECTOR_BACKEND=chroma`) |
+- Policy gates reference: `docs/policy-gates.md` (kept production guardrails and return behavior)
+- `ENVIRONMENT=production` forces sandbox off by validation rules.
+- `ENABLE_SANDBOX=true` is for local training/non-production use.
+- Sandbox API routes return `403` when sandbox is disabled.
+- API key protection can be enabled with `API_AUTH_ENABLED=true` and `API_AUTH_KEY=<secret>`.
+- Basic rate limiting can be enabled with `API_RATE_LIMIT_ENABLED=true`.
+- Agent run-loop safety caps are controlled by:
+  - `MAX_AGENT_STEPS`
+  - `MAX_TOOL_CALLS`
+  - `MAX_RUNTIME_SECONDS`
+  - `MAX_WORKER_TASKS`
+- Memory retention and recall controls:
+  - `MEMORY_MAX_EPISODIC_ITEMS`
+  - `MEMORY_MAX_SEMANTIC_FACTS`
+  - `MEMORY_RECALL_TOP_K`
+  - `SESSION_RETENTION_DAYS`
+- Prompt version controls:
+  - `PROMPT_VERSION_G1`
+  - `PROMPT_VERSION_G2`
+- Optional rubric evaluation:
+  - `ENABLE_RUBRIC_EVAL`
+- Safety/governance guardrails:
+  - `ENABLE_PROMPT_INJECTION_GUARD`
+  - `ENABLE_OUTPUT_POLICY_GUARD`
+  - `MIN_EVIDENCE_FOR_HIGH_RISK`
+  - `REQUIRE_HUMAN_APPROVAL_HIGH_RISK`
+- Runtime metrics endpoint:
+  - `GET /api/v1/metrics`
+  - `GET /api/v1/metrics/dashboard` for summary + recent runs
+- `CTI_PROVIDER=otx` enables live AlienVault OTX CTI feeds.
+- `OTX_API_KEY` is required and CTI requests use timeout/retry guardrails.
+- Local RAG can be enabled with `ENABLE_RAG=true` and knowledge files under `data/knowledge/`.
+- RAG retrieval supports `lexical`, `semantic`, and `hybrid` modes:
+  - `RAG_RETRIEVAL_MODE=hybrid`
+  - `RAG_EMBEDDING_DIMS=96`
+  - `RAG_SEMANTIC_CANDIDATES=8`
+- CTI tool input supports:
+  - threat-type queries (example: `ransomware`)
+  - IOC queries (example: `ioc:ip:1.2.3.4`, `ioc:domain:example.com`, `ioc:url:https://bad.example`, `ioc:hash:<sha256>`)
+- Do **not** commit real secrets (`.env` is ignored).
 
-**CI on GitHub** (Python 3.10 + 3.11): `.github/workflows/ci.yml` runs `make lint`, `make test-ci`, `make benchmark`, memory smoke, and web tests.
+### Local RAG quick check
 
----
+1. Add one or more `.md`/`.txt` knowledge files under `data/knowledge/`.
+2. Set `ENABLE_RAG=true` in `.env`.
+3. Ask a G1/G2 question containing known terms from those files.
+4. Confirm the answer includes retrieval citations and scored matches from the `RAGRetriever` tool output.
 
-## How G1 works (short path)
+## OTX Rollout Guidance
 
-1. Request hits FastAPI → optional auth / rate limits (`services/api/middleware.py`).  
-2. Input is validated; prompt-injection guard may return `stop_reason=needs_human`.  
-3. G1 loads the prompt version (`PROMPT_VERSION_G1`), session memory, and runs the agent loop with tools.  
-4. Structured report + **critic** + **action gating** + **output policy** run before the response is returned.  
-5. Response uses the standard envelope (`ApiResponse` in `services/api/schemas.py`).
+- Keep `CTI_PROVIDER=otx` with a valid key in each environment.
+- Enable and verify OTX first in local dev, then staging, then production.
+- Monitor timeout/rate-limit trends before broad rollout (`CTI_REQUEST_TIMEOUT_SECONDS`, `CTI_MAX_RETRIES`).
+- When OTX is unavailable, CTI returns a deterministic fallback report instead of failing the workflow.
 
-**Endpoints:** `POST /api/v1/analyze/g1`, `POST /api/v1/chat` (`mode=g1`), `POST /api/v1/workspace/stream` (SSE), `POST /api/v1/sandbox/analyze` (when sandbox is enabled).
+## Quality Gate
 
-**`stop_reason` values:** `completed`, `needs_human`, `budget_exceeded`, `blocked`, `error` (see `docs/contracts.md` for the canonical list).
+CI pipeline (`.github/workflows/ci.yml`) runs:
 
----
+- compile checks (`make lint`)
+- full tests (`make test`)
+- benchmark evaluation (`make benchmark`)
+- frontend API integration tests (`make test-web`)
+- smoke tests (`make smoke`)
 
-## RAG (Pinecone or optional local Chroma)
+Without `make` (PowerShell), the same checks are roughly:
+- `python -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py`
+- `python -m pytest -q`
+- `python scripts/run_benchmark.py --mode offline --agent-mode g1 --provider openrouter --dataset data/benchmarks/threat_cases.json --output-dir data/benchmarks/results`
+- `npm --prefix apps/web run test`
+- `python scripts/smoke_checklist.py`
 
-RAG is **on** by default. The API does **not** ingest documents on startup.
+For one-command endpoint checklist validation (auth/rate-limit/RAG + core API routes), run:
 
-**Default (`RAG_VECTOR_BACKEND=pinecone`):** cloud index over `data/knowledge/`.
+```bash
+make smoke-checklist
+```
 
-1. Add `.md` / `.txt` files under `data/knowledge/`.  
-2. Set Pinecone env vars in `.env`.  
-3. Ingest (from repo root, with deps installed):
+PowerShell (no `make`):
+```powershell
+python scripts/smoke_checklist.py
+```
 
-   ```bash
-   python3 -c "from src.tools.rag_tools import ingest_knowledge_base; print(ingest_knowledge_base())"
-   ```
+## Benchmark Evaluation
 
-4. Re-ingest after you change knowledge files or switch indexes.
+Canonical benchmark dataset:
 
-**Optional (`RAG_VECTOR_BACKEND=chroma`):** local Chroma + sentence-transformers over MITRE-style markdown in `data/mitre/` (see `data/mitre/README.md`). Build with `make rag-build-index` or `python3 scripts/rag_build_index.py`. Pinecone keys are not required when this backend is selected and `ENABLE_RAG=true`. The standalone CLI lives at `scripts/rag_cli.py`.
+- `data/benchmarks/threat_cases.json`
+- `data/benchmarks/threat_cases_lab.json` (OWASP lab simulation cases)
 
----
+Run benchmark locally (CI-safe deterministic mode):
 
-## Sandbox and safety
+```bash
+make benchmark
+make benchmark-report
+```
 
-- `ENABLE_SANDBOX=true` is for **non-production** training. In `ENVIRONMENT=production`, sandbox stays off by validation rules.  
-- Sandbox routes return **403** when disabled.  
-- Policy and gate reference: [`docs/policy-gates.md`](docs/policy-gates.md).  
-- Release checklist: [`docs/release-quality-gate.md`](docs/release-quality-gate.md).
+PowerShell (no `make`):
+```powershell
+python scripts/run_benchmark.py --mode offline --agent-mode g1 --provider openrouter --dataset data/benchmarks/threat_cases.json --output-dir data/benchmarks/results
+python scripts/run_benchmark.py --output-dir data/benchmarks/results --report-from-latest
+```
 
----
+Artifacts are written to:
 
-## Benchmarks
+- `data/benchmarks/results/latest.json`
+- `data/benchmarks/results/latest.md`
+- timestamped files under `data/benchmarks/results/`
 
-- Datasets: `data/benchmarks/threat_cases.json`, `data/benchmarks/threat_cases_lab.json`  
-- Offline (deterministic, CI-safe):
+### Real-LLM staging benchmark run
 
-  ```bash
-  make benchmark
-  make benchmark-report
-  ```
+Use this for assignment/demo evidence with real model calls:
 
-- Real LLM (local only; needs keys):
+```bash
+BENCHMARK_MODE=real-llm \
+BENCHMARK_AGENT_MODE=g1 \
+BENCHMARK_PROVIDER=openrouter \
+make benchmark
+```
 
-  ```bash
-  BENCHMARK_MODE=real-llm BENCHMARK_AGENT_MODE=g1 BENCHMARK_PROVIDER=openai make benchmark
-  ```
+For G2:
 
-More methodology: [`docs/benchmark-evaluation.md`](docs/benchmark-evaluation.md).
+```bash
+BENCHMARK_MODE=real-llm \
+BENCHMARK_AGENT_MODE=g2 \
+BENCHMARK_PROVIDER=openrouter \
+make benchmark
+```
 
----
+PowerShell (no `make`):
+```powershell
+$env:BENCHMARK_MODE="real-llm"
+$env:BENCHMARK_AGENT_MODE="g1"   # or g2
+$env:BENCHMARK_PROVIDER="openrouter"
+python scripts/run_benchmark.py --mode $env:BENCHMARK_MODE --agent-mode $env:BENCHMARK_AGENT_MODE --provider $env:BENCHMARK_PROVIDER --dataset data/benchmarks/threat_cases.json --output-dir data/benchmarks/results
+```
 
-## Repository layout
+Required environment:
+
+- `OPENROUTER_API_KEY`
+- `OTX_API_KEY`
+
+Reference methodology and evidence guidance:
+
+- `docs/benchmark-evaluation.md`
+
+## Repository Layout
 
 ```text
 src/
-  agents/g1/          # single-agent runtime
-  agents/g2/          # multi-agent workflow
-  agents/shared/      # shared helpers (e.g. intent routing)
-  config/             # Settings (env → `Settings`)
-  sandbox/            # OWASP event simulation (API-facing)
-  tools/              # log parser, CTI, RAG, envelopes
-  utils/              # memory, sessions, evaluator, logging
-services/api/         # FastAPI app (routes, services, guardrails)
-apps/web/             # Next.js frontend
-apps/vuln-lab/        # training lab (Express)
-tests/                # unit tests + integration (API key gated)
-scripts/              # benchmark, CI test runner, smoke, gates
-data/                 # knowledge, benchmarks, logs, sessions (runtime artifacts)
-prompts/              # prompt templates referenced by Settings
+  agents/
+    g1/              # single-agent modules
+    g2/              # multiagent workflow modules
+  config/            # centralized settings and validation
+  sandbox/           # local OWASP event simulation
+  tools/             # log parser + CTI tools
+  utils/             # memory, session, evaluator, logging
+services/api/        # FastAPI endpoints wrapping G1/G2
+apps/web/            # Next.js + Tailwind + TypeScript frontend
+apps/vuln-lab/       # Old-school HTML/CSS/JS vulnerable learning lab + dashboard
+tests/
 ```
 
----
+## Open-Source Readiness
 
-## Contributing and policies
-
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)  
-- PR checklist: [`docs/pr-checklist.md`](docs/pr-checklist.md)  
-- Security: [`SECURITY.md`](SECURITY.md)  
-- Code of conduct: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)  
-- License: [MIT](LICENSE)
-
----
+- Security policy: `SECURITY.md`
+- Contributing guide: `CONTRIBUTING.md`
+- Code of conduct: `CODE_OF_CONDUCT.md`
+- License: `LICENSE` (MIT)
 
 ## License
 
 MIT
+
+

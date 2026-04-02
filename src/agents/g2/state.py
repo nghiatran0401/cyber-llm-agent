@@ -8,7 +8,7 @@ What it does:
 
 from __future__ import annotations
 
-from typing import Dict, List, TypedDict
+from typing import Any, Dict, List, TypedDict
 
 
 class AgentState(TypedDict):
@@ -17,6 +17,7 @@ class AgentState(TypedDict):
     logs: str
     log_evidence: str
     rag_context: str
+    rag_result: Dict[str, Any]
     cti_evidence: str
     worker_plan: List[str]
     worker_reports: Dict[str, str]
@@ -45,6 +46,7 @@ def create_initial_state(logs: str) -> AgentState:
         "logs": logs,
         "log_evidence": "",
         "rag_context": "",
+        "rag_result": {},
         "cti_evidence": "",
         "worker_plan": [],
         "worker_reports": {},

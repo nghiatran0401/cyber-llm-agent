@@ -51,9 +51,9 @@ class RealLLMBenchmarkAgent:
     """Adapter for real G1/G2 runtime execution."""
 
     def __init__(self, agent_mode: str, provider: str):
-        if provider != "openai":
+        if provider != "openrouter":
             raise ValueError(
-                "provider=ollama is not implemented yet. Use provider=openai for now."
+                "provider=ollama is not implemented yet. Use provider=openrouter for now."
             )
         self.agent_mode = agent_mode
 

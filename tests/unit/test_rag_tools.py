@@ -1,105 +1,78 @@
-"""Unit tests for RAG tools with mocked Pinecone backend."""
+"""Unit tests for integrated RAG tools (Chroma-backed)."""
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
-from src.tools.rag_tools import ingest_knowledge_base, retrieve_security_context
+import src.tools.rag_tools as rag_tools
 
 
-def test_rag_ingest_and_retrieve(monkeypatch, tmp_path: Path):
-    knowledge_dir = tmp_path / "knowledge"
-    knowledge_dir.mkdir(parents=True, exist_ok=True)
-    (knowledge_dir / "note.md").write_text(
-        "Brute force attacks include repeated failed login attempts from one source IP.",
-        encoding="utf-8",
+def _ctx(score: float = 0.9, source: str = "data/mitre/T0000.md", chunk_id: str = "ID0"):
+    return SimpleNamespace(
+        document="Example text",
+        metadata={"source": source, "chunk_id": chunk_id},
+        score=score,
     )
 
+
+def test_rag_ingest_uses_mitre_index(monkeypatch):
+    called = {}
+
+    def fake_build():
+        called["ingest"] = True
+
+    monkeypatch.setattr(rag_tools, "build_mitre_index", fake_build)
     monkeypatch.setattr("src.tools.rag_tools.Settings.ENABLE_RAG", True)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.KNOWLEDGE_DIR", knowledge_dir)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.BASE_DIR", tmp_path)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.PINECONE_API_KEY", "fake-key")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.PINECONE_INDEX_NAME", "test-index")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.OPENAI_API_KEY", "fake-key")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.RAG_MAX_RESULTS", 2)
 
-    mock_pc = MagicMock()
-    mock_pc.list_indexes.return_value = [{"name": "test-index"}]
-    monkeypatch.setattr("src.tools.rag_tools._get_pinecone_client", lambda: mock_pc)
-
-    mock_doc = MagicMock()
-    mock_doc.page_content = "Brute force attacks include repeated failed login attempts."
-    mock_doc.metadata = {"source": str(knowledge_dir / "note.md")}
-
-    with patch("src.tools.rag_tools.DirectoryLoader") as mock_loader_cls, \
-         patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
-         patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
-        mock_loader_cls.return_value.load.return_value = [mock_doc]
-        mock_embed_cls.return_value = MagicMock()
-        mock_vs_cls.from_documents.return_value = MagicMock()
-        ingest_result = ingest_knowledge_base()
-
-    assert "chunks" in ingest_result.lower() or "processed" in ingest_result.lower()
-
-    mock_doc = MagicMock()
-    mock_doc.page_content = "Brute force attacks include repeated failed login attempts."
-    mock_doc.metadata = {"source": str(knowledge_dir / "note.md")}
-
-    with patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
-         patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
-        mock_embed_cls.return_value = MagicMock()
-        mock_retriever = MagicMock()
-        mock_retriever.invoke.return_value = [mock_doc]
-        mock_vs_cls.return_value.as_retriever.return_value = mock_retriever
-        retrieved = retrieve_security_context("failed login brute force")
-
-    assert "Retrieved Context" in retrieved
-    assert "Citations:" in retrieved
+    msg = rag_tools.ingest_knowledge_base()
+    assert called.get("ingest")
+    assert "completed" in msg.lower()
 
 
-def test_rag_retrieve_empty_index(monkeypatch, tmp_path: Path):
+def test_rag_retrieve_returns_contract(monkeypatch):
+    fake_ctx = [_ctx(score=0.8)]
+    monkeypatch.setattr(rag_tools, "retrieve_mitre_contexts", lambda q: fake_ctx)
+    monkeypatch.setattr(rag_tools, "simple_rerank", lambda ctxs: ctxs)
     monkeypatch.setattr("src.tools.rag_tools.Settings.ENABLE_RAG", True)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.KNOWLEDGE_DIR", tmp_path)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.BASE_DIR", tmp_path)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.PINECONE_API_KEY", "fake-key")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.PINECONE_INDEX_NAME", "test-index")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.OPENAI_API_KEY", "fake-key")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.RAG_MAX_RESULTS", 2)
+    monkeypatch.setattr("src.tools.rag_tools.Settings.RAG_MAX_RESULTS", 3)
 
-    with patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
-         patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
-        mock_embed_cls.return_value = MagicMock()
-        mock_retriever = MagicMock()
-        mock_retriever.invoke.return_value = []
-        mock_vs_cls.return_value.as_retriever.return_value = mock_retriever
-        result = retrieve_security_context("ransomware ioc")
+    result = rag_tools.retrieve_security_context("anything")
 
-    assert "No relevant context" in result
+    assert result.status == "ok"
+    assert result.chunks, "chunks should not be empty on success"
+    assert result.citations[0].startswith("data/mitre/T0000.md#")
+    assert result.scores[0] == fake_ctx[0].score
+
+    formatted = rag_tools.format_rag_result(result)
+    assert "Retrieved Context" in formatted
+    assert "Citations:" in formatted
 
 
-def test_rag_citation_format(monkeypatch, tmp_path: Path):
-    knowledge_dir = tmp_path / "knowledge"
-    knowledge_dir.mkdir(parents=True, exist_ok=True)
-
+def test_rag_retrieve_no_results(monkeypatch):
+    monkeypatch.setattr(rag_tools, "retrieve_mitre_contexts", lambda q: [])
     monkeypatch.setattr("src.tools.rag_tools.Settings.ENABLE_RAG", True)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.KNOWLEDGE_DIR", knowledge_dir)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.BASE_DIR", tmp_path)
-    monkeypatch.setattr("src.tools.rag_tools.Settings.PINECONE_API_KEY", "fake-key")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.PINECONE_INDEX_NAME", "test-index")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.OPENAI_API_KEY", "fake-key")
-    monkeypatch.setattr("src.tools.rag_tools.Settings.RAG_MAX_RESULTS", 2)
 
-    mock_doc = MagicMock()
-    mock_doc.page_content = "Ransomware response requires host isolation and credential rotation."
-    mock_doc.metadata = {"source": str(knowledge_dir / "ops.md")}
+    result = rag_tools.retrieve_security_context("anything")
+    assert result.status == "no_results"
+    assert result.chunks == []
 
-    with patch("src.tools.rag_tools.PineconeVectorStore") as mock_vs_cls, \
-         patch("src.tools.rag_tools.OpenAIEmbeddings") as mock_embed_cls:
-        mock_embed_cls.return_value = MagicMock()
-        mock_retriever = MagicMock()
-        mock_retriever.invoke.return_value = [mock_doc]
-        mock_vs_cls.return_value.as_retriever.return_value = mock_retriever
-        retrieved = retrieve_security_context("ransomware isolation steps")
 
-    assert "Citations:" in retrieved
-    citation_lines = [line for line in retrieved.splitlines() if line.startswith("- ") and "ops.md" in line]
-    assert citation_lines
+def test_rag_retrieve_below_threshold(monkeypatch):
+    fake_ctx = [_ctx(score=0.1)]
+    monkeypatch.setattr(rag_tools, "retrieve_mitre_contexts", lambda q: fake_ctx)
+    monkeypatch.setattr(rag_tools, "simple_rerank", lambda ctxs: ctxs)
+    monkeypatch.setattr("src.tools.rag_tools.Settings.ENABLE_RAG", True)
+    monkeypatch.setattr("src.tools.rag_tools.Settings.RAG_MIN_SCORE", 0.25)
+
+    result = rag_tools.retrieve_security_context("anything")
+    assert result.status == "no_results"
+
+
+def test_rag_retrieve_error(monkeypatch):
+    def boom(_):
+        raise RuntimeError("fail")
+
+    monkeypatch.setattr(rag_tools, "retrieve_mitre_contexts", boom)
+    monkeypatch.setattr("src.tools.rag_tools.Settings.ENABLE_RAG", True)
+
+    result = rag_tools.retrieve_security_context("anything")
+    assert result.status == "error"
+    assert "fail" in (result.error_message or "")

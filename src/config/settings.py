@@ -11,12 +11,26 @@ load_dotenv()
 class Settings:
     """Application settings loaded from environment variables."""
 
-    # API Keys
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    # API Keys / LLM provider (OpenRouter default)
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+    OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    OPENROUTER_APP_URL = os.getenv("OPENROUTER_APP_URL", "")
+    OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE", "Cyber Threat Agent")
+    HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
+
+    # Propagate OpenRouter credentials to OpenAI-compatible env vars so downstream
+    # clients (langchain-openai, semantic-router, etc.) automatically pick them up.
+    if OPENROUTER_API_KEY:
+        os.environ.setdefault("OPENAI_API_KEY", OPENROUTER_API_KEY)
+    if OPENROUTER_BASE_URL:
+        os.environ.setdefault("OPENAI_API_BASE", OPENROUTER_BASE_URL)
+        os.environ.setdefault("OPENAI_BASE_URL", OPENROUTER_BASE_URL)
 
     # Model Configuration
-    FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", "gpt-4o-mini")
-    STRONG_MODEL_NAME = os.getenv("STRONG_MODEL_NAME", "gpt-4o")
+    MODEL_NAME = os.getenv("MODEL_NAME", "arcee-ai/trinity-mini:free")
+    FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", MODEL_NAME)
+    STRONG_MODEL_NAME = os.getenv("STRONG_MODEL_NAME", MODEL_NAME)
+    AUTO_MODEL_ROUTING = os.getenv("AUTO_MODEL_ROUTING", "true").lower() == "true"
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
 
@@ -51,37 +65,22 @@ class Settings:
     REQUIRE_HUMAN_APPROVAL_HIGH_RISK = os.getenv("REQUIRE_HUMAN_APPROVAL_HIGH_RISK", "false").lower() == "true"
     MIN_EVIDENCE_FOR_HIGH_RISK = int(os.getenv("MIN_EVIDENCE_FOR_HIGH_RISK", "1"))
 
-    # CTI (AlienVault OTX)
+    # CTI provider configuration
+    CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").lower()
     OTX_API_KEY = os.getenv("OTX_API_KEY", "")
     OTX_BASE_URL = os.getenv("OTX_BASE_URL", "https://otx.alienvault.com/api/v1").rstrip("/")
-    CTI_PROVIDER = os.getenv("CTI_PROVIDER", "otx").strip().lower()
     CTI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("CTI_REQUEST_TIMEOUT_SECONDS", "10"))
     CTI_MAX_RETRIES = int(os.getenv("CTI_MAX_RETRIES", "2"))
     CTI_RETRY_BACKOFF_SECONDS = float(os.getenv("CTI_RETRY_BACKOFF_SECONDS", "0.5"))
     CTI_MAX_RESPONSE_CHARS = int(os.getenv("CTI_MAX_RESPONSE_CHARS", "3000"))
     CTI_TOP_RESULTS = int(os.getenv("CTI_TOP_RESULTS", "5"))
 
-    # RAG — default cloud Pinecone over data/knowledge; optional local Chroma + MITRE markdown
-    ENABLE_RAG = os.getenv("ENABLE_RAG", "true").lower() == "true"
-    RAG_VECTOR_BACKEND = os.getenv("RAG_VECTOR_BACKEND", "pinecone").strip().lower()
+    # RAG (LangChain + Pinecone)
+    ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() == "true"
     RAG_MAX_RESULTS = int(os.getenv("RAG_MAX_RESULTS", "3"))
+    RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.25"))
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
     PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "cyber-llm-knowledge")
-    # Local MITRE / Chroma (used when RAG_VECTOR_BACKEND=chroma); paths set after DATA_DIR
-    RAG_CHROMA_COLLECTION = os.getenv("RAG_CHROMA_COLLECTION", "mitre_attack")
-    RAG_EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-    RAG_TOP_K = int(os.getenv("RAG_TOP_K", "8"))
-    RAG_DISTANCE_THRESHOLD = float(os.getenv("RAG_DISTANCE_THRESHOLD", "0.7"))
-    RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.25"))
-
-    # Embedding configuration
-    EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
-    # openai: uses text-embedding-3-small via existing OPENAI_API_KEY
-    # ollama: uses nomic-embed-text via local Ollama instance
-    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
-    OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-    EMBEDDING_ENABLED = os.getenv("EMBEDDING_ENABLED", "true").lower() == "true"
 
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
@@ -91,11 +90,7 @@ class Settings:
     BENCHMARKS_DIR = DATA_DIR / "benchmarks"
     CTI_FEEDS_DIR = DATA_DIR / "cti_feeds"
     KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", DATA_DIR / "knowledge"))
-    _rag_data_raw = os.getenv("RAG_DATA_PATH", "").strip()
-    _rag_chroma_raw = os.getenv("RAG_CHROMA_PATH", "").strip()
-    RAG_DATA_PATH = Path(_rag_data_raw) if _rag_data_raw else DATA_DIR / "mitre"
-    RAG_CHROMA_PATH = Path(_rag_chroma_raw) if _rag_chroma_raw else DATA_DIR / "chroma_db"
-
+    
     # Ensure directories exist
     @classmethod
     def ensure_directories(cls):
@@ -106,8 +101,6 @@ class Settings:
         cls.BENCHMARKS_DIR.mkdir(exist_ok=True)
         cls.CTI_FEEDS_DIR.mkdir(exist_ok=True)
         cls.KNOWLEDGE_DIR.mkdir(exist_ok=True)
-        cls.RAG_DATA_PATH.mkdir(parents=True, exist_ok=True)
-        cls.RAG_CHROMA_PATH.mkdir(parents=True, exist_ok=True)
     
     @classmethod
     def validate(cls):
@@ -119,18 +112,20 @@ class Settings:
             )
         if cls.ENVIRONMENT == "production" and cls.ENABLE_SANDBOX:
             raise ValueError("ENABLE_SANDBOX must be false when ENVIRONMENT=production.")
-        if not cls.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required. Set it in .env file.")
+        if not cls.OPENROUTER_API_KEY:
+            raise ValueError("OPENROUTER_API_KEY is required. Set it in .env file.")
+        if not cls.OPENROUTER_BASE_URL:
+            raise ValueError("OPENROUTER_BASE_URL must be configured.")
         if not cls.FAST_MODEL_NAME or not cls.STRONG_MODEL_NAME:
             raise ValueError("FAST_MODEL_NAME and STRONG_MODEL_NAME must be configured.")
         if not (0.0 <= cls.TEMPERATURE <= 1.0):
             raise ValueError("TEMPERATURE must be between 0.0 and 1.0.")
         if cls.MAX_TOKENS <= 0:
             raise ValueError("MAX_TOKENS must be greater than 0.")
-        if not cls.OTX_API_KEY:
-            raise ValueError("OTX_API_KEY is required.")
         if cls.CTI_PROVIDER != "otx":
-            raise ValueError("CTI_PROVIDER must be 'otx'.")
+            raise ValueError("CTI_PROVIDER must be 'otx'. Mock CTI has been removed.")
+        if not cls.OTX_API_KEY:
+            raise ValueError("OTX_API_KEY is required when CTI_PROVIDER=otx.")
         if cls.CTI_REQUEST_TIMEOUT_SECONDS <= 0:
             raise ValueError("CTI_REQUEST_TIMEOUT_SECONDS must be greater than 0.")
         if cls.CTI_MAX_RETRIES < 0:
@@ -171,32 +166,15 @@ class Settings:
             raise ValueError("PROMPT_VERSION_G1 must not be empty.")
         if not cls.PROMPT_VERSION_G2.strip():
             raise ValueError("PROMPT_VERSION_G2 must not be empty.")
-        allowed_rag_backends = {"pinecone", "chroma"}
-        if cls.RAG_VECTOR_BACKEND not in allowed_rag_backends:
-            raise ValueError(
-                f"RAG_VECTOR_BACKEND must be one of {sorted(allowed_rag_backends)}; "
-                f"got '{cls.RAG_VECTOR_BACKEND}'."
-            )
-        if cls.ENABLE_RAG and cls.RAG_VECTOR_BACKEND == "pinecone":
+        if cls.ENABLE_RAG:
             if not cls.PINECONE_API_KEY:
-                raise ValueError("PINECONE_API_KEY is required when RAG_VECTOR_BACKEND=pinecone.")
+                raise ValueError("PINECONE_API_KEY is required when ENABLE_RAG=true.")
             if not cls.PINECONE_INDEX_NAME:
-                raise ValueError("PINECONE_INDEX_NAME is required when RAG_VECTOR_BACKEND=pinecone.")
+                raise ValueError("PINECONE_INDEX_NAME is required when ENABLE_RAG=true.")
+        if cls.RAG_MIN_SCORE < 0 or cls.RAG_MIN_SCORE > 1:
+            raise ValueError("RAG_MIN_SCORE must be between 0 and 1.")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
-        if cls.RAG_TOP_K <= 0:
-            raise ValueError("RAG_TOP_K must be greater than 0.")
-        # Embedding validation
-        allowed_embedding_providers = {"openai", "ollama"}
-        if cls.EMBEDDING_PROVIDER not in allowed_embedding_providers:
-            raise ValueError(
-                f"EMBEDDING_PROVIDER must be one of {sorted(allowed_embedding_providers)}; "
-                f"got '{cls.EMBEDDING_PROVIDER}'."
-            )
-        if cls.EMBEDDING_ENABLED and cls.EMBEDDING_PROVIDER == "openai" and not cls.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai.")
-        if cls.EMBEDDING_ENABLED and cls.EMBEDDING_PROVIDER == "ollama" and not cls.OLLAMA_BASE_URL:
-            raise ValueError("OLLAMA_BASE_URL is required when EMBEDDING_PROVIDER=ollama.")
         return True
 
     @classmethod
@@ -219,8 +197,20 @@ class Settings:
 
     @classmethod
     def should_use_strong_model(cls, user_text: str) -> bool:
-        """Use strong model for high-risk tasks (intent-based routing is always on)."""
+        """Route strong model for high-risk tasks when auto-routing is enabled."""
+        if not cls.AUTO_MODEL_ROUTING:
+            return False
         return cls.is_high_risk_task(user_text)
+
+    @classmethod
+    def openrouter_headers(cls) -> dict:
+        """Return recommended headers for OpenRouter client usage."""
+        headers = {}
+        if cls.OPENROUTER_APP_URL:
+            headers["HTTP-Referer"] = cls.OPENROUTER_APP_URL
+        if cls.OPENROUTER_APP_TITLE:
+            headers["X-Title"] = cls.OPENROUTER_APP_TITLE
+        return headers
 
 
 # Initialize directories on import

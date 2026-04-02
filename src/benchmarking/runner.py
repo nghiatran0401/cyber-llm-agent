@@ -30,8 +30,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--provider",
-        choices=("openai", "ollama"),
-        default="openai",
+        choices=("openrouter", "ollama"),
+        default="openrouter",
         help="LLM provider for real-llm mode. Ollama reserved for future extension.",
     )
     parser.add_argument(

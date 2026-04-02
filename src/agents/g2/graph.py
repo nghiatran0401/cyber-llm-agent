@@ -32,7 +32,9 @@ def _default_llm() -> ChatOpenAI:
     return ChatOpenAI(
         model=Settings.FAST_MODEL_NAME,
         temperature=Settings.TEMPERATURE,
-        openai_api_key=Settings.OPENAI_API_KEY,
+        openai_api_key=Settings.OPENROUTER_API_KEY,
+        openai_api_base=Settings.OPENROUTER_BASE_URL,
+        default_headers=Settings.openrouter_headers(),
     )
 
 

@@ -1,0 +1,65 @@
+"""
+Purpose: Basic agent without tools
+What it does:
+- Connects to OpenRouter LLM
+- Analyzes single log entries
+- Returns severity, threat type, and recommendations
+"""
+import os
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from src.config.settings import Settings
+from src.utils.logger import setup_logger
+from src.utils.prompt_templates import load_prompt_template
+
+load_dotenv()
+
+logger = setup_logger(__name__)
+
+
+class CyberSecurityAgent:
+
+    def __init__(self, model_name: str = None, temperature: float = None):
+        try:
+            Settings.validate()
+        except ValueError as e:
+            logger.error(f"Configuration error: {e}")
+            raise
+
+        self.llm = ChatOpenAI(
+            model=model_name or Settings.MODEL_NAME,
+            temperature=temperature if temperature is not None else Settings.TEMPERATURE,
+            openai_api_key=Settings.OPENROUTER_API_KEY,
+            openai_api_base=Settings.OPENROUTER_BASE_URL,
+            default_headers=Settings.openrouter_headers(),
+        )
+        logger.info(f"Initialized CyberSecurityAgent with model: {self.llm.model_name}")
+
+    def analyze_log(self, log_entry: str) -> str:
+        """Analyze a single security log entry."""
+        if not log_entry or not log_entry.strip():
+            logger.warning("Empty log entry provided")
+            return "Error: Empty log entry provided."
+
+        try:
+            prompt = PromptTemplate(
+                input_variables=["log"],
+                template=load_prompt_template("g1/base_agent_log_analysis.txt"),
+            )
+            chain = prompt | self.llm
+            result = chain.invoke({"log": log_entry})
+
+            if hasattr(result, 'content'):
+                analysis = result.content
+            else:
+                analysis = str(result)
+
+            logger.info(f"Log analysis completed. Response length: {len(analysis)}")
+            return analysis
+
+        except Exception as e:
+            error_msg = f"Error analyzing log: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return f"Error: {error_msg}"
+
