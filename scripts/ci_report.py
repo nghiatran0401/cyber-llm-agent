@@ -10,7 +10,7 @@ OWNER_MAP = {
     "test_benchmark_runner": "Person 1 (Platform)",
     "test_scenarios": "Person 1 (Platform)",
     "test_multiagent": "Person 2 (ReAct)",
-    "test_service_g1_phase2": "Person 2 (ReAct)",
+    "test_g1_service": "Person 2 (ReAct)",
     "test_state_validator": "Person 2 (ReAct)",
     "test_prompt_manager": "Person 2 (ReAct)",
     "test_rag_tools": "Person 3 (RAG)",
@@ -23,7 +23,7 @@ OWNER_MAP = {
 SEVERITY_MAP = {
     "test_api_endpoints": "HIGH",
     "test_multiagent": "HIGH",
-    "test_service_g1_phase2": "HIGH",
+    "test_g1_service": "HIGH",
     "test_memory": "HIGH",
     "test_tools": "MEDIUM",
     "test_sandbox": "MEDIUM",

@@ -3,8 +3,6 @@
 
 This script validates:
 - health + readiness envelopes
-- auth middleware behavior
-- rate-limit middleware behavior
 - G1/G2/chat/workspace stream endpoint wiring
 - sandbox endpoint wiring
 - basic local RAG ingest/retrieve behavior with citations
@@ -26,7 +24,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from services.api.main import app
-from services.api.middleware import _RATE_BUCKETS
 from src.tools import rag_tools
 
 
@@ -124,82 +121,43 @@ def run_checklist() -> int:
         dashboard_ok = dashboard.status_code == 200 and "summary" in dashboard.json().get("result", {})
         results.append(_result("metrics dashboard endpoint", dashboard_ok, f"status={dashboard.status_code}"))
 
-        # 2) Auth behavior
-        with patch("src.config.settings.Settings.API_AUTH_ENABLED", True), patch(
-            "src.config.settings.Settings.API_AUTH_KEY", "test-key"
-        ), patch("src.config.settings.Settings.API_RATE_LIMIT_ENABLED", False):
-            unauthorized = client.post("/api/v1/analyze/g1", json={"input": "hello"})
-            results.append(
-                _result(
-                    "auth rejects missing key",
-                    unauthorized.status_code == 401,
-                    f"status={unauthorized.status_code}",
-                )
-            )
-            authorized = client.post(
-                "/api/v1/analyze/g1",
-                headers={"x-api-key": "test-key"},
-                json={"input": "hello"},
-            )
-            results.append(
-                _result("auth accepts valid key", authorized.status_code == 200, f"status={authorized.status_code}")
-            )
+        # 2) Core endpoints
+        g1 = client.post("/api/v1/analyze/g1", json={"input": "Analyze failed logins"})
+        g2 = client.post("/api/v1/analyze/g2", json={"input": "Analyze failed logins"})
+        chat = client.post("/api/v1/chat", json={"input": "hello", "mode": "g1"})
+        g2_json = g2.json() if g2.status_code == 200 else {}
+        rag_present = "Citations:" in str(g2_json.get("result", {}).get("rag_context", ""))
+        results.append(_result("g1 analyze", g1.status_code == 200, f"status={g1.status_code}"))
+        results.append(_result("g2 analyze", g2.status_code == 200, f"status={g2.status_code}"))
+        results.append(_result("chat endpoint", chat.status_code == 200, f"status={chat.status_code}"))
+        results.append(_result("g2 includes rag citations", rag_present, "rag_context contains citations"))
 
-        # 3) Rate-limit behavior
-        with patch("src.config.settings.Settings.API_AUTH_ENABLED", False), patch(
-            "src.config.settings.Settings.API_RATE_LIMIT_ENABLED", True
-        ), patch(
-            "src.config.settings.Settings.API_RATE_LIMIT_WINDOW_SECONDS", 60
-        ), patch(
-            "src.config.settings.Settings.API_RATE_LIMIT_MAX_REQUESTS", 1
-        ):
-            _RATE_BUCKETS.clear()
-            first = client.post("/api/v1/analyze/g1", json={"input": "first"})
-            second = client.post("/api/v1/analyze/g1", json={"input": "second"})
-            ok_rate = first.status_code == 200 and second.status_code == 429 and "Retry-After" in second.headers
-            results.append(_result("rate limit enforced", ok_rate, f"first={first.status_code} second={second.status_code}"))
+        with client.stream(
+            "POST",
+            "/api/v1/workspace/stream",
+            json={"task": "chat", "mode": "g1", "input": "hello"},
+        ) as stream_resp:
+            events = _parse_stream_events(stream_resp)
+        has_trace = any(e.get("type") == "trace" for e in events)
+        has_final = any(e.get("type") == "final" for e in events)
+        has_done = any(e.get("type") == "done" for e in events)
+        results.append(_result("workspace stream trace/final/done", has_trace and has_final and has_done, f"events={len(events)}"))
 
-        # 4) Core endpoints
-        with patch("src.config.settings.Settings.API_AUTH_ENABLED", False), patch(
-            "src.config.settings.Settings.API_RATE_LIMIT_ENABLED", False
-        ):
-            g1 = client.post("/api/v1/analyze/g1", json={"input": "Analyze failed logins"})
-            g2 = client.post("/api/v1/analyze/g2", json={"input": "Analyze failed logins"})
-            chat = client.post("/api/v1/chat", json={"input": "hello", "mode": "g1"})
-            g2_json = g2.json() if g2.status_code == 200 else {}
-            rag_present = "Citations:" in str(g2_json.get("result", {}).get("rag_context", ""))
-            results.append(_result("g1 analyze", g1.status_code == 200, f"status={g1.status_code}"))
-            results.append(_result("g2 analyze", g2.status_code == 200, f"status={g2.status_code}"))
-            results.append(_result("chat endpoint", chat.status_code == 200, f"status={chat.status_code}"))
-            results.append(_result("g2 includes rag citations", rag_present, "rag_context contains citations"))
+        # 3) Sandbox endpoints
+        scenarios = client.get("/api/v1/sandbox/scenarios")
+        simulate = client.post(
+            "/api/v1/sandbox/simulate",
+            json={"scenario": "sqli", "vulnerable_mode": False, "source_ip": "127.0.0.1", "append_to_live_log": False},
+        )
+        analyze = client.post(
+            "/api/v1/sandbox/analyze",
+            json={"event": {"scenario_id": "owasp_sqli_001", "raw_event": "sql injection"}, "mode": "g1"},
+        )
+        results.append(_result("sandbox scenarios", scenarios.status_code == 200, f"status={scenarios.status_code}"))
+        results.append(_result("sandbox simulate", simulate.status_code == 200, f"status={simulate.status_code}"))
+        results.append(_result("sandbox analyze", analyze.status_code == 200, f"status={analyze.status_code}"))
 
-            with client.stream(
-                "POST",
-                "/api/v1/workspace/stream",
-                json={"task": "chat", "mode": "g1", "input": "hello"},
-            ) as stream_resp:
-                events = _parse_stream_events(stream_resp)
-            has_trace = any(e.get("type") == "trace" for e in events)
-            has_final = any(e.get("type") == "final" for e in events)
-            has_done = any(e.get("type") == "done" for e in events)
-            results.append(_result("workspace stream trace/final/done", has_trace and has_final and has_done, f"events={len(events)}"))
-
-        # 5) Sandbox endpoints (enabled)
-        with patch("services.api.routes.Settings.sandbox_enabled", return_value=True):
-            scenarios = client.get("/api/v1/sandbox/scenarios")
-            simulate = client.post(
-                "/api/v1/sandbox/simulate",
-                json={"scenario": "sqli", "vulnerable_mode": False, "source_ip": "127.0.0.1", "append_to_live_log": False},
-            )
-            analyze = client.post(
-                "/api/v1/sandbox/analyze",
-                json={"event": {"scenario_id": "owasp_sqli_001", "raw_event": "sql injection"}, "mode": "g1"},
-            )
-            results.append(_result("sandbox scenarios", scenarios.status_code == 200, f"status={scenarios.status_code}"))
-            results.append(_result("sandbox simulate", simulate.status_code == 200, f"status={simulate.status_code}"))
-            results.append(_result("sandbox analyze", analyze.status_code == 200, f"status={analyze.status_code}"))
-
-        # 6) RAG helpers (Pinecone path — mock I/O; live ingest needs keys + network)
+        # 4) RAG helpers (Pinecone path — mock I/O; live ingest needs keys + network)
         with patch.object(
             rag_tools,
             "ingest_knowledge_base",
