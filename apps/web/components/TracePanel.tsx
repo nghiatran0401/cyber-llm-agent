@@ -1,5 +1,6 @@
 "use client";
 
+import { traceStepLabel } from "@/lib/trace-labels";
 import { StepTrace } from "@/lib/types";
 
 type TracePanelProps = {
@@ -56,12 +57,18 @@ function renderMetadata(step: StepTrace) {
   }
 
   return (
-    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-      {step.run_id ? <span className="rounded-full bg-slate-200 px-2 py-1 dark:bg-slate-800">Run: {step.run_id}</span> : null}
-      {step.step_id ? <span className="rounded-full bg-slate-200 px-2 py-1 dark:bg-slate-800">Step: {step.step_id}</span> : null}
-      {step.tool_call_id ? <span className="rounded-full bg-cyan-100 px-2 py-1 text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-100">Tool Call: {step.tool_call_id}</span> : null}
+    <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-slate-400 dark:text-slate-500">
+      {step.run_id ? <span className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">Run {step.run_id.slice(0, 8)}…</span> : null}
+      {step.step_id ? <span className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">Step {step.step_id.slice(-8)}</span> : null}
+      {step.tool_call_id ? (
+        <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-100">Tool</span>
+      ) : null}
     </div>
   );
+}
+
+function stepLabel(step: StepTrace): string {
+  return traceStepLabel(step.step);
 }
 
 export function TracePanel({ trace }: TracePanelProps) {
@@ -69,51 +76,65 @@ export function TracePanel({ trace }: TracePanelProps) {
     return <p className="subtle-text">No trace available.</p>;
   }
 
+  const defaultOpenIndex = trace.findIndex((s) => s.step === "Analysis");
+  const openIndex = defaultOpenIndex >= 0 ? defaultOpenIndex : trace.length - 1;
+
   return (
     <div className="space-y-2">
       {trace.map((step, index) => {
         const parsedInputSummary = parseSummaryPairs(step.input_summary);
         const parsedOutputSummary = parseSummaryPairs(step.output_summary);
-        const isStructuredSummaryStep = step.step === "RunControl" || step.step === "PolicyGuard" || step.step === "RubricEvaluation";
+        const useDetailGrid =
+          step.step === "ExecutionSummary" ||
+          step.step === "OutputReview" ||
+          step.step === "RunControl" ||
+          step.step === "PolicyGuard" ||
+          step.step === "RubricEvaluation";
+        const hasContext = Boolean(step.prompt_preview?.trim());
 
         return (
           <details
             key={`${step.step}-${index}`}
             className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/70"
-            open={index === 0}
+            open={index === openIndex}
           >
-            <summary className="cursor-pointer text-sm font-medium text-slate-800 dark:text-slate-100">
-              {index + 1}. {step.step}
+            <summary className="cursor-pointer list-none text-sm font-medium text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden">
+              <span className="mr-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-slate-200 text-[11px] text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                {index + 1}
+              </span>
+              {stepLabel(step)}
             </summary>
-            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">{step.what_it_does}</p>
+            <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">{step.what_it_does}</p>
             {renderMetadata(step)}
 
-            <div className="mt-3 space-y-2 text-xs">
-              <div>
-                <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Prompt preview</p>
-                <pre className="code-block">{step.prompt_preview}</pre>
-              </div>
+            <div className="mt-3 space-y-3 text-xs">
+              {hasContext ? (
+                <div>
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Context</p>
+                  <pre className="code-block text-[11px]">{step.prompt_preview}</pre>
+                </div>
+              ) : null}
 
-              {isStructuredSummaryStep ? (
+              {useDetailGrid ? (
                 <>
                   <div>
-                    <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Input summary</p>
-                    {renderSummaryGrid(parsedInputSummary) ?? <pre className="code-block">{step.input_summary}</pre>}
+                    <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Details in</p>
+                    {renderSummaryGrid(parsedInputSummary) ?? <pre className="code-block text-[11px]">{step.input_summary}</pre>}
                   </div>
                   <div>
-                    <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Output summary</p>
-                    {renderSummaryGrid(parsedOutputSummary) ?? <pre className="code-block">{step.output_summary}</pre>}
+                    <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Details out</p>
+                    {renderSummaryGrid(parsedOutputSummary) ?? <pre className="code-block text-[11px]">{step.output_summary}</pre>}
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Input summary</p>
-                    <pre className="code-block">{step.input_summary}</pre>
+                    <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">In</p>
+                    <pre className="code-block text-[11px]">{step.input_summary}</pre>
                   </div>
                   <div>
-                    <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Output summary</p>
-                    <pre className="code-block">{step.output_summary}</pre>
+                    <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-500">Out</p>
+                    <pre className="code-block text-[11px]">{step.output_summary}</pre>
                   </div>
                 </>
               )}

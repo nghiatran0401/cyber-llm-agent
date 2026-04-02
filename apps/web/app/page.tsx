@@ -1,45 +1,23 @@
 "use client";
 
 import { FormEvent, useMemo, useRef, useState } from "react";
+
+/** Stable id for G1 session memory across messages in this browser tab (matches API safe pattern). */
+function newWorkspaceSessionId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return `web-${globalThis.crypto.randomUUID()}`;
+  }
+  return `web-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { LiveMonitorPanel } from "@/components/LiveMonitorPanel";
 import { TracePanel } from "@/components/TracePanel";
-import { deriveMonitorState, PhaseStatus, RunStatus } from "@/lib/monitor-state";
+import { deriveMonitorState, RunStatus } from "@/lib/monitor-state";
 import { streamWorkspace } from "@/lib/api";
 import { AgentMode, StepTrace } from "@/lib/types";
 type WorkspaceMessage = { id: string; role: "user" | "assistant"; content: string };
-
-function getPhaseBadge(status: PhaseStatus): { label: string; className: string } {
-  if (status === "completed") {
-    return {
-      label: "Completed",
-      className: "status-badge bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-    };
-  }
-  if (status === "running") {
-    return {
-      label: "Running",
-      className: "status-badge bg-cyan-100 text-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-200",
-    };
-  }
-  if (status === "error") {
-    return {
-      label: "Error",
-      className: "status-badge bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300",
-    };
-  }
-  if (status === "skipped") {
-    return {
-      label: "Skipped",
-      className: "status-badge bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-    };
-  }
-  return {
-    label: "Pending",
-    className: "status-badge bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  };
-}
 
 function MarkdownContent({ content }: { content: string }) {
   return (
@@ -63,6 +41,10 @@ export default function WorkspacePage() {
   const [liveStatus, setLiveStatus] = useState("Waiting for request...");
   const [currentStep, setCurrentStep] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const workspaceSessionIdRef = useRef<string>("");
+  if (!workspaceSessionIdRef.current) {
+    workspaceSessionIdRef.current = newWorkspaceSessionId();
+  }
 
   const canSubmit = useMemo(() => {
     if (isSubmitting) return false;
@@ -136,6 +118,7 @@ export default function WorkspacePage() {
           task: "chat",
           mode: modelMode,
           input: userInput,
+          session_id: workspaceSessionIdRef.current,
         },
         {
           onEvent: (eventPayload) => {
@@ -290,72 +273,14 @@ export default function WorkspacePage() {
 
       <aside className="space-y-4 overflow-y-auto pr-1">
         <section className="panel">
-          <h2 className="mb-2 text-base font-semibold">Live Monitor</h2>
-          <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
-            Big-picture view of backend workflow state in real time.
-          </p>
-
-          <div className="mb-3 rounded-md border border-slate-300 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/60">
-            <div className="mb-2 flex items-center justify-between text-xs">
-              <p className="font-medium text-slate-700 dark:text-slate-300">Overall run progress</p>
-              <p className="text-slate-600 dark:text-slate-400">
-                {monitor.requiredCompletedCount}/{monitor.requiredTotalCount} required steps
-              </p>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-300 dark:bg-slate-800">
-              <div
-                className="h-full rounded-full bg-cyan-500 transition-all"
-                style={{
-                  width: `${Math.min(100, Math.max(monitor.percentage, isSubmitting ? 6 : 0))}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {monitor.phases.map((phase) => {
-              const badge = getPhaseBadge(phase.status);
-              return (
-                <div
-                  key={phase.id}
-                  className={`rounded-md border p-3 ${
-                    phase.status === "completed"
-                      ? "border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
-                      : phase.status === "running"
-                        ? "border-cyan-300 bg-cyan-50 dark:border-cyan-900 dark:bg-cyan-950/30"
-                        : phase.status === "error"
-                          ? "border-rose-300 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30"
-                          : phase.status === "skipped"
-                            ? "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
-                        : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
-                  }`}
-                >
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">{phase.title}</p>
-                    <span className={badge.className}>
-                      {badge.label}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">{phase.desc}</p>
-                  <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-500">
-                    Progress: {phase.doneCount}/{phase.total} internal steps
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-3 rounded-md border border-cyan-300 bg-cyan-50 p-3 text-xs text-cyan-900 dark:border-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-100">
-            <p className="font-semibold">What is happening now?</p>
-            <p className="mt-1">
-              {liveStatus}
-            </p>
-          </div>
-          {monitor.unknownSteps.length > 0 ? (
-            <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              Unknown server steps received: {monitor.unknownSteps.join(", ")}
-            </p>
-          ) : null}
+          <LiveMonitorPanel
+            mode={modelMode}
+            monitor={monitor}
+            liveStatus={liveStatus}
+            runInFlight={isSubmitting}
+            phaseLayout="stack"
+            heading="h2"
+          />
         </section>
         <section className="panel">
           <h2 className="mb-2 text-sm font-semibold">Technical Trace</h2>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { LiveMonitorPanel } from "@/components/LiveMonitorPanel";
 import { TracePanel } from "@/components/TracePanel";
 import {
   getLabScenarios,
@@ -12,7 +13,7 @@ import {
   simulateLabScenario,
   streamWorkspace,
 } from "@/lib/api";
-import { deriveMonitorState, PhaseStatus, RunStatus } from "@/lib/monitor-state";
+import { deriveMonitorState, RunStatus } from "@/lib/monitor-state";
 import { AgentMode, OwaspMitreMapping, RecentDetectionItem, StepTrace } from "@/lib/types";
 
 type DashboardEvent = Record<string, unknown>;
@@ -27,37 +28,6 @@ function formatTimestamp(value: unknown): string {
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
   return date.toLocaleString();
-}
-
-function getPhaseBadge(status: PhaseStatus): { label: string; className: string } {
-  if (status === "completed") {
-    return {
-      label: "Completed",
-      className: "status-badge bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-    };
-  }
-  if (status === "running") {
-    return {
-      label: "Running",
-      className: "status-badge bg-cyan-100 text-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-200",
-    };
-  }
-  if (status === "error") {
-    return {
-      label: "Error",
-      className: "status-badge bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300",
-    };
-  }
-  if (status === "skipped") {
-    return {
-      label: "Skipped",
-      className: "status-badge bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-    };
-  }
-  return {
-    label: "Pending",
-    className: "status-badge bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  };
 }
 
 function detectAttackFamily(logLines: string[]): "SQLi" | "XSS" | "IDOR" | "PathTraversal" | "Attack" {
@@ -423,7 +393,7 @@ export default function SandboxPage() {
           {isSimulating ? "Running simulation and analysis..." : "Run full automated flow"}
         </button>
         <div className="rounded-md border border-cyan-300 bg-cyan-50 p-3 text-xs text-cyan-900 dark:border-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-100">
-          <p className="font-semibold">What is happening now?</p>
+          <p className="font-semibold">Current activity</p>
           <p className="mt-1">{liveStatus}</p>
         </div>
       </section>
@@ -434,38 +404,15 @@ export default function SandboxPage() {
       </section>
 
       <section className="panel lg:col-span-2">
-        <h3 className="section-title mb-2">Live Monitor (analysis internals)</h3>
-        <div className="mb-3 rounded-md border border-slate-300 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/60">
-          <div className="mb-2 flex items-center justify-between text-xs">
-            <p className="font-medium text-slate-700 dark:text-slate-300">Overall run progress</p>
-            <p className="text-slate-600 dark:text-slate-400">
-              {monitor.requiredCompletedCount}/{monitor.requiredTotalCount} required steps
-            </p>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-300 dark:bg-slate-800">
-            <div
-              className="h-full rounded-full bg-cyan-500 transition-all"
-              style={{ width: `${Math.min(100, Math.max(monitor.percentage, isSimulating ? 6 : 0))}%` }}
-            />
-          </div>
-        </div>
-        <div className="grid gap-2 md:grid-cols-3">
-          {monitor.phases.map((phase) => {
-            const badge = getPhaseBadge(phase.status);
-            return (
-              <div key={phase.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
-                <div className="mb-1 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">{phase.title}</p>
-                  <span className={badge.className}>{badge.label}</span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400">{phase.desc}</p>
-                <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-500">
-                  Progress: {phase.doneCount}/{phase.total}
-                </p>
-              </div>
-            );
-          })}
-        </div>
+        <LiveMonitorPanel
+          mode={mode}
+          monitor={monitor}
+          liveStatus={liveStatus}
+          runInFlight={isSimulating}
+          phaseLayout="grid"
+          heading="h3"
+          showActivityCallout={false}
+        />
       </section>
 
       <section className="panel">

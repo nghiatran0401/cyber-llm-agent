@@ -25,14 +25,10 @@ type StreamHandlers = {
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 const LAB_BASE_URL = (process.env.NEXT_PUBLIC_LAB_BASE_URL || "http://127.0.0.1:3100").replace(/\/$/, "");
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
 function buildHeaders(init?: HeadersInit): Headers {
   const headers = new Headers(init ?? {});
   headers.set("Content-Type", "application/json");
-  if (API_KEY) {
-    headers.set("x-api-key", API_KEY);
-  }
   return headers;
 }
 

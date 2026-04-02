@@ -1,4 +1,5 @@
 import { AgentMode } from "@/lib/types";
+import { TRACE_STEP_LABEL } from "@/lib/trace-labels";
 
 export type MonitorPhaseId = "collect" | "reason" | "respond";
 
@@ -21,84 +22,71 @@ export type MonitorContract = {
   steps: MonitorStepDefinition[];
 };
 
-const PHASES: MonitorPhaseDefinition[] = [
+const G1_PHASES: MonitorPhaseDefinition[] = [
   {
     id: "collect",
-    title: "1) Understand Input",
-    desc: "Collect and normalize evidence before analysis starts.",
+    title: "Safety & model",
+    desc: "Input safety checks and model selection (Technical Trace: Safety, Model).",
   },
   {
     id: "reason",
-    title: "2) Reason About Risk",
-    desc: "Evaluate risk signals and decide on response strategy.",
+    title: "Analysis",
+    desc: "Agent loop and tools (Technical Trace: Analysis).",
   },
   {
     id: "respond",
-    title: "3) Build Response Plan",
-    desc: "Produce final recommendations and quality guard checks.",
+    title: "Review & run summary",
+    desc: "Critic, policy, and run stats (Technical Trace: Review, Run summary).",
+  },
+];
+
+const G2_PHASES: MonitorPhaseDefinition[] = [
+  {
+    id: "collect",
+    title: "Intake",
+    desc: "Prompt version, optional safety pass, and log analysis.",
+  },
+  {
+    id: "reason",
+    title: "Deep dive",
+    desc: "Planner, threat prediction, worker tasks, and run budgets.",
+  },
+  {
+    id: "respond",
+    title: "Wrap-up",
+    desc: "Responder, verifier, orchestrator, policy, and rubric.",
   },
 ];
 
 const G1_STEPS: MonitorStepDefinition[] = [
   {
-    key: "InputPreparation",
-    title: "Input Preparation",
-    whatItDoes: "Validates and sanitizes the request.",
+    key: "SafetyCheck",
+    title: TRACE_STEP_LABEL.SafetyCheck,
+    whatItDoes: "Prompt-injection and unsafe-input checks.",
     phaseId: "collect",
   },
   {
-    key: "RoutingPolicy",
-    title: "Routing Policy",
-    whatItDoes: "Selects model strategy for this task.",
+    key: "ModelRouting",
+    title: TRACE_STEP_LABEL.ModelRouting,
+    whatItDoes: "Selects fast vs strong model for this request.",
     phaseId: "collect",
   },
   {
-    key: "PromptVersion",
-    title: "Prompt Version",
-    whatItDoes: "Loads prompt template version metadata.",
-    phaseId: "collect",
-  },
-  {
-    key: "SafetyGuard",
-    title: "Safety Guard",
-    whatItDoes: "Checks prompt-injection and input safety signals.",
-    phaseId: "collect",
-    required: false,
-  },
-  {
-    key: "SingleAgentExecution",
-    title: "Single Agent Execution",
-    whatItDoes: "Runs analysis loop and tool usage.",
+    key: "Analysis",
+    title: TRACE_STEP_LABEL.Analysis,
+    whatItDoes: "Agent execution with tools and template-backed prompt.",
     phaseId: "reason",
   },
   {
-    key: "RunControl",
-    title: "Run Control",
-    whatItDoes: "Applies execution bounds and stop reason tracking.",
-    phaseId: "reason",
-  },
-  {
-    key: "StructuredOutput",
-    title: "Structured Output",
-    whatItDoes: "Builds evidence-first response schema.",
+    key: "OutputReview",
+    title: TRACE_STEP_LABEL.OutputReview,
+    whatItDoes: "Critic and output policy outcome.",
     phaseId: "respond",
   },
   {
-    key: "CriticReview",
-    title: "Critic Review",
-    whatItDoes: "Checks report quality and evidence coverage.",
-    phaseId: "respond",
-  },
-  {
-    key: "PolicyGuard",
-    title: "Policy Guard",
-    whatItDoes: "Applies output safety policy rules.",
-    phaseId: "respond",
-  },
-  {
-    key: "RubricEvaluation",
-    title: "Rubric Evaluation",
-    whatItDoes: "Scores final report quality.",
+    key: "ExecutionSummary",
+    title: TRACE_STEP_LABEL.ExecutionSummary,
+    whatItDoes: "Steps, tools, budgets, and stop reason.",
     phaseId: "respond",
   },
 ];
@@ -188,11 +176,11 @@ const G2_STEPS: MonitorStepDefinition[] = [
 
 const MONITOR_CONTRACT_BY_MODE: Record<AgentMode, MonitorContract> = {
   g1: {
-    phases: PHASES,
+    phases: G1_PHASES,
     steps: G1_STEPS,
   },
   g2: {
-    phases: PHASES,
+    phases: G2_PHASES,
     steps: G2_STEPS,
   },
 };
