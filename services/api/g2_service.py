@@ -91,7 +91,7 @@ def run_g2_analysis(
     clean_logs = sanitize_untrusted_text(validate_input(log_input, "input"))
     prompt_version, prompt_template = _resolve_prompt_version()
     prompted_logs = _build_prompted_input(prompt_template, clean_logs)
-    injection_detected = Settings.ENABLE_PROMPT_INJECTION_GUARD and detect_prompt_injection(clean_logs)
+    injection_detected = detect_prompt_injection(clean_logs)
 
     if injection_detected:
         trace = [_trace_step(step="SafetyGuard", what_it_does="Detects prompt-injection patterns before execution.",
@@ -152,7 +152,7 @@ def run_g2_analysis_with_progress(
     clean_logs = sanitize_untrusted_text(validate_input(log_input, "input"))
     prompt_version, prompt_template = _resolve_prompt_version()
     prompted_logs = _build_prompted_input(prompt_template, clean_logs)
-    injection_detected = Settings.ENABLE_PROMPT_INJECTION_GUARD and detect_prompt_injection(clean_logs)
+    injection_detected = detect_prompt_injection(clean_logs)
 
     if injection_detected:
         on_step(_trace_step(step="SafetyGuard", what_it_does="Detects prompt-injection patterns.",

@@ -11,8 +11,6 @@ _METRICS_STATE = {
     "requests_total": 0,
     "success_total": 0,
     "error_total": 0,
-    "auth_fail_total": 0,
-    "rate_limited_total": 0,
     "duration_total_ms": 0,
     "tokens_total_est": 0,
     "cost_total_est_usd": 0.0,
@@ -27,16 +25,6 @@ _METRICS_STATE = {
     "by_stop_reason": defaultdict(int),
     "recent_runs": deque(maxlen=200),
 }
-
-
-def increment_auth_fail() -> None:
-    with _METRICS_LOCK:
-        _METRICS_STATE["auth_fail_total"] += 1
-
-
-def increment_rate_limited() -> None:
-    with _METRICS_LOCK:
-        _METRICS_STATE["rate_limited_total"] += 1
 
 
 def record_metric(
@@ -104,8 +92,6 @@ def get_snapshot() -> dict:
             "requests_total": int(_METRICS_STATE["requests_total"]),
             "success_total": int(_METRICS_STATE["success_total"]),
             "error_total": int(_METRICS_STATE["error_total"]),
-            "auth_fail_total": int(_METRICS_STATE["auth_fail_total"]),
-            "rate_limited_total": int(_METRICS_STATE["rate_limited_total"]),
             "duration_total_ms": int(_METRICS_STATE["duration_total_ms"]),
             "tokens_total_est": int(_METRICS_STATE["tokens_total_est"]),
             "cost_total_est_usd": float(_METRICS_STATE["cost_total_est_usd"]),

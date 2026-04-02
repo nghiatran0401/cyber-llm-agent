@@ -85,11 +85,6 @@ _OWASP_MITRE_MAP = {
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _require_sandbox_enabled() -> None:
-    if not Settings.sandbox_enabled():
-        raise HTTPException(status_code=403, detail="Sandbox is disabled for this environment.")
-
-
 def _estimate_tokens(text: str) -> int:
     content = str(text or "")
     if not content.strip():
@@ -141,8 +136,10 @@ def _derive_tool_stats(result, trace) -> tuple[int, int, int, int, int, int, int
         output_summary = item.get("output_summary", "") if isinstance(item, dict) else getattr(item, "output_summary", "")
         if step_name == "WorkerTask":
             statuses.setdefault("WorkerTask", True)
-        if step_name == "RunControl":
-            match = _RUN_CONTROL_TOOL_CALLS_RE.search(str(output_summary))
+        if step_name in ("RunControl", "ExecutionSummary"):
+            match = _RUN_CONTROL_TOOL_CALLS_RE.search(str(output_summary)) or _RUN_CONTROL_TOOL_CALLS_RE.search(
+                str(input_summary)
+            )
             if match:
                 budget_tool_calls = max(budget_tool_calls, int(match.group(1)))
             duplicate_match = _RUN_CONTROL_DUPLICATES_RE.search(str(input_summary))
@@ -359,8 +356,7 @@ def health() -> ApiResponse:
         ok=True,
         result={
             "status": "healthy",
-            "environment": Settings.ENVIRONMENT,
-            "sandbox_enabled": Settings.sandbox_enabled(),
+            "sandbox_enabled": True,
         },
         trace=[],
         meta=ResponseMeta(request_id=request_id, mode=None, model=None, duration_ms=0),
@@ -394,8 +390,6 @@ def metrics() -> ApiResponse:
             "requests_total": requests_total,
             "success_total": snap["success_total"],
             "error_total": snap["error_total"],
-            "auth_fail_total": snap["auth_fail_total"],
-            "rate_limited_total": snap["rate_limited_total"],
             "avg_duration_ms": avg_duration_ms,
             "tokens_total_est": snap["tokens_total_est"],
             "cost_total_est_usd": round(snap["cost_total_est_usd"], 6),
@@ -737,7 +731,6 @@ def sandbox_simulate(payload: SandboxSimulateRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        _require_sandbox_enabled()
         event = simulate_sandbox_event(
             scenario=payload.scenario,
             vulnerable_mode=payload.vulnerable_mode,
@@ -765,7 +758,6 @@ def sandbox_scenarios() -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        _require_sandbox_enabled()
         scenarios = get_sandbox_scenarios()
         return _build_success_response(
             request_id=request_id,
@@ -788,7 +780,6 @@ def sandbox_analyze(payload: SandboxAnalyzeRequest) -> ApiResponse:
     request_id = str(uuid4())
     start_time = perf_counter()
     try:
-        _require_sandbox_enabled()
         result, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
             _normalize_analysis_result(
             analyze_sandbox_event(
@@ -825,7 +816,6 @@ def sandbox_live_log(
     source: str = Query(default="live_web_logs"),
 ) -> ApiResponse:
     request_id = str(uuid4())
-    _require_sandbox_enabled()
     source_map = {
         "live_web_logs": Settings.LOGS_DIR / "live_web_logs.jsonl",
         "vuln_lab_events": Settings.LOGS_DIR / "vuln_lab_events.jsonl",

@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
+import re
+
 from src.config.settings import Settings
+
+# Strip model echoes of internal prompt wording (user-visible replies only).
+_LEAKED_OUTPUT_PREFIXES = (
+    re.compile(r"(?is)^\s*conversation\s*/\s*clarification\s*:?\s*"),
+    re.compile(r"(?is)^\s*in[-\s]?thread\s*clarification\s*:?\s*"),
+    re.compile(r"(?is)^\s*incident\s*analysis\s*:?\s*"),
+)
 
 MAX_INPUT_CHARS = 50_000
 MAX_EVENT_TEXT_CHARS = 10_000
@@ -45,9 +54,25 @@ def sanitize_untrusted_text(text: str) -> str:
     return sanitized.replace("\x00", "").strip()
 
 
+def strip_leaked_internal_prefixes(text: str) -> str:
+    """Remove leading lines that echo internal prompt labels (e.g. 'Conversation / clarification:')."""
+    t = str(text or "").replace("\x00", "").strip()
+    for _ in range(4):
+        changed = False
+        for pat in _LEAKED_OUTPUT_PREFIXES:
+            new_t, n = pat.subn("", t, count=1)
+            if n:
+                t = new_t.lstrip()
+                changed = True
+                break
+        if not changed:
+            break
+    return t.strip()
+
+
 def enforce_response_boundaries(text: str, max_chars: int = 12000) -> str:
     """Trim response text to stay within output boundaries."""
-    content = str(text or "").replace("\x00", "").strip()
+    content = strip_leaked_internal_prefixes(str(text or "").replace("\x00", "").strip())
     if len(content) <= max_chars:
         return content
     return content[: max_chars - 3].rstrip() + "..."

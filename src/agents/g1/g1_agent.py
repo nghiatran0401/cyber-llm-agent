@@ -1,9 +1,5 @@
 """
 Purpose: G1 security agent — tools, adaptive model routing, and session memory
-What it does:
-- Builds LangChain agents with security analysis tools
-- Routes each request to fast or strong model by risk intent
-- Persists conversation state by session ID and injects memory into prompts
 """
 
 from typing import Any, Optional
@@ -44,8 +40,6 @@ def _create_tool_agent(model_name: str, verbose: bool = True):
 
 
 class _AdaptiveSecurityAgent:
-    """Picks fast vs strong tool-enabled LLM per request (intent-based routing)."""
-
     def __init__(self, verbose: bool = True):
         Settings.validate()
         self.verbose = verbose
@@ -55,15 +49,7 @@ class _AdaptiveSecurityAgent:
         self.fast_agent = _create_tool_agent(self.fast_model, verbose=verbose)
         self.strong_agent = _create_tool_agent(self.strong_model, verbose=verbose)
 
-        logger.info(
-            "Initialized G1 model routing (fast=%s, strong=%s, intent_routing=on)",
-            self.fast_model,
-            self.strong_model,
-        )
-
     def invoke(self, payload: Any, *, routing_text: Optional[str] = None) -> Any:
-        """Route to the appropriate model and invoke the underlying agent."""
-
         user_text = routing_text if routing_text is not None else extract_user_text(payload)
         is_high_risk = is_high_risk_intent(user_text)
         selected_agent = self.strong_agent if is_high_risk else self.fast_agent
@@ -71,15 +57,13 @@ class _AdaptiveSecurityAgent:
 
 
 class G1Agent:
-    """G1 agent: session memory plus default intent-based model routing."""
-
     def __init__(
         self,
         memory_type: str = "buffer",
-        max_messages: int = 12,
+        max_messages: int = 6,
         max_episodic_items: int = 30,
         max_semantic_facts: int = 80,
-        max_context_chars: int = 4000,
+        max_context_chars: int = 14000,
         recall_top_k: int = 3,
         session_id: Optional[str] = None,
         backend_agent: Optional[Any] = None,
@@ -136,7 +120,8 @@ class G1Agent:
             len(self.memory.semantic_facts),
         )
         augmented_prompt = (
-            "Use this conversation context when answering.\n\n"
+            "Use this conversation context as background. Answer the current user request directly; "
+            "do not repeat a full prior incident write-up unless they ask for a recap or new assessment.\n\n"
             f"{context_block}\n\n"
             f"Current user request:\n{agent_input}"
         )
@@ -177,13 +162,13 @@ class G1Agent:
 
 def create_g1_agent(
     memory_type: str = "buffer",
-    max_messages: int = 12,
+    max_messages: int = 6,
     max_episodic_items: int = 30,
     max_semantic_facts: int = 80,
-    max_context_chars: int = 4000,
+    max_context_chars: int = 14000,
     recall_top_k: int = 3,
     session_id: Optional[str] = None,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> G1Agent:
     """Construct a G1 agent with default routing and session memory."""
     return G1Agent(

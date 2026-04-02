@@ -2,7 +2,7 @@
 
 This module is a thin shell. Business logic lives in:
   - routes.py      → All route handlers
-  - middleware.py   → Auth, rate-limit, CORS, exception handlers
+  - middleware.py   → CORS, exception handlers
   - metrics.py      → In-memory metrics aggregation
   - schemas.py      → Pydantic request/response contracts
   - g1_service.py   → G1 single-agent runner
@@ -27,8 +27,7 @@ from .routes import router
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
-    if Settings.VALIDATE_ON_STARTUP and "PYTEST_CURRENT_TEST" not in os.environ:
-        Settings.validate()
+    Settings.validate()
     yield
 
 
