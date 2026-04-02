@@ -25,6 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from services.api import main as api_main
 from services.api.main import app
 from services.api.middleware import _RATE_BUCKETS
 from src.tools import rag_tools
@@ -95,19 +96,21 @@ def run_checklist() -> int:
         )
         return "workspace final response", "gpt-4o-mini"
 
-    with patch("src.config.settings.Settings.validate", return_value=True), patch(
-        "services.api.routes.run_g1_analysis", side_effect=fake_run_g1_analysis
-    ), patch("services.api.routes.run_g2_analysis", side_effect=fake_run_g2_analysis), patch(
-        "services.api.routes.run_chat", side_effect=fake_run_chat
-    ), patch(
-        "services.api.routes.run_workspace_with_progress", side_effect=fake_workspace_with_progress
-    ), patch(
-        "services.api.routes.get_sandbox_scenarios", return_value=["sqli", "xss", "bruteforce"]
-    ), patch(
-        "services.api.routes.simulate_sandbox_event",
+    with patch("src.config.settings.Settings.validate", return_value=True), patch.object(
+        api_main, "run_g1_analysis", side_effect=fake_run_g1_analysis
+    ), patch.object(api_main, "run_g2_analysis", side_effect=fake_run_g2_analysis), patch.object(
+        api_main, "run_chat", side_effect=fake_run_chat
+    ), patch.object(
+        api_main, "run_workspace_with_progress", side_effect=fake_workspace_with_progress
+    ), patch.object(
+        api_main, "get_sandbox_scenarios", return_value=["sqli", "xss", "bruteforce"]
+    ), patch.object(
+        api_main,
+        "simulate_sandbox_event",
         return_value={"scenario_id": "owasp_sqli_001", "mode": "safe", "source_ip": "127.0.0.1"},
-    ), patch(
-        "services.api.routes.analyze_sandbox_event",
+    ), patch.object(
+        api_main,
+        "analyze_sandbox_event",
         return_value=("sandbox analyzed", [], "gpt-4o-mini"),
     ):
         client = TestClient(app)
@@ -185,7 +188,7 @@ def run_checklist() -> int:
             results.append(_result("workspace stream trace/final/done", has_trace and has_final and has_done, f"events={len(events)}"))
 
         # 5) Sandbox endpoints (enabled)
-        with patch("services.api.routes.Settings.sandbox_enabled", return_value=True):
+        with patch.object(api_main.Settings, "sandbox_enabled", classmethod(lambda cls: True)):
             scenarios = client.get("/api/v1/sandbox/scenarios")
             simulate = client.post(
                 "/api/v1/sandbox/simulate",
