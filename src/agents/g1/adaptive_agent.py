@@ -3,11 +3,13 @@ Purpose: Tool-enabled adaptive security agent
 What it does:
 - Builds LangChain agents with security analysis tools
 - Routes requests to fast or strong models by risk intent
+- Applies shared runtime controls to tool usage without changing tool behavior
 """
 
 from typing import Any
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
+from langchain_core.tools import Tool
 from src.tools.log_parser_tool import log_parser
 from src.tools.cti_tool import cti_fetch
 from src.tools.rag_tools import rag_retriever
@@ -15,8 +17,27 @@ from src.agents.shared.intent_routing import is_high_risk_intent
 from src.config.settings import Settings
 from src.utils.logger import setup_logger
 from src.utils.prompt_templates import load_prompt_template
+from services.api.react_runtime import execute_tool_with_runtime_controls
 
 logger = setup_logger(__name__)
+
+
+def _wrap_runtime_tool(tool: Tool) -> Tool:
+    """Wrap one LangChain tool so runtime budgets and dedupe apply automatically."""
+
+    def _wrapped_tool(tool_input: str) -> str:
+        # Keep the original tool output contract, but guard the call with shared ReAct policy.
+        return execute_tool_with_runtime_controls(
+            tool_name=tool.name,
+            raw_input=str(tool_input),
+            tool_func=lambda value: str(tool.func(value)),
+        )
+
+    return Tool(
+        name=tool.name,
+        func=_wrapped_tool,
+        description=tool.description,
+    )
 
 
 def _create_tool_agent(model_name: str, verbose: bool = True):
@@ -28,9 +49,10 @@ def _create_tool_agent(model_name: str, verbose: bool = True):
         openai_api_base=Settings.OPENROUTER_BASE_URL,
         default_headers=Settings.openrouter_headers(),
     )
-    tools = [log_parser, cti_fetch]
+    # Build wrapped tools once per agent so runtime policies stay transparent to the model layer.
+    tools = [_wrap_runtime_tool(log_parser), _wrap_runtime_tool(cti_fetch)]
     if Settings.ENABLE_RAG:
-        tools.append(rag_retriever)
+        tools.append(_wrap_runtime_tool(rag_retriever))
     return create_agent(
         model=llm,
         tools=tools,
