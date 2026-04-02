@@ -1,0 +1,135 @@
+Large Language Model (LLM)-Powered Autonomous Agents and Multi-Agent Systems
+Deadline: 11:59 PM, 02/11/2025 (End of Week 12)
+Weight: 50% of final grade
+Group Assignment: 3–5 students per group
+
+Eligibility (Option D)
+To undertake Option D, you must apply to the unit convenor by demonstrating your suitability for this research-oriented project. Requirements include:
+
+A current academic average of at least Distinction (≥ 70%)
+
+Aiming to achieve a Distinction/High Distinction in Intelligent Systems
+
+Strong Python programming skills
+
+Project Summary
+This project involves working in a team led by teaching staff to implement and demonstrate autonomous agents powered by large language models (LLMs) such as GPT, LLaMA, or Gemini.
+
+Intro resource: https://botpress.com/blog/llm-agents
+(Students are expected to conduct their own research to find relevant learning materials.)
+
+Project Goals
+There are two main objectives:
+
+(G1) Develop and deploy an LLM-powered autonomous agent
+
+(G2) Develop and deploy a multi-agent system consisting of interacting LLM-powered agents
+
+While both goals are preferred, teams may focus on achieving (G1) and making as much progress as possible toward (G2) if challenges arise.
+
+Application Focus
+Your system should focus on one of the following:
+
+Business Improvement Agent
+
+Analyzes company or organization reviews
+
+Summarizes customer sentiment
+
+Identifies areas for improvement
+
+Cybersecurity Support Agent
+
+Analyzes system logs to detect and diagnose issues
+
+Identifies and predicts cyber attacks
+
+Uses Cyber Threat Intelligence (CTI) for proactive defense and incident response
+
+Project Requirements
+Implementation must be in Python (not suitable for beginners)
+
+Source code must be maintained using Git (GitHub, GitLab, Bitbucket, etc.) with read-only access for supervisors
+
+Documentation must be maintained on OneDrive with supervisor access
+
+Development requirements:
+
+Learn LLMs, agentic AI, and multi-agent systems
+
+Implement a basic LLM agent (locally and via cloud deployment)
+
+Develop agents aligned with your team’s agreed mission
+
+Build a multi-agent system with collaborative agents
+
+Implement a user interface (UI)
+
+Demonstrate a working prototype (preferably hosted for browser access)
+
+Evaluate system performance using benchmarks/datasets
+
+Portfolio Requirements
+Individual weekly work logs
+
+Individual fortnightly reports
+
+Team project summary report
+
+Project Report (20–30 pages)
+Must include:
+
+Cover page (team details) and Table of Contents
+
+Introduction
+
+System architecture (including tools/libraries used)
+
+Installation and user guide
+
+Implementation details by team members
+
+Experimentation and evaluation details
+
+Use-case scenarios/examples
+
+Critical analysis
+
+Discussion of results
+
+Conclusion
+
+Video Presentation
+Duration: 12–15 minutes
+
+Marking Scheme (Option D)
+Each member:
+
+Assigned weekly tasks
+
+Receives fortnightly marks (0–14) across 5 fortnights (Weeks 3–12)
+
+Receives feedback during weekly meetings
+
+Final grade = individual marks + team portfolio score
+
+Team portfolio (max 30 marks):
+
+Report: up to 20 marks
+
+Video: up to 10 marks
+
+Individual contribution: up to -30 marks (low contribution may result in 0 for this component)
+
+Submission
+Submit one .zip file (code + working system + report) via Canvas
+
+Deadline: 11:59 PM, 02/11/2025
+
+Late penalty: 10% per day; more than 5 days late = 0%
+
+Additional requirements:
+
+Provide Git repository access within 1 week of team formation
+
+Submit video (12–15 minutes) via Canvas by 11:59 PM, Tuesday 04/11/2025
