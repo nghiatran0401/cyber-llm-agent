@@ -18,7 +18,7 @@ from src.agents.g2.multiagent_config import (
 )
 from src.config.settings import Settings
 from src.utils.logger import setup_logger
-from services.api.react_runtime import (
+from services.api.agent_loop_runtime import (
     activate_runtime_budget,
     create_runtime_budget_state,
     deactivate_runtime_budget,

@@ -6,6 +6,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from src.agents.g1.llm_payload import extract_response_text
+
 
 class AgentEvaluator:
     """Compute simple quality and latency metrics for agent outputs."""
@@ -128,23 +130,10 @@ class AgentEvaluator:
     @staticmethod
     def _invoke_agent(agent: Any, prompt: str) -> str:
         """Invoke agent across common interfaces and normalize to text."""
+        if hasattr(agent, "invoke"):
+            return extract_response_text(agent.invoke({"input": prompt}))
+
         if hasattr(agent, "run"):
             return str(agent.run(prompt))
 
-        if hasattr(agent, "invoke"):
-            result = agent.invoke({"input": prompt})
-            if isinstance(result, dict):
-                if "output" in result:
-                    return str(result["output"])
-                if "messages" in result and result["messages"]:
-                    last = result["messages"][-1]
-                    if hasattr(last, "content"):
-                        return str(last.content)
-                    if isinstance(last, tuple) and len(last) == 2:
-                        return str(last[1])
-                    return str(last)
-            if hasattr(result, "content"):
-                return str(result.content)
-            return str(result)
-
-        raise TypeError("Agent must provide run() or invoke().")
+        raise TypeError("Agent must provide invoke() or run().")

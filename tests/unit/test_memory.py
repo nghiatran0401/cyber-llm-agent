@@ -1,10 +1,11 @@
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-from src.agents.g1.g1_agent import G1Agent
+from src.agents.g1.g1_agent import G1Agent, default_g1_conversation_memory
 from src.utils.memory_manager import ConversationMemory
 from src.utils.session_manager import SessionManager
 
@@ -84,11 +85,10 @@ def test_session_manager_save_and_load(tmp_path: Path):
 def test_stateful_agent_persists_memory_to_disk(tmp_path: Path):
     fake_backend = _FakeBackendAgent()
     agent = G1Agent(
-        memory_type="buffer",
-        max_messages=4,
         session_id="memory_test",
         backend_agent=fake_backend,
         verbose=False,
+        memory=replace(default_g1_conversation_memory(), max_messages=4),
     )
     agent.session_manager = SessionManager(session_dir=tmp_path)
     result = agent.invoke({"input": "Analyze login failures"})
@@ -295,11 +295,10 @@ def test_context_contains_trim_marker_when_over_limit():
 def test_stateful_agent_invoke_does_not_crash(tmp_path: Path):
     fake_backend = _FakeBackendAgent()
     agent = G1Agent(
-        memory_type="buffer",
-        max_messages=4,
         session_id="context_size_test",
         backend_agent=fake_backend,
         verbose=False,
+        memory=replace(default_g1_conversation_memory(), max_messages=4),
     )
     agent.session_manager = SessionManager(session_dir=tmp_path)
     result = agent.invoke({"input": "Analyze suspicious login"})

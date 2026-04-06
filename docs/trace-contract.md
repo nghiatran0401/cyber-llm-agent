@@ -88,7 +88,7 @@ These canonical sequences matter because they make the trace explainable to huma
 ## Main implementation anchors
 
 - `services/api/schemas.py`
-- `services/api/react_runtime.py`
+- `services/api/agent_loop_runtime.py`
 - `services/api/g1_service.py`
 - `services/api/g2_service.py`
 - `services/api/main.py`
@@ -106,10 +106,10 @@ Treat the trace contract as satisfied when:
 
 ## Quick validation
 
-Run core ReAct, trace, and guardrail tests:
+Run core agent-loop, trace, and guardrail tests:
 
 ```bash
-pytest -q tests/unit/test_react_runtime.py tests/unit/test_g1_service.py \
+pytest -q tests/unit/test_agent_loop_runtime.py tests/unit/test_g1_service.py \
   tests/unit/test_multiagent.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py
 ```
 

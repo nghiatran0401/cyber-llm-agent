@@ -181,6 +181,7 @@ Public API:
 | `add_episodic_memory`        | `(summary: str, tags: List[str]) -> None`                                | Store episode for long-term recall            |
 | `add_semantic_fact`          | `(fact: str) -> None`                                                    | Store stable fact for grounding               |
 | `update_long_term_from_turn` | `(user_text: str, assistant_text: str) -> None`                          | Auto-derive episodic + semantic from turn     |
+| `record_dialogue_turn`       | `(user_text: str, assistant_text: str) -> None` (keyword-only)           | `add_turn`×2 + `update_long_term_from_turn`   |
 | `retrieve_relevant_memories` | `(query: str, max_items: int = None) -> List[str]`                       | Top relevant entries by token overlap         |
 
 State keys returned by `get_state()`: `memory_type`, `max_messages`, `max_summary_chars`, `max_episodic_items`, `max_semantic_facts`, `recall_top_k`, `running_summary`, `messages`, `episodic_memories`, `semantic_facts`.

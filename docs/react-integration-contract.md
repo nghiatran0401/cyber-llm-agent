@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the integration-facing contract for the ReAct runtime in this repository.
+This document defines the integration-facing contract for the agent-loop runtime (ReAct-style tool execution) in this repository.
 
 It focuses on how the runtime interacts with:
 
@@ -73,7 +73,7 @@ It also guarantees that redundant calls are handled through:
 ### CTI
 
 - Live CTI failures already degrade to a deterministic fallback report.
-- ReAct runtime metrics should treat CTI fallback or unavailable output as evidence of degraded tool quality, not as a silent success.
+- Agent-loop runtime metrics should treat CTI fallback or unavailable output as evidence of degraded tool quality, not as a silent success.
 - CTI queries for the same threat family should reuse prior in-run evidence whenever the runtime can map them to one intent key.
 
 ## 3) Trace rendering contract
@@ -120,7 +120,7 @@ The runtime follows these practical rules:
 
 ## 5) Current implementation anchors
 
-- `services/api/react_runtime.py`
+- `services/api/agent_loop_runtime.py`
 - `services/api/g1_service.py`
 - `services/api/g2_service.py`
 - `services/api/main.py`

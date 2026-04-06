@@ -17,7 +17,7 @@ from .guardrails import (
     sanitize_untrusted_text,
     validate_input,
 )
-from .react_runtime import build_step_trace, normalize_stop_reason, resolve_stop_reason
+from .agent_loop_runtime import build_step_trace, normalize_stop_reason, resolve_stop_reason
 from .response_parser import summarize_text
 from .schemas import StepTrace
 

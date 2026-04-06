@@ -20,13 +20,6 @@ def create_openai_embeddings() -> OpenAIEmbeddings:
 
 class EmbeddingMemory:
     """OpenAI embedding vectors for memory recall via LangChain ``OpenAIEmbeddings``.
-
-    Same embedding stack as RAG (:func:`create_openai_embeddings`), but wrapped
-    with graceful failure so callers can fall back to BM25.
-
-    Construct directly for tests, or use ``from_settings()`` from app settings.
-    Returns ``None`` on any provider error so callers fall back to BM25
-    without crashing.
     """
 
     def __init__(

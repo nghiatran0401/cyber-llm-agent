@@ -24,7 +24,7 @@ from src.tools.rag_tools import retrieve_security_context
 from src.utils.logger import setup_logger
 from src.utils.prompt_templates import render_prompt_template
 from src.utils.state_validator import REQUIRED_STATE_KEYS, log_state, validate_state
-from services.api.react_runtime import execute_tool_with_runtime_controls
+from services.api.agent_loop_runtime import execute_tool_with_runtime_controls
 
 from .state import AgentState
 

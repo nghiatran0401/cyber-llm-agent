@@ -1,4 +1,8 @@
-"""In-memory request metrics aggregation."""
+"""
+    In-memory request metrics aggregation.
+
+    It is just a small in-process metrics store for the API to track the number of requests, the success/error rate, etc.
+"""
 
 from __future__ import annotations
 

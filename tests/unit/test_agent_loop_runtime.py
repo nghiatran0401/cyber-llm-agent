@@ -1,6 +1,6 @@
-"""Unit tests for shared ReAct runtime helpers."""
+"""Unit tests for shared agent-loop runtime (ReAct-style tool loop, not React.js)."""
 
-from services.api.react_runtime import (
+from services.api.agent_loop_runtime import (
     activate_runtime_budget,
     build_budget_summary,
     build_step_trace,

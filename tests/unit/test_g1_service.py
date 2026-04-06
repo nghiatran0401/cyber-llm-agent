@@ -1,14 +1,14 @@
 """Unit tests for G1 structured output and critic review."""
 
 from services.api import g1_service
-from services.api.react_runtime import execute_tool_with_runtime_controls
+from services.api.agent_loop_runtime import execute_tool_with_runtime_controls
 
 
 class _FakeAgent:
     def __init__(self, response: str):
         self._response = response
 
-    def run(self, _input: str, **_kwargs) -> str:
+    def invoke(self, _payload, *, memory_user_text=None, routing_text=None):
         return self._response
 
 
@@ -138,7 +138,7 @@ def test_g1_progress_trace_includes_structured_and_critic_steps(monkeypatch):
 
 def test_g1_marks_budget_exceeded_when_tool_budget_is_hit(monkeypatch):
     class _ToolHungryAgent:
-        def run(self, _input: str, **_kwargs) -> str:
+        def invoke(self, _payload, *, memory_user_text=None, routing_text=None):
             first = execute_tool_with_runtime_controls("CTIFetch", "ransomware", lambda value: f"ran {value}")
             second = execute_tool_with_runtime_controls("LogParser", "incident.log", lambda value: f"ran {value}")
             return f"{first}\n{second}"
@@ -164,7 +164,7 @@ def test_g1_marks_budget_exceeded_when_tool_budget_is_hit(monkeypatch):
 
 def test_g1_reuses_semantically_equivalent_tool_calls(monkeypatch):
     class _SemanticReuseAgent:
-        def run(self, _input: str, **_kwargs) -> str:
+        def invoke(self, _payload, *, memory_user_text=None, routing_text=None):
             first = execute_tool_with_runtime_controls(
                 "CTIFetch",
                 "possible ransomware activity",

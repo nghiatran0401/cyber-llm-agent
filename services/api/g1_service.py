@@ -8,6 +8,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.agents.g1.g1_agent import create_g1_agent
+from src.agents.g1.llm_payload import extract_response_text
 from src.config.settings import Settings
 from src.benchmarking.evaluator import AgentEvaluator
 from src.utils.prompt_manager import PromptManager
@@ -26,7 +27,7 @@ from .response_parser import (
     critic_validate_structured_output,
     summarize_text,
 )
-from .react_runtime import (
+from .agent_loop_runtime import (
     activate_runtime_budget,
     build_budget_summary,
     build_step_trace,
@@ -154,10 +155,12 @@ def _run_single_agent_loop(
             break
         steps_used = step_idx + 1
         response = enforce_response_boundaries(
-            agent.run(
-                user_input,
-                memory_user_text=memory_user_text,
-                routing_text=memory_user_text,
+            extract_response_text(
+                agent.invoke(
+                    {"input": user_input},
+                    memory_user_text=memory_user_text,
+                    routing_text=memory_user_text,
+                )
             )
         )
         budget_stop_reason = sync_runtime_budget_steps(steps_used)

@@ -1,4 +1,4 @@
-"""Session persistence utilities for memory-enabled conversations."""
+"""Load and save conversational sessions as JSON."""
 
 import json
 import os
@@ -9,13 +9,11 @@ from typing import Any, Dict, Optional
 
 from src.config.settings import Settings
 
-# Session JSON files older than this (by `updated_at`) are deleted on prune.
+# Session JSON files older than this are deleted on prune. (by updated_at)
 SESSION_EXPIRY_DAYS = 30
 
 
 class SessionManager:
-    """Load and save conversational sessions as JSON."""
-
     def __init__(self, session_dir: Optional[Path] = None):
         self.session_dir = Path(session_dir or Settings.SESSIONS_DIR)
         self.session_dir.mkdir(parents=True, exist_ok=True)
@@ -33,7 +31,7 @@ class SessionManager:
                 raise ValueError(f"session_id contains invalid character: {ch!r}")
 
     def save_session(self, session_id: str, payload: Dict[str, Any]):
-        """Persist session payload to disk using a temp file and atomic replace."""
+        """Save the session payload to disk using a temp file and atomic replace."""
         self._validate_session_id(session_id)
         self.prune_expired_sessions()
         session_file = self._session_path(session_id)
@@ -57,7 +55,7 @@ class SessionManager:
             raise
 
     def load_session(self, session_id: str) -> Dict[str, Any]:
-        """Read previously saved session payload."""
+        """Load the session payload from disk."""
         self._validate_session_id(session_id)
         session_file = self._session_path(session_id)
         if not session_file.exists():

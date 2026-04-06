@@ -1,4 +1,7 @@
-"""Shared ReAct runtime helpers for trace shape, loop budgets, and tool control."""
+"""Shared agent-loop runtime: trace shape, budgets, stop reasons, and tool-call policy.
+
+This is the execution harness for tool-using (ReAct-style) G1/G2 runs—not React.js.
+"""
 
 from __future__ import annotations
 
@@ -54,7 +57,7 @@ _CANONICAL_INTENT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     (("ddos", "dos", "port scan", "network scan", "scan"), "threat:network_disruption"),
 )
 _RUNTIME_BUDGET_STATE: ContextVar["RuntimeBudgetState | None"] = ContextVar(
-    "react_runtime_budget_state",
+    "agent_loop_budget_state",
     default=None,
 )
 

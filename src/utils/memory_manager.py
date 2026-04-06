@@ -1,4 +1,5 @@
-"""Conversation memory manager for short-term and long-term memory."""
+"""Conversation memory manager for short-term and long-term memory.
+The in-memory “brain”: recent chat, optional rolling summary, episodic snippets, semantic facts, and the logic to turn that into text for the next prompt and to update after each reply."""
 
 from __future__ import annotations
 
@@ -19,13 +20,9 @@ logger = setup_logger(__name__)
 class ConversationMemory:
     """Maintain chat history with buffer or summary strategy.
 
-    Short-term memory: recent messages kept in ``messages`` up to
-    ``max_messages``. Overflow is either dropped (buffer) or compressed
-    into ``running_summary`` (summary).
+    Short-term memory: recent messages kept in messages up to max_messages. Overflow is either dropped (buffer) or compressed into running_summary (summary).
 
-    Long-term memory: episodic episodes and semantic facts stored
-    indefinitely up to their respective caps. Recall uses cosine similarity
-    when an embedding_memory is available, otherwise falls back to BM25.
+    Long-term memory: episodic episodes and semantic facts stored indefinitely up to their respective caps. Recall uses cosine similarity when an embedding_memory is available, otherwise falls back to BM25.
     """
 
     memory_type: str = "buffer"
@@ -33,8 +30,9 @@ class ConversationMemory:
     max_summary_chars: int = 1200
     max_episodic_items: int = 30
     max_semantic_facts: int = 80
-    max_context_chars: int = 10_000
+    max_context_chars: int = 14000
     recall_top_k: int = 3
+
     messages: List[Dict[str, str]] = field(default_factory=list)
     running_summary: str = ""
     episodic_memories: List[Dict[str, Any]] = field(default_factory=list)
@@ -256,6 +254,12 @@ class ConversationMemory:
         self.add_episodic_memory(episode, tags=self._infer_tags(user_clean + "\n" + assistant_clean))
         for fact in self._extract_semantic_facts(assistant_clean):
             self.add_semantic_fact(fact)
+
+    def record_dialogue_turn(self, *, user_text: str, assistant_text: str) -> None:
+        """Append one user/assistant exchange and refresh derived long-term memory."""
+        self.add_turn("user", user_text)
+        self.add_turn("assistant", assistant_text)
+        self.update_long_term_from_turn(user_text=user_text, assistant_text=assistant_text)
 
     def retrieve_relevant_memories(
         self, query: str, max_items: int | None = None
