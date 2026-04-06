@@ -4,16 +4,6 @@ An AI assistant for security operations: it turns logs and natural-language ques
 
 ---
 
-## Who this is for
-
-- **SOC / IR analysts** triaging alerts and logs
-- **Students and builders** learning agentic security workflows (optional OWASP lab)
-- **Teams** who want a small but real **FastAPI + Next.js** codebase with two agent modes (single-agent vs multi-step workflow)
-
-**Team onboarding** (roles, tracks, honest status): [`docs/team-onboarding/team-onboarding-summary.md`](docs/team-onboarding/team-onboarding-summary.md).
-
----
-
 ## What you get (at a glance)
 
 | Piece   | What it does                                                                                         |
@@ -24,7 +14,7 @@ An AI assistant for security operations: it turns logs and natural-language ques
 | **Web** | Next.js app in `apps/web` — workspace UI with traces                                                 |
 | **Lab** | Deliberately vulnerable OWASP-style app in `apps/vuln-lab` (local learning only)                     |
 
-Frozen HTTP and tool contracts live in [`docs/contracts.md`](docs/contracts.md) and [`docs/tool-contracts.md`](docs/tool-contracts.md).
+Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs/tool-contracts.md`](docs/tool-contracts.md). ReAct trace shape and runtime integration: [`docs/trace-contract.md`](docs/trace-contract.md), [`docs/react-integration-contract.md`](docs/react-integration-contract.md). Tool-layer operations: [`docs/tooling-runbook.md`](docs/tooling-runbook.md).
 
 ---
 
@@ -37,7 +27,7 @@ Frozen HTTP and tool contracts live in [`docs/contracts.md`](docs/contracts.md) 
 
 ---
 
-## Configuration (start here)
+## Config and run the system
 
 1. Copy the template and edit values:
 
@@ -45,62 +35,23 @@ Frozen HTTP and tool contracts live in [`docs/contracts.md`](docs/contracts.md) 
    cp .env.example .env
    ```
 
-2. **Required in `.env`** (validated when the API starts — see `src/config/settings.py`):
+2. **Required in `.env`**:
 
    - `OPENAI_API_KEY`
    - `OTX_API_KEY`
-   - `PINECONE_API_KEY` and `PINECONE_INDEX_NAME`
+   - `PINECONE_API_KEY`
 
-3. **Local web app** (when not using Docker for the frontend):
+3. Runs **API (8000)**, **web (3000)**, and **lab (3100)** together.
 
    ```bash
-   cp apps/web/.env.local.example apps/web/.env.local
+   docker compose up --build -d
    ```
-
-   Point `NEXT_PUBLIC_API_BASE_URL` at your API (default `http://127.0.0.1:8000`).
-
-`.env.example` is kept in sync with the Python settings model; optional keys are documented inline there.
-
----
-
-## Running the system
-
-### Option A — Docker Compose (recommended)
-
-Runs **API (8000)**, **web (3000)**, and **lab (3100)** together.
-
-```bash
-cp .env.example .env
-# fill secrets, then:
-docker compose up --build -d
-```
 
 - Web: `http://localhost:3000`
 - API docs: `http://localhost:8000/docs`
 - Lab: `http://localhost:3100`
 
 **Operator details** (volumes, lab ↔ API networking, URL overrides): [`docs/docker-setup.md`](docs/docker-setup.md).
-
-**API-only container** (no Compose):
-
-```bash
-make docker-build
-make docker-run
-```
-
-### Option B — Local development (no Docker)
-
-Install dependencies, then run each process in its own terminal:
-
-```bash
-make install          # Python deps
-make install-web      # Next.js deps
-make install-lab      # Lab deps (optional)
-
-make run-api          # http://127.0.0.1:8000
-make run-web          # http://127.0.0.1:3000
-make run-lab          # http://127.0.0.1:3100 (optional)
-```
 
 ---
 
@@ -117,8 +68,6 @@ make run-lab          # http://127.0.0.1:3100 (optional)
 | `make smoke-checklist`                     | Scripted API checklist (health, core routes, sandbox, RAG mocks)                                      |
 | `make ci`                                  | Lint + CI tests + benchmark + smoke + web tests (heavy; mirrors most of CI locally)                   |
 | `make validate-traces`                     | Trace validation helper (see `scripts/validate_traces.py`)                                            |
-| `make docker-up` / `make docker-down`      | Compose: start full stack (`docker compose up --build -d`) or stop (`docker compose down`)            |
-| `make docker-reset` / `make docker-logs`   | Remove Compose volumes (`down -v`) or follow service logs                                             |
 
 **CI on GitHub** (Python 3.10 + 3.11): `.github/workflows/ci.yml` runs `make lint`, `make test-ci`, `make benchmark`, memory smoke, and web tests.
 
@@ -160,7 +109,7 @@ Session **memory recall** uses the same `OPENAI_API_KEY` with `OPENAI_EMBEDDING_
 
 - OWASP-style **sandbox** API routes (`/api/v1/sandbox/*`) are always on for local demos.
 - Policy and gate reference: [`docs/policy-gates.md`](docs/policy-gates.md).
-- Optional deeper checklist: [`docs/release-quality-gate.md`](docs/release-quality-gate.md).
+- Heavier verification (integration tests with `OPENAI_API_KEY`, real-LLM benchmarks): [`docs/benchmark-evaluation.md`](docs/benchmark-evaluation.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 

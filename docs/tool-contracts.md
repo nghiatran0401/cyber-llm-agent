@@ -1,6 +1,6 @@
 # Tool Contracts
 
-> Frozen as of Sprint 1. All tool functions must return a ToolResult envelope.
+> Frozen tool baseline. All tool functions must return a ToolResult envelope.
 
 ## ToolResult Envelope
 

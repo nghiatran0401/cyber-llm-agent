@@ -62,21 +62,3 @@ smoke-checklist:
 
 validate-traces:
 	$(PYTHON) scripts/validate_traces.py
-
-docker-build:
-	docker build -t $(IMAGE) .
-
-docker-run:
-	docker run --rm -p 8000:8000 --env-file .env $(IMAGE)
-
-docker-up:
-	docker compose up --build -d
-
-docker-down:
-	docker compose down --remove-orphans
-
-docker-reset:
-	docker compose down -v --remove-orphans
-
-docker-logs:
-	docker compose logs -f

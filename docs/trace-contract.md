@@ -95,11 +95,24 @@ These canonical sequences matter because they make the trace explainable to huma
 - `apps/web/lib/types.ts`
 - `apps/web/components/TracePanel.tsx`
 
-## Week 1 closure note
+## Contract completeness checklist
 
-Week 1 is considered functionally complete when:
+Treat the trace contract as satisfied when:
 
 1. the trace shape is explicitly documented
 2. stop reasons are normalized and deterministic
 3. core runtime tests for trace and stop reasons pass in a real test environment
 4. the trace contract has a named schema version and golden sequence coverage
+
+## Quick validation
+
+Run core ReAct, trace, and guardrail tests:
+
+```bash
+pytest -q tests/unit/test_react_runtime.py tests/unit/test_g1_service.py \
+  tests/unit/test_multiagent.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py
+```
+
+**Runtime metrics:** `/api/v1/metrics` and `/api/v1/metrics/dashboard` expose counters (tool calls, duplicates, stop reasons) for spotting regressions.
+
+**Benchmarks:** see [`benchmark-evaluation.md`](benchmark-evaluation.md).

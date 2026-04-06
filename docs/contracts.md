@@ -1,6 +1,6 @@
 # Frozen Contracts
 
-> Frozen as of Sprint 1. Any breaking change requires: (1) update this document first, (2) Person 1 approval, (3) PR description references the contract change. Non-breaking additions (new optional fields) can proceed with a note in the PR.
+> Frozen API baseline. Any breaking change requires: (1) update this document first, (2) maintainer approval, (3) PR description references the contract change. Non-breaking additions (new optional fields) can proceed with a note in the PR.
 
 ## 1. HTTP API Envelope
 

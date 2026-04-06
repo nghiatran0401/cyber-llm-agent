@@ -5,19 +5,19 @@ import re
 import sys
 
 OWNER_MAP = {
-    "test_api_endpoints": "Person 1 (Platform)",
-    "test_evaluator": "Person 1 (Platform)",
-    "test_benchmark_runner": "Person 1 (Platform)",
-    "test_scenarios": "Person 1 (Platform)",
-    "test_multiagent": "Person 2 (ReAct)",
-    "test_g1_service": "Person 2 (ReAct)",
-    "test_state_validator": "Person 2 (ReAct)",
-    "test_prompt_manager": "Person 2 (ReAct)",
-    "test_rag_tools": "Person 3 (RAG)",
-    "test_memory": "Person 4 (Memory)",
-    "test_tools": "Person 5 (Tooling)",
-    "test_sandbox": "Person 5 (Tooling)",
-    "test_agent_flow": "Person 2 (ReAct) + Person 5 (Tooling)",
+    "test_api_endpoints": "API / platform",
+    "test_evaluator": "API / platform",
+    "test_benchmark_runner": "API / platform",
+    "test_scenarios": "API / platform",
+    "test_multiagent": "G2 / multiagent",
+    "test_g1_service": "G1 / ReAct runtime",
+    "test_state_validator": "G1 / ReAct runtime",
+    "test_prompt_manager": "G1 / ReAct runtime",
+    "test_rag_tools": "RAG",
+    "test_memory": "Memory / sessions",
+    "test_tools": "Tools (CTI, log parser)",
+    "test_sandbox": "Sandbox",
+    "test_agent_flow": "Integration (agent + tools)",
 }
 
 SEVERITY_MAP = {

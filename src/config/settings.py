@@ -52,7 +52,6 @@ class Settings:
     LOGS_DIR = Path(os.getenv("LOGS_DIR", DATA_DIR / "logs"))
     SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", DATA_DIR / "sessions"))
     BENCHMARKS_DIR = DATA_DIR / "benchmarks"
-    CTI_FEEDS_DIR = DATA_DIR / "cti_feeds"
     KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", DATA_DIR / "knowledge"))
 
     # Ensure directories exist
@@ -63,7 +62,6 @@ class Settings:
         cls.LOGS_DIR.mkdir(exist_ok=True)
         cls.SESSIONS_DIR.mkdir(exist_ok=True)
         cls.BENCHMARKS_DIR.mkdir(exist_ok=True)
-        cls.CTI_FEEDS_DIR.mkdir(exist_ok=True)
         cls.KNOWLEDGE_DIR.mkdir(exist_ok=True)
     
     @classmethod
