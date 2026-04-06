@@ -1,4 +1,14 @@
-"""Input/output security guardrails for the API service layer."""
+"""
+Input/output security guardrails for the API service layer.
+What guardrails do in this repo:
+- Validate inbound input shape/content (validate_input)
+- Sanitize untrusted text (sanitize_untrusted_text)
+- Detect prompt-injection-like patterns (detect_prompt_injection)
+- Gate risky actions or outputs (apply_action_gating)
+- Apply output policy checks (apply_output_policy_guard)
+- Enforce response boundaries (enforce_response_boundaries)
+- Count evidence markers for confidence/risk logic (count_evidence_markers)
+"""
 
 from __future__ import annotations
 

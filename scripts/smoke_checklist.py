@@ -6,6 +6,10 @@ This script validates:
 - G1/G2/chat/workspace stream endpoint wiring
 - sandbox endpoint wiring
 - basic local RAG ingest/retrieve behavior with citations
+
+When to use:
+- Quick local sanity check after endpoint wiring/refactors.
+- Before demos when you want deterministic mocked validation.
 """
 
 from __future__ import annotations
@@ -167,9 +171,9 @@ def run_checklist() -> int:
             "retrieve_security_context",
             return_value=(
                 "Retrieved Context (source=pinecone_semantic):\n"
-                "- Match 1 [score=1.0000] [source=data/knowledge/security.md#1]: brute force login attempts\n"
+                "- Match 1 [score=1.0000] [source=data/knowledge/security_basics.md#1]: brute force login attempts\n"
                 "Citations:\n"
-                "- data/knowledge/security.md#1"
+                "- data/knowledge/security_basics.md#1"
             ),
         ):
             ingest_message = rag_tools.ingest_knowledge_base()

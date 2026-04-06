@@ -8,7 +8,6 @@ services:
     volumes:
       - ./data/sessions:/app/data/sessions
       - ./data/logs:/app/data/logs
-      # Same knowledge corpus as host (ingest + RAG tooling see KNOWLEDGE_DIR, default data/knowledge).
       - ./data/knowledge:/app/data/knowledge
     ports:
       - "8000:8000"
@@ -45,13 +44,11 @@ services:
       LAB_MODE: ${LAB_MODE:-vulnerable}
       LAB_HOST: 0.0.0.0
       LAB_PORT: ${LAB_PORT:-3100}
-      # Always use Compose service DNS — do not inherit host .env (127.0.0.1 breaks from inside the container).
       CTI_API_BASE: http://api:8000
       CTI_BRIDGE_MODE: ${CTI_BRIDGE_MODE:-both}
       CTI_ANALYZE_MODE: ${CTI_ANALYZE_MODE:-g1}
       CTI_BATCH_SIZE: ${CTI_BATCH_SIZE:-8}
       CTI_FLUSH_MS: ${CTI_FLUSH_MS:-7000}
-      # Lab Dockerfile only contains apps/vuln-lab; write logs to a mounted dir (see volumes).
       LAB_LOG_FILE: /lab-data/vuln_lab_events.jsonl
       LAB_DETECTION_FILE: /lab-data/vuln_lab_detections.jsonl
       LAB_SYSTEM_LOG_FILE: /lab-data/vuln_lab_system.log

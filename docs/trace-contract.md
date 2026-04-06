@@ -110,7 +110,7 @@ Run core agent-loop, trace, and guardrail tests:
 
 ```bash
 pytest -q tests/unit/test_agent_loop_runtime.py tests/unit/test_g1_service.py \
-  tests/unit/test_multiagent.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py
+  tests/unit/test_g2_runner.py tests/unit/test_api_endpoints.py tests/unit/test_guardrails.py
 ```
 
 **Runtime metrics:** `/api/v1/metrics` and `/api/v1/metrics/dashboard` expose counters (tool calls, duplicates, stop reasons) for spotting regressions.

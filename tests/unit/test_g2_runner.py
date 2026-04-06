@@ -1,4 +1,4 @@
-"""Unit tests for multiagent nodes and workflow."""
+"""Unit tests for G2 runner nodes and workflow."""
 
 import pytest
 
@@ -34,7 +34,7 @@ class _FakeLLM:
         return _FakeResponse("Final: high-risk incident with immediate containment required.")
 
 
-def test_multiagent_nodes_update_state_sequentially():
+def test_g2_runner_nodes_update_state_sequentially():
     llm = _FakeLLM()
     state = create_initial_state("Failed login repeated from same host.")
     state = log_analyzer_node(state, llm)
@@ -55,7 +55,7 @@ def test_log_analyzer_rejects_empty_logs():
         log_analyzer_node(state, llm)
 
 
-def test_run_multiagent_with_trace_returns_four_steps():
+def test_run_multiagent_with_trace_returns_canonical_multi_step_trace():
     llm = _FakeLLM()
     traced = run_multiagent_with_trace("Failed login and scan patterns detected.", llm=llm)
 

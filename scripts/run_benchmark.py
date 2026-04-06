@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Stable CLI entry for benchmarks (used by Makefile)."""
+"""Stable CLI entry for benchmarks (used by Makefile).
+
+When to use:
+- `make benchmark` for offline deterministic benchmark runs.
+- `make benchmark-real-llm` for keyed staging checks.
+- `make benchmark-report` to render latest markdown summary.
+"""
 
 from __future__ import annotations
 

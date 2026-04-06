@@ -14,7 +14,7 @@ An AI assistant for security operations: it turns logs and natural-language ques
 | **Web** | Next.js app in `apps/web` — workspace UI with traces                                                 |
 | **Lab** | Deliberately vulnerable OWASP-style app in `apps/vuln-lab` (local learning only)                     |
 
-Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs/tool-contracts.md`](docs/tool-contracts.md). ReAct trace shape and runtime integration: [`docs/trace-contract.md`](docs/trace-contract.md), [`docs/react-integration-contract.md`](docs/react-integration-contract.md). Tool-layer operations: [`docs/tooling-runbook.md`](docs/tooling-runbook.md).
+Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs/tool-contracts.md`](docs/tool-contracts.md). ReAct trace shape and runtime integration: [`docs/trace-contract.md`](docs/trace-contract.md). Tool-layer operations: [`docs/tooling-runbook.md`](docs/tooling-runbook.md).
 
 ---
 

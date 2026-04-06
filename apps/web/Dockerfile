@@ -14,8 +14,8 @@ RUN npm ci --include=dev
 
 COPY . .
 RUN npm run build
+# Keep runtime image lean after build.
 RUN npm prune --omit=dev
-RUN npm install --no-save typescript
 
 ENV NODE_ENV=production
 

@@ -1,34 +1,34 @@
 {
-  "timestamp": "2026-04-06T04:07:03.851757+00:00",
+  "timestamp": "2026-04-06T09:52:04.578652+00:00",
   "total_tests": 6,
   "average_precision": 1.0,
-  "average_recall": 0.7917,
-  "average_f1_score": 0.8524,
-  "average_latency_seconds": 13.3758,
+  "average_recall": 1.0,
+  "average_f1_score": 1.0,
+  "average_latency_seconds": 0.0,
   "results": [
     {
       "test_id": "case_001",
       "test_name": "Brute Force Login Pattern",
       "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nFailed SSH login from 203.0.113.9 repeated 14 times in 2 minutes.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "- **Indicators:**\n  - IP Address: 203.0.113.9\n  - Repeated failed SSH login attempts: 14 times in 2 minutes\n\n- **Threat assessment:**\n  - **Threat Type:** Brute force attack attempt\n  - **Severity:** Medium. The repeated failed login attempts indicate a potential brute force attack, which could lead to unauthorized access if successful.\n\n- **Recommended actions:**\n  - **Block the IP:** Immediately block the IP address 203.0.113.9 at the firewall to prevent further attempts.\n  - **Enable Rate Limiting:** Implement rate limiting on SSH login attempts to slow down brute force attacks.\n  - **Review Access Logs:** Check for any successful logins from this IP or other suspicious activities around the same time.\n  - **Implement Multi-Factor Authentication (MFA):** Ensure MFA is enabled for SSH logins to increase security.\n  - **Alert Monitoring:** Set up alerts for repeated failed login attempts to detect similar incidents promptly.\n\n- **Evidence-based rationale:**\n  - The high frequency of failed login attempts from a single IP within a short time frame is a common indicator of a brute force attack. Blocking the IP and implementing additional security measures can mitigate the risk of unauthorized access.\n\nCritic verdict: High-risk response missing recommended actions. Please provide more logs, IOC context, or CTI evidence.",
+      "response": "Threat: brute force login pattern.\nSeverity: high.\nRecommended Actions:\n- block ip\n- enforce mfa\n- monitor failed login spikes",
       "metrics": {
         "precision": 1.0,
-        "recall": 0.75,
-        "f1_score": 0.8571,
-        "true_positive_keywords": 3,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "true_positive_keywords": 4,
         "false_positive_keywords": 0,
-        "missing_expected_keywords": 1,
-        "response_length": 1339,
-        "timestamp": "2026-04-06T04:06:28.037370+00:00",
-        "latency_seconds": 44.4413,
-        "tokens_approx": 197
+        "missing_expected_keywords": 0,
+        "response_length": 126,
+        "timestamp": "2026-04-06T09:52:04.578504+00:00",
+        "latency_seconds": 0.0,
+        "tokens_approx": 20
       }
     },
     {
       "test_id": "case_002",
       "test_name": "Ransomware Indicator",
       "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nMass file rename events and high entropy extensions detected on shared drive.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "- **Indicators:**\n  - Mass file rename events\n  - High entropy extensions detected on shared drive\n\n- **Threat assessment:**\n  - **Threat Type:** Ransomware attack\n  - **Severity:** High. The combination of mass file renaming and high entropy extensions is a strong indicator of ransomware activity, which can lead to data encryption and potential data loss.\n\n- **Recommended actions:**\n  - **Isolate Affected Systems:** Immediately disconnect the affected systems from the network to prevent further spread.\n  - **Initiate Incident Response Plan:** Activate your organization's incident response plan specific to ransomware attacks.\n  - **Backup Verification:** Verify the integrity of your backups and prepare for potential restoration.\n  - **Engage with Security Vendors:** Contact your cybersecurity vendors for assistance in containment and eradication.\n  - **Preserve Evidence:** Preserve logs and any affected files for forensic analysis to understand the attack vector and scope.\n\n- **Evidence-based rationale:**\n  - The pattern of mass file renaming and high entropy extensions is characteristic of ransomware, which encrypts files and demands a ransom for decryption keys. Immediate isolation and response are critical to limit damage and facilitate recovery.\n\nCritic verdict: High-risk response missing recommended actions. Please provide more logs, IOC context, or CTI evidence.",
+      "response": "Threat: ransomware behavior.\nSeverity: critical.\nRecommended Actions:\n- isolate affected hosts\n- validate backup integrity",
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
@@ -36,17 +36,17 @@
         "true_positive_keywords": 4,
         "false_positive_keywords": 0,
         "missing_expected_keywords": 0,
-        "response_length": 1390,
-        "timestamp": "2026-04-06T04:06:36.138739+00:00",
-        "latency_seconds": 8.1012,
-        "tokens_approx": 191
+        "response_length": 122,
+        "timestamp": "2026-04-06T09:52:04.578619+00:00",
+        "latency_seconds": 0.0,
+        "tokens_approx": 15
       }
     },
     {
       "test_id": "case_003",
       "test_name": "DDoS Traffic Spike",
       "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nInbound HTTP requests jumped to 9 million per minute from botnet-like IP range.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "- **Indicators:**\n  - Inbound HTTP requests surged to 9 million per minute\n  - Requests originating from a botnet-like IP range\n\n- **Threat assessment:**\n  - **Threat Type:** Distributed Denial of Service (DDoS) attack\n  - **Severity:** High. The massive volume of requests from a botnet-like IP range indicates a DDoS attack, which can overwhelm server resources and disrupt services.\n\n- **Recommended actions:**\n  - **Activate DDoS Mitigation Services:** Engage any DDoS protection services you have in place to handle the traffic surge.\n  - **Rate Limiting and Traffic Filtering:** Implement rate limiting and filter traffic based on IP reputation to reduce the load on your servers.\n  - **Monitor Network Traffic:** Continuously monitor network traffic to identify patterns and sources of the attack.\n  - **Engage with ISP and Security Vendors:** Coordinate with your Internet Service Provider and security vendors for additional support and mitigation strategies.\n  - **Preserve Logs for Analysis:** Retain logs of the attack traffic for further analysis and to aid in identifying the botnet's characteristics.\n\n- **Evidence-based rationale:**\n  - The sudden spike in HTTP requests from a botnet-like IP range is a clear indicator of a DDoS attack, intended to exhaust server resources and disrupt normal operations. Immediate activation of mitigation strategies is crucial to maintain service availability and minimize impact.\n\nCritic verdict: High-risk response missing recommended actions. Please provide more logs, IOC context, or CTI evidence.",
+      "response": "Threat: ddos traffic spike.\nSeverity: high.\nRecommended Actions:\n- enable rate limiting\n- activate mitigation profile",
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
@@ -54,35 +54,17 @@
         "true_positive_keywords": 4,
         "false_positive_keywords": 0,
         "missing_expected_keywords": 0,
-        "response_length": 1553,
-        "timestamp": "2026-04-06T04:06:42.212737+00:00",
-        "latency_seconds": 6.0739,
-        "tokens_approx": 224
+        "response_length": 117,
+        "timestamp": "2026-04-06T09:52:04.578629+00:00",
+        "latency_seconds": 0.0,
+        "tokens_approx": 16
       }
     },
     {
       "test_id": "case_004",
       "test_name": "Phishing Campaign",
       "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nMultiple users clicked lookalike SSO link from spoofed sender domain.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "- **Indicators:**\n  - Multiple users clicked on a lookalike Single Sign-On (SSO) link\n  - The link was sent from a spoofed sender domain\n\n- **Threat assessment:**\n  - **Threat Type:** Phishing attack\n  - **Severity:** High. The use of a lookalike SSO link from a spoofed domain suggests an attempt to harvest user credentials, potentially leading to unauthorized access and data breaches.\n\n- **Recommended actions:**\n  - **Immediate User Notification:** Alert all users about the phishing attempt and instruct them not to enter credentials on the spoofed page.\n  - **Password Reset:** Require affected users to reset their passwords immediately.\n  - **Domain Blocking:** Block the spoofed domain at the email gateway and web proxy to prevent further access.\n  - **Security Awareness Training:** Reinforce phishing awareness training to help users identify and avoid such threats in the future.\n  - **Monitor for Unusual Activity:** Closely monitor user accounts and network activity for signs of unauthorized access or data exfiltration.\n\n- **Evidence-based rationale:**\n  - The clicking of a lookalike SSO link from a spoofed domain is a classic phishing tactic aimed at credential theft. Immediate user notification and credential protection are critical to prevent unauthorized access and mitigate potential damage.\n\nCritic verdict: High-risk response missing recommended actions. Please provide more logs, IOC context, or CTI evidence.",
-      "metrics": {
-        "precision": 1.0,
-        "recall": 0.25,
-        "f1_score": 0.4,
-        "true_positive_keywords": 1,
-        "false_positive_keywords": 0,
-        "missing_expected_keywords": 3,
-        "response_length": 1439,
-        "timestamp": "2026-04-06T04:06:48.684324+00:00",
-        "latency_seconds": 6.4715,
-        "tokens_approx": 209
-      }
-    },
-    {
-      "test_id": "case_005",
-      "test_name": "Port Scan Recon",
-      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nSequential connection attempts observed across ports 22, 80, 443, 3389 from one host.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "- **Indicators:**\n  - Sequential connection attempts across multiple ports (22, 80, 443, 3389) from a single host\n\n- **Threat assessment:**\n  - **Threat Type:** Port scanning activity\n  - **Severity:** Medium. The sequential connection attempts across common service ports indicate reconnaissance activity, potentially as a precursor to a more targeted attack.\n\n- **Recommended actions:**\n  - **Block Host IP:** Temporarily block the IP address of the host performing the scans to prevent further reconnaissance.\n  - **Network Monitoring:** Increase monitoring on the network for additional scanning activity or attempts to exploit vulnerabilities.\n  - **Review Firewall Rules:** Ensure that firewall rules are properly configured to limit unnecessary exposure of services.\n  - **Conduct Vulnerability Assessment:** Perform a vulnerability assessment on the targeted systems to identify and remediate potential weaknesses.\n  - **Log Review:** Analyze logs for any successful connections or anomalies that may indicate further malicious activity.\n\n- **Evidence-based rationale:**\n  - The pattern of sequential connection attempts across multiple ports is a common reconnaissance tactic used to identify open services and potential vulnerabilities. Blocking the scanning host and reviewing security configurations can help mitigate the risk of subsequent attacks.\n\nCritic verdict: High-risk response missing recommended actions. Please provide more logs, IOC context, or CTI evidence.",
+      "response": "Threat: phishing campaign.\nSeverity: medium.\nRecommended Actions:\n- tighten email filter\n- enforce mfa reset messaging",
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
@@ -90,32 +72,50 @@
         "true_positive_keywords": 4,
         "false_positive_keywords": 0,
         "missing_expected_keywords": 0,
-        "response_length": 1482,
-        "timestamp": "2026-04-06T04:06:55.695552+00:00",
-        "latency_seconds": 7.0111,
-        "tokens_approx": 198
+        "response_length": 118,
+        "timestamp": "2026-04-06T09:52:04.578636+00:00",
+        "latency_seconds": 0.0,
+        "tokens_approx": 16
+      }
+    },
+    {
+      "test_id": "case_005",
+      "test_name": "Port Scan Recon",
+      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nSequential connection attempts observed across ports 22, 80, 443, 3389 from one host.\n\nAnswer concisely and include concrete actions.\n",
+      "response": "Threat: port scan reconnaissance.\nSeverity: medium.\nRecommended Actions:\n- update firewall rules\n- monitor reconnaissance behavior",
+      "metrics": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "true_positive_keywords": 4,
+        "false_positive_keywords": 0,
+        "missing_expected_keywords": 0,
+        "response_length": 130,
+        "timestamp": "2026-04-06T09:52:04.578643+00:00",
+        "latency_seconds": 0.0,
+        "tokens_approx": 16
       }
     },
     {
       "test_id": "case_006",
       "test_name": "Privilege Escalation Suspicion",
       "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nService account granted admin role outside approved change window.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "- **Indicators:**\n  - A service account was granted an admin role outside of the approved change window.\n\n- **Threat assessment:**\n  - **Threat Type:** Potential insider threat or unauthorized access\n  - **Severity:** High. The unauthorized elevation of privileges for a service account suggests a possible security breach or policy violation, which could lead to misuse of administrative capabilities.\n\n- **Recommended actions:**\n  - **Immediate Role Reversal:** Revoke the admin role from the service account immediately to prevent potential misuse.\n  - **Audit Logs:** Conduct a thorough review of logs to determine who made the change and assess any actions taken by the service account during the elevated access period.\n  - **User Verification:** Verify the legitimacy of the change with the responsible team or individual to rule out any administrative errors.\n  - **Access Review:** Perform a comprehensive review of all service accounts and their permissions to ensure compliance with security policies.\n  - **Strengthen Change Management:** Reinforce change management protocols to prevent unauthorized role changes in the future.\n\n- **Evidence-based rationale:**\n  - The elevation of privileges outside of an approved change window is a significant red flag for unauthorized access or insider threat. Immediate action to revoke the change and investigate the circumstances is essential to mitigate potential risks and ensure system integrity.\n\nCritic verdict: High-risk response missing recommended actions. Please provide more logs, IOC context, or CTI evidence.",
+      "response": "Threat: privilege escalation suspicion.\nSeverity: high.\nRecommended Actions:\n- investigate account activity\n- audit role assignment trail",
       "metrics": {
         "precision": 1.0,
-        "recall": 0.75,
-        "f1_score": 0.8571,
-        "true_positive_keywords": 3,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "true_positive_keywords": 4,
         "false_positive_keywords": 0,
-        "missing_expected_keywords": 1,
-        "response_length": 1574,
-        "timestamp": "2026-04-06T04:07:03.851723+00:00",
-        "latency_seconds": 8.156,
-        "tokens_approx": 224
+        "missing_expected_keywords": 0,
+        "response_length": 137,
+        "timestamp": "2026-04-06T09:52:04.578650+00:00",
+        "latency_seconds": 0.0,
+        "tokens_approx": 17
       }
     }
   ],
-  "benchmark_mode": "real-llm",
+  "benchmark_mode": "offline",
   "agent_mode": "g1",
   "provider": "openai",
   "dataset": "/Users/nghiatran/projects/cyber-llm-agent/data/benchmarks/threat_cases.json"

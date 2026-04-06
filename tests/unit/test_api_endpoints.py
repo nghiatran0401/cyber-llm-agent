@@ -49,6 +49,60 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
     assert body["meta"]["total_tokens_est"] >= 1
 
 
+def test_g2_endpoint_uses_service_layer(monkeypatch):
+    client = TestClient(app)
+
+    def _fake_run_g2_analysis(user_input: str):
+        assert user_input == "test g2 input"
+        return (
+            {"final_report": "mocked g2 response", "runtime_budget": {"tool_calls_used": 1}},
+            [],
+            "gpt-4o-mini",
+            "completed",
+            2,
+            "security_analysis_v2.txt",
+            3.7,
+            "acceptable",
+        )
+
+    monkeypatch.setattr("services.api.routes.run_g2_analysis", _fake_run_g2_analysis)
+
+    response = client.post(
+        "/api/v1/analyze/g2",
+        json={"input": "test g2 input", "include_trace": True},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["result"]["final_report"] == "mocked g2 response"
+    assert body["meta"]["mode"] == "g2"
+    assert body["meta"]["stop_reason"] == "completed"
+    assert body["meta"]["steps_used"] == 2
+    assert body["meta"]["rubric_label"] == "acceptable"
+
+
+def test_chat_endpoint_supports_g2_mode(monkeypatch):
+    client = TestClient(app)
+
+    def _fake_run_chat(user_input: str, mode: str = "g1", session_id=None):
+        assert user_input == "chat g2"
+        assert mode == "g2"
+        return "chat g2 result", [], "gpt-4o-mini", "completed", 2, "security_analysis_v2.txt", 3.4, "acceptable"
+
+    monkeypatch.setattr("services.api.routes.run_chat", _fake_run_chat)
+
+    response = client.post(
+        "/api/v1/chat",
+        json={"input": "chat g2", "mode": "g2", "include_trace": True},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["result"] == "chat g2 result"
+    assert body["meta"]["mode"] == "g2"
+    assert body["meta"]["stop_reason"] == "completed"
+
+
 def test_sandbox_scenarios_endpoint(monkeypatch):
     client = TestClient(app)
 
@@ -111,6 +165,50 @@ def test_workspace_stream_emits_trace_and_final(monkeypatch):
     assert final_event["meta"]["trace_schema_version"] == "react-trace-v1"
     assert final_event["meta"]["run_id"]
     assert final_event["meta"]["total_tokens_est"] >= 1
+
+
+def test_workspace_stream_supports_g2_mode(monkeypatch):
+    client = TestClient(app)
+
+    def _fake_run_workspace_with_progress(*, task, mode, user_input, on_step, session_id=None):
+        assert task == "analyze"
+        assert mode == "g2"
+        assert user_input == "hello g2"
+        on_step(
+            type(
+                "StepLike",
+                (),
+                {
+                    "model_dump": lambda self: {
+                        "step": "Analysis",
+                        "what_it_does": "Run g2 analysis.",
+                        "prompt_preview": "hello g2",
+                        "input_summary": "hello g2",
+                        "output_summary": "done",
+                    }
+                },
+            )()
+        )
+        return "g2 final answer", "gpt-4o-mini", "completed", 3
+
+    monkeypatch.setattr("services.api.routes.run_workspace_with_progress", _fake_run_workspace_with_progress)
+
+    with client.stream(
+        "POST",
+        "/api/v1/workspace/stream",
+        json={"task": "analyze", "mode": "g2", "input": "hello g2"},
+    ) as response:
+        assert response.status_code == 200
+        events = []
+        for line in response.iter_lines():
+            if line and line.startswith("data: "):
+                events.append(json.loads(line.replace("data: ", "")))
+
+    assert any(event["type"] == "trace" for event in events)
+    assert any(event["type"] == "final" and event["result"] == "g2 final answer" for event in events)
+    final_event = next(event for event in events if event.get("type") == "final")
+    assert final_event["meta"]["mode"] == "g2"
+    assert final_event["meta"]["steps_used"] == 3
 
 
 def test_metrics_endpoint_returns_aggregates():

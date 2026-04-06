@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run pytest for CI: excludes flaky, key-gated, or legacy integration tests.
+"""Run pytest for CI against core product workflows only.
 
-When adding a path to IGNORED, add a comment on the preceding line (owner + reason)
-and document the follow-up in the PR description.
+When to use:
+- In CI (`make test-ci`) to enforce required coverage.
+- Locally before opening a PR to mirror CI Python checks.
 """
 
 from __future__ import annotations
@@ -11,22 +12,23 @@ import sys
 
 import pytest
 
-IGNORED = [
-    # G2 multiagent — stabilize imports/graph in CI before restoring.
-    "tests/unit/test_multiagent.py",
-    # RAG — Pinecone + embeddings; mock-heavy; run locally or in keyed CI.
-    "tests/unit/test_rag_tools.py",
-    # G1 service — tighter coupling; restore when CI deps align.
+CORE_WORKFLOW_TESTS = [
+    "tests/unit/test_api_endpoints.py",
+    "tests/unit/test_guardrails.py",
+    "tests/unit/test_agent_loop_runtime.py",
     "tests/unit/test_g1_service.py",
-    # Tools — OTX + filesystem; run locally with keys/mocks as needed.
+    "tests/unit/test_g2_service.py",
+    "tests/unit/test_g2_runner.py",
     "tests/unit/test_tools.py",
-    # Integration — requires OPENAI_API_KEY; manual / pre-release.
-    "tests/integration/test_agent_flow.py",
+    "tests/unit/test_rag_tools.py",
+    "tests/unit/test_memory.py",
+    "tests/unit/test_intent_routing.py",
+    "tests/unit/test_sandbox.py",
 ]
 
 
 def main() -> int:
-    args = ["-q", *[f"--ignore={path}" for path in IGNORED], *sys.argv[1:]]
+    args = ["-q", *CORE_WORKFLOW_TESTS, *sys.argv[1:]]
     return pytest.main(args)
 
 

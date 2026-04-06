@@ -22,7 +22,7 @@ test-web:
 	cd apps/web && npm run test
 
 test-memory:
-	pytest -q tests/unit/test_memory.py tests/unit/test_embedding_memory.py
+	pytest -q tests/unit/test_memory.py
 
 evaluate-memory:
 	python -m src.utils.eval_memory

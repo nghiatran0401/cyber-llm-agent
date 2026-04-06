@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Week 3: End-to-end trace consistency validator.
+"""End-to-end trace consistency validator (live API).
 
 Sends requests to the running API and validates that:
 1. Every response has a valid ApiResponse envelope
@@ -8,6 +8,10 @@ Sends requests to the running API and validates that:
 4. Trace run_ids match meta.run_id
 5. G2 results contain expected sub-report keys
 6. Streaming endpoint emits trace, final, and done events
+
+When to use:
+- After starting the real API server (`make run-api` or Docker).
+- Before release/demo to verify live HTTP + SSE trace contracts.
 """
 
 import json
@@ -45,6 +49,7 @@ def validate_trace(data: dict, label: str):
         check(f"{prefix} has step", bool(step.get("step")), "missing step name")
         check(f"{prefix} has what_it_does", bool(step.get("what_it_does")), "missing description")
         check(f"{prefix} has run_id", bool(step.get("run_id")), "missing run_id")
+        check(f"{prefix} has step_id", bool(step.get("step_id")), "missing step_id")
         check(f"{prefix} run_id matches meta", step.get("run_id") == run_id,
               f"step run_id={step.get('run_id')} != meta run_id={run_id}")
 
@@ -80,6 +85,9 @@ def test_g2_analysis():
     result = data.get("result", {})
     if isinstance(result, dict):
         check("g2: has final_report", bool(result.get("final_report")), "missing final_report key")
+        check("g2: has log_analysis", "log_analysis" in result, "missing log_analysis key")
+        check("g2: has threat_prediction", "threat_prediction" in result, "missing threat_prediction key")
+        check("g2: has incident_response", "incident_response" in result, "missing incident_response key")
 
 
 def test_chat():
