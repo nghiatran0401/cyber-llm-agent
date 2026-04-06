@@ -76,17 +76,6 @@ def _derive_threat_query(text: str) -> str:
     return "malware"
 
 
-def _has_usable_tool_evidence(value: str, *, unavailable_markers: tuple[str, ...] = ()) -> bool:
-    """Return True when a prior tool result is good enough to reuse safely."""
-    content = str(value or "").strip()
-    if not content:
-        return False
-    lowered = content.lower()
-    if "returned no usable output" in lowered or "temporarily unavailable" in lowered:
-        return False
-    return not any(marker in lowered for marker in unavailable_markers)
-
-
 def plan_worker_tasks(state: AgentState) -> List[str]:
     """Create dynamic worker plan based on current evidence."""
     content = (
@@ -183,12 +172,10 @@ def threat_predictor_node(state: AgentState, llm: Any) -> AgentState:
     validate_state(state, REQUIRED_STATE_KEYS)
     log_state(state, "threat_predictor")
     cti_query = _derive_threat_query(state["log_analysis"])
-    if _has_usable_tool_evidence(
+    if not _has_usable_tool_evidence(
         state.get("cti_evidence", ""),
         unavailable_markers=("cti unavailable", "unavailable"),
-    ):
-        pass
-    elif Settings.OTX_API_KEY:
+    ) and Settings.OTX_API_KEY:
         raw_cti = execute_tool_with_runtime_controls(
             tool_name="CTIFetch",
             raw_input=cti_query,
@@ -204,7 +191,10 @@ def threat_predictor_node(state: AgentState, llm: Any) -> AgentState:
                 state["cti_evidence"] = raw_cti
         except (json.JSONDecodeError, TypeError):
             state["cti_evidence"] = raw_cti
-    else:
+    elif not _has_usable_tool_evidence(
+        state.get("cti_evidence", ""),
+        unavailable_markers=("cti unavailable", "unavailable"),
+    ):
         state["cti_evidence"] = "CTI unavailable: OTX_API_KEY is not configured."
     prompt = render_prompt_template(
         "g2/nodes/threat_predictor.txt",

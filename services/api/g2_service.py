@@ -40,16 +40,37 @@ def _evaluate_response_rubric(response_text: str) -> Dict[str, Any]:
     return _EVALUATOR.evaluate_rubric(response_text)
 
 
-def _build_run_control_trace_strings(runtime_budget: Dict[str, Any], stop_reason: str) -> tuple[str, str, str]:
-    """Build one shared run-control summary for G2 trace emission."""
+def _g2_safety_output(injection_detected: bool) -> str:
+    if injection_detected:
+        return "Blocked - looks like prompt injection. Send logs or a defensive security question only."
+    return "OK - no injection patterns flagged."
+
+
+def _g2_output_review_input(high_risk: bool, evidence_count: int, policy_ok: bool) -> str:
+    return (
+        f"high_risk={high_risk}, evidence_markers={evidence_count}, "
+        f"policy_pass={policy_ok}"
+    )
+
+
+def _g2_analysis_output_summary(executed_steps: List[Dict[str, str]], final_report: str) -> str:
+    step_names = [str(item.get("step", "Unknown")) for item in executed_steps]
+    compact_steps = " -> ".join(step_names)
+    return summarize_text(f"Flow: {compact_steps}\nFinal report: {final_report}", 400)
+
+
+def _g2_execution_trace_step(
+    runtime_budget: Dict[str, Any],
+    stop_reason: str,
+    steps_used: int,
+) -> StepTrace:
     prompt_preview = (
-        f"max_steps={runtime_budget.get('max_steps', Settings.MAX_AGENT_STEPS)} "
-        f"max_tool_calls={runtime_budget.get('max_tool_calls', Settings.MAX_TOOL_CALLS)} "
-        f"max_runtime_seconds={runtime_budget.get('max_runtime_seconds', Settings.MAX_RUNTIME_SECONDS)} "
-        "trace_schema=react-trace-v1"
+        f"max_steps={runtime_budget.get('max_steps', Settings.MAX_AGENT_STEPS)}, "
+        f"max_tool_calls={runtime_budget.get('max_tool_calls', Settings.MAX_TOOL_CALLS)}, "
+        f"max_runtime_seconds={runtime_budget.get('max_runtime_seconds', Settings.MAX_RUNTIME_SECONDS)}"
     )
     input_summary = (
-        f"steps_used={runtime_budget.get('steps_used', 0)}, "
+        f"steps_used={steps_used}, "
         f"tool_calls_used={runtime_budget.get('tool_calls_used', 0)}, "
         f"duplicate_tool_calls={runtime_budget.get('duplicate_tool_calls', 0)}, "
         f"semantic_duplicate_tool_calls={runtime_budget.get('semantic_duplicate_tool_calls', 0)}, "
@@ -58,12 +79,16 @@ def _build_run_control_trace_strings(runtime_budget: Dict[str, Any], stop_reason
         f"tool_failures={runtime_budget.get('tool_failures', 0)}"
     )
     output_summary = (
-        f"stop_reason={stop_reason}, "
-        f"tool_calls_used={runtime_budget.get('tool_calls_used', 0)}, "
-        f"cached_tool_reuses={runtime_budget.get('cached_tool_reuses', 0)}, "
-        f"tool_failures={runtime_budget.get('tool_failures', 0)}"
+        f"{stop_reason} - {steps_used} agent step(s) - "
+        f"{runtime_budget.get('tool_calls_used', 0)} tool call(s)"
     )
-    return prompt_preview, input_summary, output_summary
+    return _trace_step(
+        step="ExecutionSummary",
+        what_it_does="Tool usage and how the run finished (limits, stop reason).",
+        prompt_preview=prompt_preview,
+        input_summary=input_summary,
+        output_summary=output_summary,
+    )
 
 
 def _trace_step(
@@ -84,64 +109,100 @@ def _trace_step(
     )
 
 
-def run_g2_analysis(
+def _run_g2_analysis_core(
     log_input: str,
 ) -> Tuple[Dict[str, Any], List[StepTrace], str, str, int, str, Optional[float], str]:
-    """Run G2 multi-agent workflow. Returns (result, trace, model, stop_reason, steps, prompt_ver, rubric_score, rubric_label)."""
     clean_logs = sanitize_untrusted_text(validate_input(log_input, "input"))
     prompt_version, prompt_template = _resolve_prompt_version()
     prompted_logs = _build_prompted_input(prompt_template, clean_logs)
     injection_detected = detect_prompt_injection(clean_logs)
-
+    initial_steps: List[StepTrace] = [
+        _trace_step(
+            step="SafetyCheck",
+            what_it_does="Checks your message for prompt-injection patterns before calling the model.",
+            prompt_preview="",
+            input_summary=summarize_text(clean_logs),
+            output_summary=_g2_safety_output(injection_detected),
+        ),
+    ]
     if injection_detected:
-        trace = [_trace_step(step="SafetyGuard", what_it_does="Detects prompt-injection patterns before execution.",
-                             prompt_preview="prompt_injection_guard=enabled", input_summary=summarize_text(clean_logs),
-                             output_summary="injection_detected=True")]
-        return ({"final_report": "Potential prompt-injection content detected. Provide only incident evidence."},
-                trace, Settings.FAST_MODEL_NAME, "needs_human", 0, prompt_version, None, "n/a")
+        return (
+            {"final_report": "Potential prompt-injection content detected. Provide only incident evidence."},
+            initial_steps,
+            Settings.FAST_MODEL_NAME,
+            "needs_human",
+            0,
+            prompt_version,
+            None,
+            "n/a",
+        )
+
+    initial_steps.append(
+        _trace_step(
+            step="ModelRouting",
+            what_it_does="Picks the OpenAI model for this request (faster vs stronger).",
+            prompt_preview="",
+            input_summary=summarize_text(clean_logs),
+            output_summary=f"Using {Settings.FAST_MODEL_NAME}.",
+        )
+    )
 
     executed = run_multiagent_with_trace(prompted_logs)
     result = executed["result"]
     runtime_budget = dict(result.get("runtime_budget", {})) if isinstance(result, dict) else {}
-    trace = [
-        _trace_step(
-            step=str(step.get("step", "Unknown")),
-            what_it_does=str(step.get("what_it_does", "n/a")),
-            prompt_preview=str(step.get("prompt_preview", "")),
-            input_summary=str(step.get("input_summary", "")),
-            output_summary=str(step.get("output_summary", "")),
-        )
-        for step in executed["trace"]
-    ]
-    trace.insert(0, _trace_step(step="PromptVersion", what_it_does="Loads prompt template version for this run.",
-                                prompt_preview=summarize_text(prompt_template, 180), input_summary=f"mode=g2 version={prompt_version}",
-                                output_summary="Prompt template resolved successfully."))
     stop_reason = normalize_stop_reason(str(executed.get("stop_reason", "completed")), default="completed")
-    steps_used = int(executed.get("steps_used", len(trace)))
+    steps_used = int(executed.get("steps_used", len(executed.get("trace", []))))
     final_text = str(result.get("final_report", ""))
+    high_risk = Settings.is_high_risk_task(clean_logs)
     evidence_count = count_evidence_markers(final_text + "\n" + str(result.get("cti_evidence", "")))
-    gated_text, gated_stop_reason = apply_action_gating(final_text, high_risk=Settings.is_high_risk_task(clean_logs), evidence_count=evidence_count)
+    gated_text, gated_stop_reason = apply_action_gating(final_text, high_risk=high_risk, evidence_count=evidence_count)
     result["final_report"] = gated_text
     stop_reason = resolve_stop_reason(stop_reason, gated_stop_reason)
-    policy_ok, policy_status = apply_output_policy_guard(result["final_report"])
+    policy_ok, _ = apply_output_policy_guard(result["final_report"])
     if not policy_ok:
         result["final_report"] = "Output policy blocked this response due to potentially unsafe content. Please narrow the request to defensive security analysis."
         stop_reason = resolve_stop_reason(stop_reason, "needs_human")
-    run_control_prompt, run_control_input, run_control_output = _build_run_control_trace_strings(runtime_budget, stop_reason)
     rubric = _evaluate_response_rubric(result["final_report"])
-    trace += [
-        _trace_step(step="RunControl", what_it_does="Tracks loop stop condition and tool/runtime budget state.",
-                    prompt_preview=run_control_prompt, input_summary=run_control_input,
-                    output_summary=run_control_output),
-        _trace_step(step="PolicyGuard", what_it_does="Applies output-policy and high-risk action gates.",
-                    prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
-                    input_summary=f"evidence_count={evidence_count}",
-                    output_summary=f"policy={policy_status}, stop_reason={stop_reason}"),
-        _trace_step(step="RubricEvaluation", what_it_does="Scores response quality against rubric checks.",
-                    prompt_preview="criteria={evidence,severity,actions,clarity}", input_summary=summarize_text(final_text),
-                    output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}"),
+
+    final_steps: List[StepTrace] = [
+        _trace_step(
+            step="Analysis",
+            what_it_does="Runs the multi-agent workflow (log analysis, threat prediction, workers, response, verification).",
+            prompt_preview=f"Answer format: prompts/{prompt_version} · Multi-agent role set: g2",
+            input_summary=summarize_text(clean_logs, 320),
+            output_summary=_g2_analysis_output_summary(executed.get("trace", []), result["final_report"]),
+        ),
+        _trace_step(
+            step="OutputReview",
+            what_it_does="Validates evidence coverage and safety policy on the draft answer.",
+            prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
+            input_summary=_g2_output_review_input(high_risk, evidence_count, policy_ok),
+            output_summary=(
+                "Evidence and safety checks passed."
+                if policy_ok
+                else "Output policy blocked this answer."
+            ),
+        ),
+        _g2_execution_trace_step(runtime_budget, stop_reason, steps_used),
     ]
-    return (result, trace, Settings.FAST_MODEL_NAME, stop_reason, steps_used, prompt_version, rubric.get("rubric_score"), str(rubric.get("rubric_label", "n/a")))
+
+    return (
+        result,
+        initial_steps + final_steps,
+        Settings.FAST_MODEL_NAME,
+        stop_reason,
+        steps_used,
+        prompt_version,
+        rubric.get("rubric_score"),
+        str(rubric.get("rubric_label", "n/a")),
+    )
+
+
+def run_g2_analysis(
+    log_input: str,
+) -> Tuple[Dict[str, Any], List[StepTrace], str, str, int, str, Optional[float], str]:
+    """Run G2 multi-agent workflow. Returns (result, trace, model, stop_reason, steps, prompt_ver, rubric_score, rubric_label)."""
+    return _run_g2_analysis_core(log_input)
 
 
 def run_g2_analysis_with_progress(
@@ -149,54 +210,7 @@ def run_g2_analysis_with_progress(
     on_step: Callable[[StepTrace], None],
 ) -> Tuple[Dict[str, Any], str, str, int, str, Optional[float], str]:
     """Run G2 analysis, emitting each step immediately via on_step callback."""
-    clean_logs = sanitize_untrusted_text(validate_input(log_input, "input"))
-    prompt_version, prompt_template = _resolve_prompt_version()
-    prompted_logs = _build_prompted_input(prompt_template, clean_logs)
-    injection_detected = detect_prompt_injection(clean_logs)
-
-    if injection_detected:
-        on_step(_trace_step(step="SafetyGuard", what_it_does="Detects prompt-injection patterns.",
-                            prompt_preview="prompt_injection_guard=enabled", input_summary=summarize_text(clean_logs),
-                            output_summary="injection_detected=True"))
-        return ({"final_report": "Potential prompt-injection content detected. Provide only incident evidence."},
-                Settings.FAST_MODEL_NAME, "needs_human", 0, prompt_version, None, "n/a")
-
-    on_step(_trace_step(step="PromptVersion", what_it_does="Loads prompt template version for this run.",
-                        prompt_preview=summarize_text(prompt_template, 180), input_summary=f"mode=g2 version={prompt_version}",
-                        output_summary="Prompt template resolved successfully."))
-
-    def _on_step(step: Dict[str, str]):
-        on_step(_trace_step(
-            step=str(step.get("step", "Unknown")),
-            what_it_does=str(step.get("what_it_does", "n/a")),
-            prompt_preview=str(step.get("prompt_preview", "")),
-            input_summary=str(step.get("input_summary", "")),
-            output_summary=str(step.get("output_summary", "")),
-        ))
-
-    executed = run_multiagent_with_trace(prompted_logs, on_step=_on_step)
-    runtime_budget = dict(executed["result"].get("runtime_budget", {})) if isinstance(executed.get("result"), dict) else {}
-    stop_reason = normalize_stop_reason(str(executed.get("stop_reason", "completed")), default="completed")
-    steps_used = int(executed.get("steps_used", len(executed.get("trace", []))))
-    final_text = str(executed["result"].get("final_report", ""))
-    evidence_count = count_evidence_markers(final_text + "\n" + str(executed["result"].get("cti_evidence", "")))
-    gated_text, gated_stop_reason = apply_action_gating(final_text, high_risk=Settings.is_high_risk_task(clean_logs), evidence_count=evidence_count)
-    executed["result"]["final_report"] = gated_text
-    stop_reason = resolve_stop_reason(stop_reason, gated_stop_reason)
-    policy_ok, policy_status = apply_output_policy_guard(executed["result"]["final_report"])
-    if not policy_ok:
-        executed["result"]["final_report"] = "Output policy blocked this response due to potentially unsafe content. Please narrow the request to defensive security analysis."
-        stop_reason = resolve_stop_reason(stop_reason, "needs_human")
-    run_control_prompt, run_control_input, run_control_output = _build_run_control_trace_strings(runtime_budget, stop_reason)
-    rubric = _evaluate_response_rubric(executed["result"]["final_report"])
-    on_step(_trace_step(step="RunControl", what_it_does="Tracks loop stop condition and tool/runtime budget state.",
-                        prompt_preview=run_control_prompt, input_summary=run_control_input,
-                        output_summary=run_control_output))
-    on_step(_trace_step(step="PolicyGuard", what_it_does="Applies output-policy and high-risk action gates.",
-                        prompt_preview=f"min_evidence={Settings.MIN_EVIDENCE_FOR_HIGH_RISK}",
-                        input_summary=f"evidence_count={evidence_count}",
-                        output_summary=f"policy={policy_status}, stop_reason={stop_reason}"))
-    on_step(_trace_step(step="RubricEvaluation", what_it_does="Scores response quality against rubric checks.",
-                        prompt_preview="criteria={evidence,severity,actions,clarity}", input_summary=summarize_text(final_text),
-                        output_summary=f"score={rubric.get('rubric_score')} label={rubric.get('rubric_label')}"))
-    return (executed["result"], Settings.FAST_MODEL_NAME, stop_reason, steps_used, prompt_version, rubric.get("rubric_score"), str(rubric.get("rubric_label", "n/a")))
+    result, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = _run_g2_analysis_core(log_input)
+    for step in trace:
+        on_step(step)
+    return (result, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label)

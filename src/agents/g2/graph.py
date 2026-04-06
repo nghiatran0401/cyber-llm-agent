@@ -2,28 +2,29 @@
 Purpose: Build and compile the G2 LangGraph workflow
 What it does:
 - Creates a default LLM instance from project settings
-- Assembles node sequence and edges for multiagent execution
-- Returns a compiled workflow ready for invocation
+- Executes core G2 nodes via minimal LangGraph wrappers
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from langchain_openai import ChatOpenAI
+from langgraph.graph import END, StateGraph
 
 from src.config.settings import Settings
 from src.utils.logger import setup_logger
 
-from .nodes import (
-    incident_responder_node,
-    log_analyzer_node,
-    orchestrator_node,
-    threat_predictor_node,
-)
+from .nodes import incident_responder_node, log_analyzer_node, orchestrator_node, threat_predictor_node
 from .state import AgentState
 
 logger = setup_logger(__name__)
+_CORE_NODE_HANDLERS: dict[str, Callable[[AgentState, Any], AgentState]] = {
+    "log_analyzer": log_analyzer_node,
+    "threat_predictor": threat_predictor_node,
+    "incident_responder": incident_responder_node,
+    "orchestrator": orchestrator_node,
+}
 
 
 def _default_llm() -> ChatOpenAI:
@@ -36,33 +37,20 @@ def _default_llm() -> ChatOpenAI:
     )
 
 
-def _build_langgraph_workflow(llm: Any):
-    """Build and compile the LangGraph state graph."""
-    try:
-        from langgraph.graph import END, StateGraph
-    except ImportError as exc:
-        raise ImportError(
-            "langgraph is required for create_multiagent_workflow(). "
-            "Install it with: pip install langgraph"
-        ) from exc
+def run_core_node_with_langgraph(
+    *,
+    node_name: str,
+    state: AgentState,
+    llm: Any | None = None,
+) -> AgentState:
+    if node_name not in _CORE_NODE_HANDLERS:
+        raise ValueError(f"Unsupported core node '{node_name}'.")
 
-    workflow = StateGraph(AgentState)
-    workflow.add_node("log_analyzer", lambda state: log_analyzer_node(state, llm))
-    workflow.add_node("threat_predictor", lambda state: threat_predictor_node(state, llm))
-    workflow.add_node("incident_responder", lambda state: incident_responder_node(state, llm))
-    workflow.add_node("orchestrator", lambda state: orchestrator_node(state, llm))
-
-    workflow.set_entry_point("log_analyzer")
-    workflow.add_edge("log_analyzer", "threat_predictor")
-    workflow.add_edge("threat_predictor", "incident_responder")
-    workflow.add_edge("incident_responder", "orchestrator")
-    workflow.add_edge("orchestrator", END)
-
-    return workflow.compile()
-
-
-def create_multiagent_workflow(llm: Any | None = None):
-    """Create and return a compiled LangGraph multiagent workflow."""
     selected_llm = llm or _default_llm()
-    logger.info("Creating multiagent workflow.")
-    return _build_langgraph_workflow(selected_llm)
+    workflow = StateGraph(AgentState)
+    handler = _CORE_NODE_HANDLERS[node_name]
+    workflow.add_node(node_name, lambda current_state: handler(current_state, selected_llm))
+    workflow.set_entry_point(node_name)
+    workflow.add_edge(node_name, END)
+    compiled = workflow.compile()
+    return compiled.invoke(state)

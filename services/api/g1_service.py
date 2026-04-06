@@ -204,11 +204,11 @@ def _trace_step(
     )
 
 
-def run_g1_analysis(
+def _run_g1_analysis_core(
     user_input: str,
     session_id: Optional[str] = None,
 ) -> Tuple[str, List[StepTrace], str, str, int, str, Optional[float], str]:
-    """Run G1 analysis and return (response, trace, model, stop_reason, steps, prompt_ver, rubric_score, rubric_label)."""
+    """Run G1 once and return response plus canonical user-facing trace steps."""
     clean_input = sanitize_untrusted_text(validate_input(user_input, "input"))
     prompt_version, prompt_template = _resolve_prompt_version("g1")
     prompted_input = _build_prompted_input(prompt_template, clean_input)
@@ -229,7 +229,13 @@ def run_g1_analysis(
     if injection_detected:
         return (
             "Potential prompt-injection content detected. Please remove control-instruction text and retry with only incident data.",
-            trace, selected_model, "needs_human", 0, prompt_version, None, "n/a",
+            trace,
+            selected_model,
+            "needs_human",
+            0,
+            prompt_version,
+            None,
+            "n/a",
         )
 
     trace.append(
@@ -269,7 +275,7 @@ def run_g1_analysis(
         evidence_count = count_evidence_markers(response)
         response, gated_stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
         stop_reason = resolve_stop_reason(stop_reason, gated_stop_reason)
-        policy_ok, _policy_status = apply_output_policy_guard(response)
+        policy_ok, _ = apply_output_policy_guard(response)
         if not policy_ok:
             response = (
                 "Output policy blocked this response due to potentially unsafe content. "
@@ -300,7 +306,24 @@ def run_g1_analysis(
         execution_summary_step,
     ]
     rubric = _evaluate_response_rubric(response)
-    return (response, trace, selected_model, stop_reason, steps_used, prompt_version, rubric.get("rubric_score"), str(rubric.get("rubric_label", "n/a")))
+    return (
+        response,
+        trace,
+        selected_model,
+        stop_reason,
+        steps_used,
+        prompt_version,
+        rubric.get("rubric_score"),
+        str(rubric.get("rubric_label", "n/a")),
+    )
+
+
+def run_g1_analysis(
+    user_input: str,
+    session_id: Optional[str] = None,
+) -> Tuple[str, List[StepTrace], str, str, int, str, Optional[float], str]:
+    """Run G1 analysis and return (response, trace, model, stop_reason, steps, prompt_ver, rubric_score, rubric_label)."""
+    return _run_g1_analysis_core(user_input, session_id=session_id)
 
 
 def run_g1_analysis_with_progress(
@@ -309,98 +332,13 @@ def run_g1_analysis_with_progress(
     session_id: Optional[str] = None,
 ) -> Tuple[str, str, str, int, str, Optional[float], str]:
     """Run G1 analysis, emitting each step immediately via on_step callback."""
-    clean_input = sanitize_untrusted_text(validate_input(user_input, "input"))
-    prompt_version, prompt_template = _resolve_prompt_version("g1")
-    prompted_input = _build_prompted_input(prompt_template, clean_input)
-    high_risk = Settings.is_high_risk_task(clean_input)
-    selected_model = Settings.STRONG_MODEL_NAME if Settings.should_use_strong_model(clean_input) else Settings.FAST_MODEL_NAME
-    injection_detected = detect_prompt_injection(clean_input)
-
-    on_step(
-        _trace_step(
-            step="SafetyCheck",
-            what_it_does="Checks your message for prompt-injection patterns before calling the model.",
-            prompt_preview="",
-            input_summary=summarize_text(clean_input),
-            output_summary=_g1_safety_output(injection_detected),
-        )
+    response, trace, selected_model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = _run_g1_analysis_core(
+        user_input,
+        session_id=session_id,
     )
-
-    if injection_detected:
-        return ("Potential prompt-injection content detected. Please remove control-instruction text and retry.",
-                selected_model, "needs_human", 0, prompt_version, None, "n/a")
-
-    on_step(
-        _trace_step(
-            step="ModelRouting",
-            what_it_does="Picks the OpenAI model for this request (faster vs stronger).",
-            prompt_preview="",
-            input_summary=summarize_text(clean_input),
-            output_summary=_g1_model_routing_summary(high_risk, selected_model),
-        )
-    )
-
-    agent = _create_g1_agent_for_session(session_id)
-    budget_state = create_runtime_budget_state(
-        max_steps=Settings.MAX_AGENT_STEPS,
-        max_tool_calls=Settings.MAX_TOOL_CALLS,
-        max_runtime_seconds=Settings.MAX_RUNTIME_SECONDS,
-    )
-    budget_token = activate_runtime_budget(budget_state)
-    execution_summary_step: Optional[StepTrace] = None
-    try:
-        response, stop_reason, steps_used = _run_single_agent_loop(
-            agent, prompted_input, clean_input
-        )
-        stop_reason = normalize_stop_reason(stop_reason, default="completed")
-        stop_reason = resolve_stop_reason(stop_reason, budget_state.stop_reason)
-        response = _append_budget_note(response, stop_reason)
-        structured = build_structured_g1_report(response)
-        critic_ok, critic_message = critic_validate_structured_output(
-            structured, high_risk=high_risk, user_text=clean_input
-        )
-        if not critic_ok:
-            response = enforce_response_boundaries(
-                f"{response}\n\nCritic verdict: {critic_message} Please provide more logs, IOC context, or CTI evidence."
-            )
-            stop_reason = resolve_stop_reason(stop_reason, "needs_human")
-        evidence_count = count_evidence_markers(response)
-        response, gated_stop_reason = apply_action_gating(response, high_risk=high_risk, evidence_count=evidence_count)
-        stop_reason = resolve_stop_reason(stop_reason, gated_stop_reason)
-        policy_ok, _policy_status = apply_output_policy_guard(response)
-        if not policy_ok:
-            response = (
-                "Output policy blocked this response due to potentially unsafe content. "
-                "Please narrow the request to defensive security analysis."
-            )
-            stop_reason = resolve_stop_reason(stop_reason, "needs_human")
-        execution_summary_step = _g1_execution_trace_step(stop_reason, steps_used)
-    finally:
-        deactivate_runtime_budget(budget_token)
-
-    if execution_summary_step is None:
-        raise RuntimeError("G1 execution summary step missing after successful run")
-    on_step(
-        _trace_step(
-            step="Analysis",
-            what_it_does="Runs the tool-enabled agent (log parser, threat intel, optional knowledge search).",
-            prompt_preview=_g1_analysis_context_line(prompt_version),
-            input_summary=summarize_text(clean_input, 320),
-            output_summary=summarize_text(response, 400),
-        )
-    )
-    on_step(
-        _trace_step(
-            step="OutputReview",
-            what_it_does="Validates structure, evidence, and safety policy on the draft answer.",
-            prompt_preview="",
-            input_summary=_g1_output_review_input(high_risk, evidence_count, critic_ok, policy_ok),
-            output_summary=_g1_output_review_output(critic_ok, critic_message, policy_ok),
-        )
-    )
-    on_step(execution_summary_step)
-    rubric = _evaluate_response_rubric(response)
-    return (response, selected_model, stop_reason, steps_used, prompt_version, rubric.get("rubric_score"), str(rubric.get("rubric_label", "n/a")))
+    for step in trace:
+        on_step(step)
+    return (response, selected_model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label)
 
 
 def run_chat(user_input: str, mode: str = "g1", session_id: Optional[str] = None):

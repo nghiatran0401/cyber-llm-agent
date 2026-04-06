@@ -10,7 +10,6 @@ from src.agents.g2.nodes import (
     incident_responder_node,
     orchestrator_node,
 )
-from src.agents.g2.graph import create_multiagent_workflow
 from src.agents.g2.runner import run_multiagent_with_trace
 
 
@@ -54,14 +53,6 @@ def test_log_analyzer_rejects_empty_logs():
     state = create_initial_state("")
     with pytest.raises(ValueError):
         log_analyzer_node(state, llm)
-
-
-def test_create_multiagent_workflow_runs_end_to_end():
-    llm = _FakeLLM()
-    workflow = create_multiagent_workflow(llm=llm)
-    result = workflow.invoke(create_initial_state("Port scan and failed login activity detected."))
-    assert result["final_report"]
-    assert len(llm.prompts) >= 4
 
 
 def test_run_multiagent_with_trace_returns_four_steps():

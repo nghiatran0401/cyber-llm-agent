@@ -1,7 +1,6 @@
 """
 Purpose: Runtime entry points for G2 multiagent execution
 What it does:
-- Exposes a one-call assessment helper for the workflow
 - Runs a traced sequential execution for UI step visibility
 - Enforces runtime and step budgets with stop reasons
 """
@@ -26,18 +25,14 @@ from services.api.agent_loop_runtime import (
     sync_runtime_budget_steps,
 )
 
-from .graph import _default_llm
+from .graph import _default_llm, run_core_node_with_langgraph
 from .nodes import (
-    incident_responder_node,
-    log_analyzer_node,
-    orchestrator_node,
     plan_worker_tasks,
     run_worker_task,
     verifier_node,
-    threat_predictor_node,
     _invoke_llm,
 )
-from .state import AgentState, MultiagentStepTrace, create_initial_state
+from .state import MultiagentStepTrace, create_initial_state
 
 logger = setup_logger(__name__)
 
@@ -47,13 +42,6 @@ def _summarize_text(text: str, max_len: int = 220) -> str:
     if len(content) <= max_len:
         return content
     return content[:max_len] + "..."
-
-
-def run_multiagent_assessment(logs: str, llm: Any | None = None) -> AgentState:
-    """Convenience runner for single-call assessments."""
-    from .graph import create_multiagent_workflow
-    workflow = create_multiagent_workflow(llm=llm)
-    return workflow.invoke(create_initial_state(logs))
 
 
 def run_multiagent_with_trace(
@@ -109,7 +97,11 @@ def run_multiagent_with_trace(
         # Step 1: Log Analyzer
         if not _within_budget():
             return _result_payload()
-        state = log_analyzer_node(state, selected_llm)
+        state = run_core_node_with_langgraph(
+            node_name="log_analyzer",
+            state=state,
+            llm=selected_llm,
+        )
         steps_used += 1
         _emit({"step": "LogAnalyzer", "what_it_does": "Finds suspicious patterns and classifies severity from raw logs.",
                "prompt_preview": _summarize_text(f"{LOG_ANALYZER_ROLE.system_prompt} logs={state['logs']}"),
@@ -132,7 +124,11 @@ def run_multiagent_with_trace(
         # Step 2: Threat Predictor
         if not _within_budget():
             return _result_payload()
-        state = threat_predictor_node(state, selected_llm)
+        state = run_core_node_with_langgraph(
+            node_name="threat_predictor",
+            state=state,
+            llm=selected_llm,
+        )
         steps_used += 1
         _emit({"step": "ThreatPredictor", "what_it_does": "Predicts likely attacker next steps based on log analysis.",
                "prompt_preview": _summarize_text(f"{THREAT_PREDICTOR_ROLE.system_prompt}"),
@@ -156,7 +152,11 @@ def run_multiagent_with_trace(
         # Step 3: Incident Responder
         if not _within_budget():
             return _result_payload()
-        state = incident_responder_node(state, selected_llm)
+        state = run_core_node_with_langgraph(
+            node_name="incident_responder",
+            state=state,
+            llm=selected_llm,
+        )
         steps_used += 1
         _emit({"step": "IncidentResponder", "what_it_does": "Creates immediate containment and response actions.",
                "prompt_preview": _summarize_text(f"{INCIDENT_RESPONDER_ROLE.system_prompt}"),
@@ -198,7 +198,11 @@ def run_multiagent_with_trace(
         # Step 4: Orchestrator
         if not _within_budget():
             return _result_payload()
-        state = orchestrator_node(state, selected_llm)
+        state = run_core_node_with_langgraph(
+            node_name="orchestrator",
+            state=state,
+            llm=selected_llm,
+        )
         steps_used += 1
         _emit({"step": "Orchestrator", "what_it_does": "Combines all agent outputs into one final decision summary.",
                "prompt_preview": _summarize_text(f"{ORCHESTRATOR_ROLE.system_prompt}"),
