@@ -57,8 +57,8 @@ data/benchmarks/results/*.md
 !data/logs/sample_logs.txt
 !data/logs/.gitkeep
 
-# Local Chroma index (optional RAG_VECTOR_BACKEND=chroma)
-data/chroma_db/
+# Next.js
+apps/web/tsconfig.tsbuildinfo
 
 # OS
 .DS_Store

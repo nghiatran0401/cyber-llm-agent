@@ -6,7 +6,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 ROOT = Path(__file__).resolve().parent.parent
+# Load repo .env before any src imports so Settings sees keys regardless of cwd.
+load_dotenv(ROOT / ".env")
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
