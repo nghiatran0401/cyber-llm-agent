@@ -1,7 +1,7 @@
 PYTHON ?= python3
 IMAGE ?= cyber-llm-agent:latest
 
-.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci validate-traces docker-build docker-run docker-up docker-down docker-reset docker-logs test-memory
+.PHONY: install install-web install-lab test test-ci test-web benchmark benchmark-real-llm benchmark-report lint run-api run-web run-lab smoke smoke-checklist ci validate-traces docker-build docker-run docker-up docker-down docker-reset docker-logs test-memory
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -29,6 +29,11 @@ evaluate-memory:
 
 benchmark:
 	$(PYTHON) scripts/run_benchmark.py --mode $${BENCHMARK_MODE:-offline} --agent-mode $${BENCHMARK_AGENT_MODE:-g1} --provider $${BENCHMARK_PROVIDER:-openai} --dataset $${BENCHMARK_DATASET:-data/benchmarks/threat_cases.json} --output-dir $${BENCHMARK_OUTPUT_DIR:-data/benchmarks/results}
+
+# Real OpenAI + tools (G1/G2). Needs OPENAI_API_KEY, OTX_API_KEY; Pinecone if ENABLE_RAG=true.
+# Override budget: BENCHMARK_MAX_RUNTIME_SECONDS=300 make benchmark-real-llm
+benchmark-real-llm:
+	MAX_RUNTIME_SECONDS=$${BENCHMARK_MAX_RUNTIME_SECONDS:-180} $(PYTHON) scripts/run_benchmark.py --mode real-llm --agent-mode $${BENCHMARK_AGENT_MODE:-g1} --provider $${BENCHMARK_PROVIDER:-openai} --dataset $${BENCHMARK_DATASET:-data/benchmarks/threat_cases.json} --output-dir $${BENCHMARK_OUTPUT_DIR:-data/benchmarks/results}
 
 benchmark-report:
 	$(PYTHON) scripts/run_benchmark.py --output-dir $${BENCHMARK_OUTPUT_DIR:-data/benchmarks/results} --report-from-latest
