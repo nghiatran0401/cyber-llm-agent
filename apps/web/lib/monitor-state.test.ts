@@ -58,6 +58,6 @@ describe("deriveMonitorState", () => {
       runStatus: "running",
     });
 
-    expect(state.unknownSteps).toEqual(["UnknownStepV2"]);
+    expect(state.unknownSteps).toEqual(["LogAnalyzer", "UnknownStepV2"]);
   });
 });

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.benchmarking.agents import OfflineDeterministicAgent, RealLLMBenchmarkAgent
+from src.benchmarking.agents import RealLLMBenchmarkAgent
 from src.benchmarking.evaluator import AgentEvaluator
 from src.benchmarking.reporting import load_latest_report, render_markdown, write_artifacts
 from src.config.settings import Settings
@@ -17,22 +17,16 @@ from src.utils.prompt_templates import render_prompt_template
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run benchmark evaluation suite.")
     parser.add_argument(
-        "--mode",
-        choices=("offline", "real-llm"),
-        default="offline",
-        help="Benchmark execution mode.",
-    )
-    parser.add_argument(
         "--agent-mode",
         choices=("g1", "g2"),
         default="g1",
-        help="Agent mode used for real-llm benchmark runs.",
+        help="Agent mode used for benchmark runs.",
     )
     parser.add_argument(
         "--provider",
         choices=("openai",),
         default="openai",
-        help="LLM provider for real-llm mode (OpenAI only).",
+        help="LLM provider for benchmark mode (OpenAI only).",
     )
     parser.add_argument(
         "--dataset",
@@ -108,16 +102,13 @@ def main() -> int:
     raw_cases = load_dataset(dataset_path)
     cases = normalize_cases(raw_cases, case_limit=max(0, args.case_limit))
 
-    if args.mode == "offline":
-        agent = OfflineDeterministicAgent()
-    else:
-        agent = RealLLMBenchmarkAgent(agent_mode=args.agent_mode, provider=args.provider)
+    agent = RealLLMBenchmarkAgent(agent_mode=args.agent_mode, provider=args.provider)
 
     evaluator = AgentEvaluator()
     benchmark_result = evaluator.run_benchmark(agent=agent, test_cases=cases)
     report = {
         **benchmark_result,
-        "benchmark_mode": args.mode,
+        "benchmark_mode": "real-llm",
         "agent_mode": args.agent_mode,
         "provider": args.provider,
         "dataset": str(dataset_path),

@@ -1,50 +1,6 @@
-"""Agent adapters for benchmark execution modes."""
+"""Agent adapters for benchmark execution."""
 
 from __future__ import annotations
-
-
-class OfflineDeterministicAgent:
-    """Deterministic agent for CI-safe benchmark presence checks."""
-
-    def run(self, prompt: str) -> str:
-        text = (prompt or "").lower()
-        if "failed ssh login" in text or "failed login" in text:
-            return (
-                "Threat: brute force login pattern.\n"
-                "Severity: high.\n"
-                "Recommended Actions:\n- block ip\n- enforce mfa\n- monitor failed login spikes"
-            )
-        if "mass file rename" in text or "entropy" in text:
-            return (
-                "Threat: ransomware behavior.\n"
-                "Severity: critical.\n"
-                "Recommended Actions:\n- isolate affected hosts\n- validate backup integrity"
-            )
-        if "9 million per minute" in text or "botnet" in text:
-            return (
-                "Threat: ddos traffic spike.\n"
-                "Severity: high.\n"
-                "Recommended Actions:\n- enable rate limiting\n- activate mitigation profile"
-            )
-        if "lookalike sso" in text or "spoofed sender" in text:
-            return (
-                "Threat: phishing campaign.\n"
-                "Severity: medium.\n"
-                "Recommended Actions:\n- tighten email filter\n- enforce mfa reset messaging"
-            )
-        if "ports 22, 80, 443, 3389" in text or "sequential connection" in text:
-            return (
-                "Threat: port scan reconnaissance.\n"
-                "Severity: medium.\n"
-                "Recommended Actions:\n- update firewall rules\n- monitor reconnaissance behavior"
-            )
-        if "admin role outside approved change window" in text:
-            return (
-                "Threat: privilege escalation suspicion.\n"
-                "Severity: high.\n"
-                "Recommended Actions:\n- investigate account activity\n- audit role assignment trail"
-            )
-        return "Threat: unknown.\nSeverity: medium.\nRecommended Actions:\n- investigate and monitor."
 
 
 class RealLLMBenchmarkAgent:

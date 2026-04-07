@@ -5,8 +5,7 @@ This document defines how benchmark evaluation is executed and how results shoul
 ## Objectives
 
 - Provide repeatable evaluation for cybersecurity-agent behavior.
-- Keep CI evaluation lightweight and deterministic.
-- Support real-LLM staging runs for demonstration and report evidence.
+- Run benchmarks against real LLM agent paths for report evidence.
 
 ## Dataset
 
@@ -18,19 +17,11 @@ This document defines how benchmark evaluation is executed and how results shoul
   - `expected_keywords`
   - `unexpected_keywords`
 
-## Execution Modes
-
-### 1) Offline mode (default, CI-safe)
-
-- Command: `make benchmark`
-- Uses deterministic offline adapter in `src/benchmarking/agents.py`
-- Purpose: benchmark pipeline presence and artifact generation
-
-### 2) Real-LLM mode (staging/manual)
+## Execution
 
 - Command:
-  - `BENCHMARK_MODE=real-llm BENCHMARK_AGENT_MODE=g1 BENCHMARK_PROVIDER=openai make benchmark`
-  - `BENCHMARK_MODE=real-llm BENCHMARK_AGENT_MODE=g2 BENCHMARK_PROVIDER=openai make benchmark`
+  - `BENCHMARK_AGENT_MODE=g1 BENCHMARK_PROVIDER=openai make benchmark`
+  - `BENCHMARK_AGENT_MODE=g2 BENCHMARK_PROVIDER=openai make benchmark`
 - Uses real runtime paths:
   - G1: `run_g1_analysis(...)`
   - G2: `run_g2_analysis(...)`
@@ -70,9 +61,9 @@ Human-readable summary command:
 
 ## CI Integration
 
-The CI workflow includes a named `Benchmark evaluation` step that runs `make benchmark` in offline mode.
+The CI workflow includes a named `Benchmark evaluation` step that runs `make benchmark`.
 
-- This is a presence-only gate.
+- This is a benchmark execution gate.
 - The job fails only if benchmark execution itself fails.
 - Metric thresholds are intentionally not enforced yet.
 

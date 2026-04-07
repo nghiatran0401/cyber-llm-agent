@@ -3,9 +3,6 @@ The in-memory “brain”: recent chat, optional rolling summary, episodic snipp
 
 from __future__ import annotations
 
-import math
-import re
-from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -22,7 +19,7 @@ class ConversationMemory:
 
     Short-term memory: recent messages kept in messages up to max_messages. Overflow is either dropped (buffer) or compressed into running_summary (summary).
 
-    Long-term memory: episodic episodes and semantic facts stored indefinitely up to their respective caps. Recall uses cosine similarity when an embedding_memory is available, otherwise falls back to BM25.
+    Long-term memory: episodic episodes and semantic facts stored indefinitely up to their respective caps. Recall uses cosine similarity over OpenAI embeddings.
     """
 
     memory_type: str = "buffer"
@@ -68,7 +65,7 @@ class ConversationMemory:
             self._embedding_backend = EmbeddingMemory.from_settings()
         except Exception as exc:
             logger.warning("Could not initialise embedding backend: %s", exc)
-            self._embedding_backend = EmbeddingMemory(enabled=False)
+            self._embedding_backend = EmbeddingMemory(openai_api_key="")
         return self._embedding_backend
 
     # Public API — short-term memory
@@ -264,12 +261,12 @@ class ConversationMemory:
     def retrieve_relevant_memories(
         self, query: str, max_items: int | None = None
     ) -> List[str]:
-        """Rank memories by cosine similarity when available, else BM25."""
+        """Rank memories by cosine similarity over embedding vectors."""
         limit = max_items or self.recall_top_k
         query_embedding = self._embed(query)
-        if query_embedding is not None:
-            return self._retrieve_by_embedding(query_embedding, limit)
-        return self._retrieve_by_bm25(query, limit)
+        if query_embedding is None:
+            return []
+        return self._retrieve_by_embedding(query_embedding, limit)
 
     # Private — recall
 
@@ -303,48 +300,6 @@ class ConversationMemory:
             if vec is None:
                 continue
             scored.append((cosine(query_vec, vec), f"Semantic: {fact}"))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return self._deduplicate(scored, limit)
-
-    def _retrieve_by_bm25(self, query: str, limit: int) -> List[str]:
-        """BM25 fallback — used when embedding backend is disabled or unavailable."""
-        query_tokens = self._tokens_list(query)
-        if not query_tokens:
-            return []
-
-        doc_entries: List[tuple[list[str], str, int]] = []
-        for i, memory in enumerate(self.episodic_memories):
-            summary = str(memory.get("summary", "")).strip()
-            if not summary:
-                continue
-            doc_entries.append((self._tokens_list(summary), f"Episodic: {summary}", i))
-        for fact in self.semantic_facts:
-            doc_entries.append((self._tokens_list(fact), f"Semantic: {fact}", -1))
-
-        if not doc_entries:
-            return []
-
-        corpus_tokens = [dt for dt, _, _ in doc_entries]
-        corpus_size = len(corpus_tokens)
-        avg_doc_len = sum(len(dt) for dt in corpus_tokens) / max(corpus_size, 1)
-
-        idf_map: dict[str, float] = {}
-        for term in set(query_tokens):
-            df = sum(1 for dt in corpus_tokens if term in set(dt))
-            idf_map[term] = self._bm25_idf(df, corpus_size)
-
-        scored: List[tuple[float, str]] = []
-        for doc_tokens, label, episodic_idx in doc_entries:
-            score = self._bm25_doc_score(
-                query_tokens, doc_tokens, idf_map, avg_doc_len=avg_doc_len
-            )
-            if score <= 0:
-                continue
-            if episodic_idx >= 0:
-                recency = (episodic_idx + 1) / max(len(self.episodic_memories), 1)
-                score *= 1 + 0.2 * recency
-            scored.append((score, label))
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return self._deduplicate(scored, limit)
@@ -400,42 +355,6 @@ class ConversationMemory:
             trim = len(self.semantic_facts) - self.max_semantic_facts
             self.semantic_facts = self.semantic_facts[trim:]
             self._semantic_embeddings = self._semantic_embeddings[trim:]
-
-    # Private — BM25 scoring
-
-    @staticmethod
-    def _tokens_list(text: str) -> list[str]:
-        return [t.lower() for t in re.findall(r"[a-zA-Z0-9_.:-]{2,}", text or "")]
-
-    @staticmethod
-    def _bm25_idf(df: int, corpus_size: int) -> float:
-        """Okapi BM25 inverse document frequency using corpus-wide document frequency."""
-        if corpus_size <= 0:
-            return 0.0
-        return math.log((corpus_size - df + 0.5) / (df + 0.5) + 1.0)
-
-    @staticmethod
-    def _bm25_doc_score(
-        query_tokens: list[str],
-        doc_tokens: list[str],
-        idf_map: dict[str, float],
-        avg_doc_len: float = 20.0,
-        k1: float = 1.5,
-        b: float = 0.75,
-    ) -> float:
-        if not query_tokens or not doc_tokens:
-            return 0.0
-        doc_len = len(doc_tokens)
-        doc_freq = Counter(doc_tokens)
-        score = 0.0
-        for term in query_tokens:
-            tf = doc_freq.get(term, 0)
-            if tf == 0:
-                continue
-            idf = idf_map.get(term, 0.0)
-            tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (doc_len / avg_doc_len)))
-            score += idf * tf_norm
-        return score
 
     # Private — tagging and fact extraction
 

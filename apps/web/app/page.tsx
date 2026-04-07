@@ -122,6 +122,7 @@ export default function WorkspacePage() {
 
     try {
       let finalText = "";
+      let receivedFinal = false;
       await streamWorkspace(
         {
           task: "chat",
@@ -138,17 +139,21 @@ export default function WorkspacePage() {
               return;
             }
             if (eventPayload.type === "final") {
-              finalText = eventPayload.result;
+              receivedFinal = true;
+              finalText = typeof eventPayload.result === "string" ? eventPayload.result : "";
+              const displayText = finalText.trim()
+                ? finalText
+                : "(Run completed, but the agent returned an empty final report.)";
               setLiveStatus("Completed.");
               setRunStatus("completed");
               setCurrentStep("");
-              setLastResultText(finalText);
+              setLastResultText(displayText);
               setMessages((prev) => [
                 ...prev,
                 {
                   id: `assistant-${Date.now()}`,
                   role: "assistant",
-                  content: finalText,
+                  content: displayText,
                 },
               ]);
               return;
@@ -160,7 +165,7 @@ export default function WorkspacePage() {
               setCurrentStep("");
             }
             if (eventPayload.type === "done") {
-              if (!finalText) {
+              if (!receivedFinal) {
                 setLiveStatus("Run stopped before final output.");
                 setRunStatus("error");
               }

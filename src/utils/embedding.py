@@ -25,23 +25,21 @@ class EmbeddingMemory:
     def __init__(
         self,
         openai_model: str = "text-embedding-3-small",
-        enabled: bool = True,
         *,
         openai_api_key: str | None = None,
     ):
         self.openai_model = openai_model
-        self.enabled = enabled
         self._openai_api_key = openai_api_key
         self._lc_embeddings: Optional[OpenAIEmbeddings] = None
 
     def embed(self, text: str) -> Optional[List[float]]:
-        """Return an embedding vector, or None if disabled or the call fails."""
-        if not self.enabled or not (text or "").strip():
+        """Return an embedding vector, or None if input is empty or call fails."""
+        if not (text or "").strip():
             return None
         try:
             return self._embed_openai(text)
         except Exception as exc:
-            logger.warning("Embedding failed (openai), falling back to BM25: %s", exc)
+            logger.warning("Embedding failed (openai): %s", exc)
             return None
 
     @staticmethod
@@ -61,7 +59,6 @@ class EmbeddingMemory:
         """Construct from application :class:`Settings`."""
         return cls(
             openai_model=Settings.OPENAI_EMBEDDING_MODEL,
-            enabled=Settings.EMBEDDING_ENABLED,
             openai_api_key=Settings.OPENAI_API_KEY,
         )
 

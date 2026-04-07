@@ -242,8 +242,6 @@ def verifier_node(state: AgentState, llm: Any) -> AgentState:
     verdict_text = _invoke_llm(llm, prompt)
     normalized = verdict_text.lower()
     passed = "verdict: pass" in normalized and "verdict: fail" not in normalized
-    if not passed:
-        passed = bool(state.get("incident_response", "").strip() and state.get("worker_reports"))
     state["verifier_passed"] = passed
     state["verifier_feedback"] = verdict_text
     return state

@@ -59,6 +59,39 @@ def _g2_analysis_output_summary(executed_steps: List[Dict[str, str]], final_repo
     return summarize_text(f"Flow: {compact_steps}\nFinal report: {final_report}", 400)
 
 
+def _fallback_final_report_from_state(
+    result: Dict[str, Any],
+    *,
+    stop_reason: str,
+) -> str:
+    """Build a deterministic report when orchestrator output is empty."""
+    log_analysis = summarize_text(str(result.get("log_analysis", "")).strip(), 900) or "No log analysis available."
+    threat_prediction = (
+        summarize_text(str(result.get("threat_prediction", "")).strip(), 900) or "No threat prediction available."
+    )
+    incident_response = (
+        summarize_text(str(result.get("incident_response", "")).strip(), 1200) or "No containment actions available."
+    )
+    worker_reports = result.get("worker_reports", {})
+    worker_count = len(worker_reports) if isinstance(worker_reports, dict) else 0
+    runtime_budget = result.get("runtime_budget", {})
+    steps_used = runtime_budget.get("steps_used", "unknown")
+    tool_calls_used = runtime_budget.get("tool_calls_used", 0)
+    return (
+        "### Executive Summary\n\n"
+        "Automated G2 analysis completed, but the final synthesis step returned empty output. "
+        "This fallback summarizes the strongest available evidence so you can proceed safely.\n\n"
+        f"- **Run status:** {stop_reason}\n"
+        f"- **Execution budget:** steps_used={steps_used}, tool_calls_used={tool_calls_used}, worker_reports={worker_count}\n\n"
+        "### Log Analysis\n"
+        f"{log_analysis}\n\n"
+        "### Likely Threat Progression\n"
+        f"{threat_prediction}\n\n"
+        "### Immediate Actions\n"
+        f"{incident_response}"
+    )
+
+
 def _g2_execution_trace_step(
     runtime_budget: Dict[str, Any],
     stop_reason: str,
@@ -153,6 +186,9 @@ def _run_g2_analysis_core(
     stop_reason = normalize_stop_reason(str(executed.get("stop_reason", "completed")), default="completed")
     steps_used = int(executed.get("steps_used", len(executed.get("trace", []))))
     final_text = str(result.get("final_report", ""))
+    if not final_text.strip():
+        result["final_report"] = _fallback_final_report_from_state(result, stop_reason=stop_reason)
+        final_text = result["final_report"]
     high_risk = Settings.is_high_risk_task(clean_logs)
     evidence_count = count_evidence_markers(final_text + "\n" + str(result.get("cti_evidence", "")))
     gated_text, gated_stop_reason = apply_action_gating(final_text, high_risk=high_risk, evidence_count=evidence_count)

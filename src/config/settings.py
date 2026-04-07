@@ -44,7 +44,6 @@ class Settings:
 
     # Memory recall embeddings (OpenAI; uses OPENAI_API_KEY)
     OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-    EMBEDDING_ENABLED = os.getenv("EMBEDDING_ENABLED", "true").lower() == "true"
 
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
@@ -96,8 +95,6 @@ class Settings:
                 raise ValueError("PINECONE_INDEX_NAME is required when ENABLE_RAG=true.")
         if cls.RAG_MAX_RESULTS <= 0:
             raise ValueError("RAG_MAX_RESULTS must be greater than 0.")
-        if cls.EMBEDDING_ENABLED and not cls.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required when EMBEDDING_ENABLED=true.")
         return True
 
     @classmethod

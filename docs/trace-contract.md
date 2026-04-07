@@ -73,15 +73,13 @@ The API returns a short trace intended for the workspace UI. Deeper steps (full 
 
 ### G2 canonical sequence
 
-For the default successful workflow without verifier retry:
+The API now returns the same user-facing canonical five-step trace as G1 (with G2-specific analysis content):
 
-1. `LogAnalyzer`
-2. `WorkerPlanner`
-3. `ThreatPredictor`
-4. one or more `WorkerTask` steps
-5. `IncidentResponder`
-6. `Verifier`
-7. `Orchestrator`
+1. `SafetyCheck` — injection heuristic; on block, trace stops here.
+2. `ModelRouting` — which OpenAI model was selected.
+3. `Analysis` — G2 multi-agent execution summarized into one user-facing trace step.
+4. `OutputReview` — evidence + policy outcome in plain language.
+5. `ExecutionSummary` — budgets, tool counters, stop reason.
 
 These canonical sequences matter because they make the trace explainable to humans and predictable for tests and UI rendering.
 

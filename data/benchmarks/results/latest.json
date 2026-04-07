@@ -1,16 +1,16 @@
 {
-  "timestamp": "2026-04-06T09:52:04.578652+00:00",
-  "total_tests": 6,
+  "timestamp": "2026-04-07T10:30:16.343410+00:00",
+  "total_tests": 1,
   "average_precision": 1.0,
   "average_recall": 1.0,
   "average_f1_score": 1.0,
-  "average_latency_seconds": 0.0,
+  "average_latency_seconds": 35.9315,
   "results": [
     {
       "test_id": "case_001",
       "test_name": "Brute Force Login Pattern",
       "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nFailed SSH login from 203.0.113.9 repeated 14 times in 2 minutes.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "Threat: brute force login pattern.\nSeverity: high.\nRecommended Actions:\n- block ip\n- enforce mfa\n- monitor failed login spikes",
+      "response": "- **Indicators:**\n  - Failed SSH login attempts from IP address 203.0.113.9 repeated 14 times within a 2-minute window.\n\n- **Threat assessment:**\n  - **Threat Type:** Brute force attack\n  - **Severity:** Medium. The rapid succession of failed login attempts suggests an attempt to gain unauthorized access through brute force methods.\n\n- **Recommended actions:**\n  - **Block IP Address:** Temporarily block the IP address 203.0.113.9 to prevent further login attempts.\n  - **Enable Rate Limiting:** Implement rate limiting on SSH login attempts to reduce the risk of brute force attacks.\n  - **Review Authentication Logs:** Analyze authentication logs for any successful logins or other suspicious activity from the same IP range.\n  - **Strengthen SSH Security:** Ensure SSH configurations are secure, including using key-based authentication and disabling password logins if possible.\n  - **Monitor for Further Attempts:** Set up alerts for repeated failed login attempts to quickly identify and respond to similar threats.\n\n- **Evidence-based rationale:**\n  - The pattern of repeated failed login attempts is indicative of a brute force attack, aiming to guess credentials. Blocking the offending IP and enhancing SSH security measures can mitigate the risk of unauthorized access.\n\nCritic verdict: High-risk response missing recommended actions. Please provide more logs, IOC context, or CTI evidence.",
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
@@ -18,104 +18,14 @@
         "true_positive_keywords": 4,
         "false_positive_keywords": 0,
         "missing_expected_keywords": 0,
-        "response_length": 126,
-        "timestamp": "2026-04-06T09:52:04.578504+00:00",
-        "latency_seconds": 0.0,
-        "tokens_approx": 20
-      }
-    },
-    {
-      "test_id": "case_002",
-      "test_name": "Ransomware Indicator",
-      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nMass file rename events and high entropy extensions detected on shared drive.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "Threat: ransomware behavior.\nSeverity: critical.\nRecommended Actions:\n- isolate affected hosts\n- validate backup integrity",
-      "metrics": {
-        "precision": 1.0,
-        "recall": 1.0,
-        "f1_score": 1.0,
-        "true_positive_keywords": 4,
-        "false_positive_keywords": 0,
-        "missing_expected_keywords": 0,
-        "response_length": 122,
-        "timestamp": "2026-04-06T09:52:04.578619+00:00",
-        "latency_seconds": 0.0,
-        "tokens_approx": 15
-      }
-    },
-    {
-      "test_id": "case_003",
-      "test_name": "DDoS Traffic Spike",
-      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nInbound HTTP requests jumped to 9 million per minute from botnet-like IP range.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "Threat: ddos traffic spike.\nSeverity: high.\nRecommended Actions:\n- enable rate limiting\n- activate mitigation profile",
-      "metrics": {
-        "precision": 1.0,
-        "recall": 1.0,
-        "f1_score": 1.0,
-        "true_positive_keywords": 4,
-        "false_positive_keywords": 0,
-        "missing_expected_keywords": 0,
-        "response_length": 117,
-        "timestamp": "2026-04-06T09:52:04.578629+00:00",
-        "latency_seconds": 0.0,
-        "tokens_approx": 16
-      }
-    },
-    {
-      "test_id": "case_004",
-      "test_name": "Phishing Campaign",
-      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nMultiple users clicked lookalike SSO link from spoofed sender domain.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "Threat: phishing campaign.\nSeverity: medium.\nRecommended Actions:\n- tighten email filter\n- enforce mfa reset messaging",
-      "metrics": {
-        "precision": 1.0,
-        "recall": 1.0,
-        "f1_score": 1.0,
-        "true_positive_keywords": 4,
-        "false_positive_keywords": 0,
-        "missing_expected_keywords": 0,
-        "response_length": 118,
-        "timestamp": "2026-04-06T09:52:04.578636+00:00",
-        "latency_seconds": 0.0,
-        "tokens_approx": 16
-      }
-    },
-    {
-      "test_id": "case_005",
-      "test_name": "Port Scan Recon",
-      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nSequential connection attempts observed across ports 22, 80, 443, 3389 from one host.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "Threat: port scan reconnaissance.\nSeverity: medium.\nRecommended Actions:\n- update firewall rules\n- monitor reconnaissance behavior",
-      "metrics": {
-        "precision": 1.0,
-        "recall": 1.0,
-        "f1_score": 1.0,
-        "true_positive_keywords": 4,
-        "false_positive_keywords": 0,
-        "missing_expected_keywords": 0,
-        "response_length": 130,
-        "timestamp": "2026-04-06T09:52:04.578643+00:00",
-        "latency_seconds": 0.0,
-        "tokens_approx": 16
-      }
-    },
-    {
-      "test_id": "case_006",
-      "test_name": "Privilege Escalation Suspicion",
-      "prompt": "You are a SOC analyst. Analyze this security event and provide:\n1) threat type\n2) severity\n3) immediate defensive actions\n4) evidence-based rationale.\n\nSecurity log/event:\nService account granted admin role outside approved change window.\n\nAnswer concisely and include concrete actions.\n",
-      "response": "Threat: privilege escalation suspicion.\nSeverity: high.\nRecommended Actions:\n- investigate account activity\n- audit role assignment trail",
-      "metrics": {
-        "precision": 1.0,
-        "recall": 1.0,
-        "f1_score": 1.0,
-        "true_positive_keywords": 4,
-        "false_positive_keywords": 0,
-        "missing_expected_keywords": 0,
-        "response_length": 137,
-        "timestamp": "2026-04-06T09:52:04.578650+00:00",
-        "latency_seconds": 0.0,
-        "tokens_approx": 17
+        "response_length": 1404,
+        "timestamp": "2026-04-07T10:30:16.343388+00:00",
+        "latency_seconds": 35.9315,
+        "tokens_approx": 199
       }
     }
   ],
-  "benchmark_mode": "offline",
+  "benchmark_mode": "real-llm",
   "agent_mode": "g1",
   "provider": "openai",
   "dataset": "/Users/nghiatran/projects/cyber-llm-agent/data/benchmarks/threat_cases.json"

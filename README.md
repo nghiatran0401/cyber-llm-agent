@@ -18,6 +18,15 @@ Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs
 
 ---
 
+## Current status (important)
+
+- **G1:** implemented and production-ready for this project scope.
+- **G2:** implemented and active (not a placeholder).
+- **G2 runtime flow today:** `LogAnalyzer -> WorkerPlanner -> ThreatPredictor -> WorkerTask(s) -> IncidentResponder -> Verifier (with one retry) -> Orchestrator`.
+- **Trace + safety gates:** active for both G1/G2 (`stop_reason`, budget controls, output policy, action gating).
+
+---
+
 ## Prerequisites
 
 - **Python 3.10–3.13** (see `requirements.txt` header; some deps exclude 3.14+ today)
@@ -60,8 +69,8 @@ Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs
 | Command                                    | Purpose                                                                                               |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
 | `make lint`                                | Byte-compile critical Python packages (fast sanity check)                                             |
-| `make test`                                | Full pytest suite (includes integration tests if not skipped)                                         |
-| `make test-ci`                             | Same set as CI: all tests except `tests/integration/test_agent_flow.py` (needs real `OPENAI_API_KEY`) |
+| `make test`                                | Full pytest run for repository tests                                                                  |
+| `make test-ci`                             | Curated core-workflow Python suite used by CI (`scripts/run_test_ci.py`)                             |
 | `make test-web`                            | Frontend unit tests (Vitest)                                                                          |
 | `make benchmark` / `make benchmark-report` | Offline benchmark pipeline (CI-safe defaults)                                                         |
 | `make smoke`                               | Quick compile + memory/session smoke tests                                                            |
@@ -87,6 +96,18 @@ Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs
 
 ---
 
+## How G2 works (current flow)
+
+1. API sanitizes input and applies prompt-injection checks.
+2. G2 runner executes staged nodes: log analysis, worker planning, threat prediction, dynamic worker tasks, incident response, verifier, orchestrator.
+3. Runtime budgets enforce max steps/tool-calls/runtime and emit deterministic `stop_reason`.
+4. Service-level review applies action gating + output policy guard before returning.
+5. API returns structured `ApiResponse` + human-readable trace steps for UI.
+
+**Endpoints:** `POST /api/v1/analyze/g2`, `POST /api/v1/chat` (`mode=g2`), `POST /api/v1/workspace/stream` (`mode=g2`).
+
+---
+
 ## RAG (Pinecone + OpenAI)
 
 RAG is **on** by default. The API does **not** ingest documents on startup. Retrieval uses a **Pinecone** index built from files under `data/knowledge/` (OpenAI embeddings).
@@ -101,7 +122,7 @@ RAG is **on** by default. The API does **not** ingest documents on startup. Retr
 
 4. Re-ingest after you change knowledge files or switch indexes.
 
-Session **memory recall** uses the same `OPENAI_API_KEY` with `OPENAI_EMBEDDING_MODEL` (see `.env.example`). Set `EMBEDDING_ENABLED=false` to use BM25-only recall.
+Session **memory recall** uses the same `OPENAI_API_KEY` with `OPENAI_EMBEDDING_MODEL` (see `.env.example`).
 
 ---
 
@@ -109,25 +130,21 @@ Session **memory recall** uses the same `OPENAI_API_KEY` with `OPENAI_EMBEDDING_
 
 - OWASP-style **sandbox** API routes (`/api/v1/sandbox/*`) are always on for local demos.
 - Policy and gate reference: [`docs/policy-gates.md`](docs/policy-gates.md).
-- Heavier verification (integration tests with `OPENAI_API_KEY`, real-LLM benchmarks): [`docs/benchmark-evaluation.md`](docs/benchmark-evaluation.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- Heavier verification (live API checks + real-LLM benchmark mode): [`docs/benchmark-evaluation.md`](docs/benchmark-evaluation.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
 ## Benchmarks
 
 - Datasets: `data/benchmarks/threat_cases.json`, `data/benchmarks/threat_cases_lab.json`
-- Offline (deterministic, CI-safe):
+- Benchmark runs:
 
   ```bash
   make benchmark
   make benchmark-report
   ```
 
-- Real LLM (local only; needs keys):
-
-  ```bash
-  BENCHMARK_MODE=real-llm BENCHMARK_AGENT_MODE=g1 BENCHMARK_PROVIDER=openai make benchmark
-  ```
+- Real LLM (local only; needs keys): `BENCHMARK_MODE=real-llm BENCHMARK_AGENT_MODE=g1 BENCHMARK_PROVIDER=openai make benchmark`
 
 More methodology: [`docs/benchmark-evaluation.md`](docs/benchmark-evaluation.md).
 

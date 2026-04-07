@@ -41,20 +41,15 @@ jobs:
         run: make lint
 
       - name: Run test suite (CI scope; no live API keys)
-        env:
-          EMBEDDING_ENABLED: "false"
         run: make test-ci
 
       - name: Benchmark evaluation
         env:
-          BENCHMARK_MODE: offline
           BENCHMARK_AGENT_MODE: g1
           BENCHMARK_PROVIDER: openai
         run: make benchmark
 
       - name: Smoke checks (compile + memory/session)
-        env:
-          EMBEDDING_ENABLED: "false"
         run: |
           python -m py_compile src/agents/g1/*.py src/agents/g2/*.py services/api/*.py
           make test-memory

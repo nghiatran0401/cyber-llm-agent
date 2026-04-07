@@ -2,8 +2,7 @@
 """Stable CLI entry for benchmarks (used by Makefile).
 
 When to use:
-- `make benchmark` for offline deterministic benchmark runs.
-- `make benchmark-real-llm` for keyed staging checks.
+- `make benchmark` for keyed benchmark runs.
 - `make benchmark-report` to render latest markdown summary.
 """
 

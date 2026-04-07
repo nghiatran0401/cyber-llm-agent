@@ -29,8 +29,10 @@ class _FakeLLM:
             return _FakeResponse("Analysis: brute force indicators found.")
         if "predict likely attacker" in lower:
             return _FakeResponse("Prediction: attacker may continue credential stuffing.")
-        if "immediate response" in lower:
+        if "response requirements" in lower or "immediate response" in lower:
             return _FakeResponse("Response: block source IP and reset credentials.")
+        if "strict incident response verifier" in lower:
+            return _FakeResponse("VERDICT: PASS\nREASON: Supported by evidence.\nFIX: n/a")
         return _FakeResponse("Final: high-risk incident with immediate containment required.")
 
 

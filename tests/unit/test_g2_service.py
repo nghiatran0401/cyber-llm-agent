@@ -114,3 +114,21 @@ def test_g2_progress_emits_all_steps(monkeypatch):
     assert stop_reason == "completed"
     assert isinstance(result, dict)
     assert [step.step for step in emitted] == ["SafetyCheck", "ModelRouting", "Analysis", "OutputReview", "ExecutionSummary"]
+
+
+def test_g2_empty_final_report_uses_fallback_summary(monkeypatch):
+    monkeypatch.setattr("services.api.g2_service._resolve_prompt_version", lambda: ("security_analysis_v2.txt", "tmpl"))
+    monkeypatch.setattr(
+        "services.api.g2_service.run_multiagent_with_trace",
+        lambda _logs: _fake_executed_result(final_report="", stop_reason="budget_exceeded"),
+    )
+    monkeypatch.setattr("services.api.g2_service.Settings.is_high_risk_task", lambda _text: False)
+
+    result, _trace, _model, stop_reason, _steps_used, _prompt_version, _rubric_score, _rubric_label = g2_service.run_g2_analysis(
+        "auth failures and suspicious endpoint activity"
+    )
+
+    assert stop_reason == "budget_exceeded"
+    assert "fallback summarizes the strongest available evidence" in result["final_report"].lower()
+    assert "log analysis" in result["final_report"].lower()
+    assert "immediate actions" in result["final_report"].lower()

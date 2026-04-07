@@ -23,4 +23,11 @@ CTI evidence:
 Retrieved context:
 {rag_context}
 
-Create one executive summary with top risks and immediate actions. Include cited sources when available.
+Create one final response that is strictly evidence-grounded.
+
+Hard constraints:
+- Do not introduce incident facts not present in the provided inputs.
+- If evidence is insufficient, explicitly say "Insufficient evidence".
+- Preserve user-requested structure from upstream outputs when present (for example, team split by SOC/IAM/Email/Endpoint).
+- Keep recommendations specific to the observed incident chain and prioritize containment first.
+- Only include source references when they are explicitly present in CTI or retrieved context.
