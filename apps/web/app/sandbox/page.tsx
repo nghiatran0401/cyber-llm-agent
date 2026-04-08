@@ -1,514 +1,295 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { LiveMonitorPanel } from "@/components/LiveMonitorPanel";
 import { TracePanel } from "@/components/TracePanel";
-import {
-  getLabScenarios,
-  getLabSystemLogs,
-  getLiveLog,
-  getOwaspMitreMap,
-  getRecentDetections,
-  simulateLabScenario,
-  streamWorkspace,
-} from "@/lib/api";
-import { deriveMonitorState, RunStatus } from "@/lib/monitor-state";
-import { AgentMode, OwaspMitreMapping, RecentDetectionItem, StepTrace } from "@/lib/types";
+import { analyze, getLabSystemLogs, resetLabSystemLogs } from "@/lib/api";
+import { AgentMode, G2Result, LabSystemLogEntry, ResponseMeta, StepTrace } from "@/lib/types";
 
-type DashboardEvent = Record<string, unknown>;
+const LAB_BASE = (process.env.NEXT_PUBLIC_LAB_BASE_URL || "http://127.0.0.1:3100").replace(/\/$/, "");
+const POLL_MS = 2500;
 
-function asText(value: unknown): string {
-  return typeof value === "string" ? value : "";
+function formatLabLine(entry: LabSystemLogEntry): string {
+  return (
+    `[${entry.timestamp}] req=${entry.requestId} ${entry.method} ${entry.path} ` +
+    `status=${entry.status} latency_ms=${entry.latencyMs} ip=${entry.ip}` +
+    `${entry.attackDetected ? " attack_detected=true" : ""}` +
+    `${entry.scenarioId ? ` scenario=${entry.scenarioId}` : ""}` +
+    `${entry.riskHint ? ` risk=${entry.riskHint}` : ""}` +
+    `${entry.payloadSnippet ? ` payload="${entry.payloadSnippet}"` : ""}`
+  );
 }
 
-function formatTimestamp(value: unknown): string {
-  const raw = asText(value);
-  if (!raw) return "n/a";
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return raw;
-  return date.toLocaleString();
-}
-
-function detectAttackFamily(logLines: string[]): "SQLi" | "XSS" | "IDOR" | "PathTraversal" | "Attack" {
-  const joined = logLines.join(" ").toLowerCase();
-  if (joined.includes("risk=sqli") || joined.includes("scenario=sqli")) return "SQLi";
-  if (joined.includes("risk=xss") || joined.includes("scenario=reflectedxss") || joined.includes("storedxss")) return "XSS";
-  if (joined.includes("risk=idor") || joined.includes("scenario=idor")) return "IDOR";
-  if (joined.includes("pathtraversal") || joined.includes("scenario=pathtraversal")) return "PathTraversal";
-  return "Attack";
-}
-
-function extractSection(text: string, title: string): string {
-  const pattern = new RegExp(`${title}\\s*:?([\\s\\S]*?)(?:\\n\\s*[0-9]+\\)|$)`, "i");
-  const match = text.match(pattern);
-  return match ? match[1].trim() : "";
-}
-
-function buildFallbackWarning(logLines: string[]): string {
-  const attackFamily = detectAttackFamily(logLines);
-  if (attackFamily === "SQLi") {
-    return [
-      "ALERT: Possible SQL injection attack detected on your login endpoint.",
-      "IMMEDIATE ACTIONS:",
-      "- Temporarily block suspicious IPs and enable strict rate limiting on login.",
-      "- Reject SQL-like patterns in username/password input immediately.",
-      "- Use parameterized queries only; disable string-built SQL.",
-      "- Rotate admin credentials and review recent successful logins.",
-    ].join("\n");
-  }
-  if (attackFamily === "XSS") {
-    return [
-      "ALERT: Possible cross-site scripting (XSS) attack detected.",
-      "IMMEDIATE ACTIONS:",
-      "- Escape/sanitize all user-controlled output before rendering.",
-      "- Turn on a strict Content Security Policy (CSP).",
-      "- Remove malicious stored content and invalidate active sessions.",
-      "- Monitor new requests for repeated script payload patterns.",
-    ].join("\n");
-  }
+function buildLabLogPrompt(lines: string[]): string {
   return [
-    "ALERT: Suspicious attack activity detected on your website.",
-    "IMMEDIATE ACTIONS:",
-    "- Block repeat offender IPs and tighten rate limits.",
-    "- Validate and sanitize all user inputs at the server.",
-    "- Review auth/admin actions from the same time window.",
-    "- Keep logs and capture evidence for incident follow-up.",
+    "You are helping a security analyst review HTTP request logs from a deliberately vulnerable local demo app (vuln-lab).",
+    "Summarize what the log shows, likely intent, severity, and short containment or verification steps. Stay concise.",
+    "",
+    "Logs:",
+    ...lines,
   ].join("\n");
 }
 
-function buildUserWarning(finalText: string, logLines: string[]): string {
-  const firstLine = finalText.split("\n").find((line) => line.trim().length > 0) || "";
-  const introLooksUnhelpful = /i will|to analyze|first extract|based on this analysis/i.test(firstLine);
-  if (introLooksUnhelpful) return buildFallbackWarning(logLines);
-
-  const alertLine = finalText
-    .split("\n")
-    .find((line) => line.toLowerCase().includes("alert"))
-    ?.trim();
-  const immediate = extractSection(finalText, "IMMEDIATE ACTIONS");
-  if (!alertLine) return buildFallbackWarning(logLines);
-
-  const trimmedActions = immediate
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("-"))
-    .slice(0, 4)
-    .join("\n");
-
-  return [alertLine, trimmedActions || "- Apply immediate containment and review recent attack logs."].join("\n");
+function formatAnalysisResult(result: string | G2Result): string {
+  if (typeof result === "string") {
+    return result;
+  }
+  const parts = [
+    result.log_analysis && `## Log analysis\n${result.log_analysis}`,
+    result.threat_prediction && `## Threat assessment\n${result.threat_prediction}`,
+    result.incident_response && `## Response ideas\n${result.incident_response}`,
+    result.final_report && `## Summary\n${result.final_report}`,
+  ].filter(Boolean);
+  return parts.join("\n\n") || JSON.stringify(result, null, 2);
 }
 
 export default function SandboxPage() {
-  const [mode, setMode] = useState<AgentMode>("g1");
-  const [trace, setTrace] = useState<StepTrace[]>([]);
-  const [events, setEvents] = useState<DashboardEvent[]>([]);
-  const [systemLogs, setSystemLogs] = useState<string[]>([]);
-  const [detections, setDetections] = useState<RecentDetectionItem[]>([]);
-  const [scenarios, setScenarios] = useState<Array<{ id: string; name: string; endpoint: string; method: string }>>(
-    []
-  );
-  const [selectedScenario, setSelectedScenario] = useState("sqliLogin");
-  const [analysisResult, setAnalysisResult] = useState("");
-  const [mapping, setMapping] = useState<Record<string, OwaspMitreMapping>>({});
-  const [error, setError] = useState("");
-  const [runStatus, setRunStatus] = useState<RunStatus>("idle");
-  const [currentStep, setCurrentStep] = useState("");
-  const [liveStatus, setLiveStatus] = useState("Waiting for simulation.");
-  const [autoModeEnabled, setAutoModeEnabled] = useState(true);
-  const [warningText, setWarningText] = useState("");
-  const [promptUsed, setPromptUsed] = useState("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<string>("");
-  const processedAttackIdsRef = useRef<Set<string>>(new Set());
-  const inFlightAutoRunRef = useRef(false);
+  const [logEntries, setLogEntries] = useState<LabSystemLogEntry[]>([]);
+  const [labConnected, setLabConnected] = useState<boolean | null>(null);
+  const [lastPollAt, setLastPollAt] = useState<string>("");
 
-  const refresh = useCallback(async () => {
-    setIsRefreshing(true);
-    setError("");
+  const [mode, setMode] = useState<AgentMode>("g1");
+  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [statusLine, setStatusLine] = useState("Waiting for lab logs.");
+
+  const [analysisText, setAnalysisText] = useState("");
+  const [trace, setTrace] = useState<StepTrace[]>([]);
+  const [meta, setMeta] = useState<ResponseMeta | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [logsRefreshing, setLogsRefreshing] = useState(false);
+
+  const processedAttackIdsRef = useRef<Set<string>>(new Set());
+  const inFlightRef = useRef(false);
+
+  const refreshLabLogs = useCallback(async (opts?: { manual?: boolean }) => {
+    setLogsRefreshing(true);
     try {
-      const [eventsResponse, detectionsResponse, mappingResponse, systemLogResponse] = await Promise.all([
-        getLiveLog({ source: "vuln_lab_events", tail: 40 }),
-        getRecentDetections(25),
-        getOwaspMitreMap(),
-        getLabSystemLogs(80),
-      ]);
-      setEvents(eventsResponse.result.items);
-      setDetections(detectionsResponse.result.items);
-      setMapping(mappingResponse.result);
-      setSystemLogs(
-        systemLogResponse.result.map(
-          (entry) =>
-            `[${entry.timestamp}] req=${entry.requestId} ${entry.method} ${entry.path} ` +
-            `status=${entry.status} latency_ms=${entry.latencyMs}` +
-            `${entry.attackDetected ? " attack_detected=true" : ""}` +
-            `${entry.scenarioId ? ` scenario=${entry.scenarioId}` : ""}` +
-            `${entry.riskHint ? ` risk=${entry.riskHint}` : ""}` +
-            `${entry.payloadSnippet ? ` payload="${entry.payloadSnippet}"` : ""}`
-        )
-      );
-      setLastUpdatedAt(new Date().toISOString());
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to refresh dashboard.");
+      if (opts?.manual) {
+        await resetLabSystemLogs();
+        processedAttackIdsRef.current.clear();
+        inFlightRef.current = false;
+      }
+      const res = await getLabSystemLogs(60);
+      setLogEntries(res.result);
+      setLabConnected(true);
+      setLastPollAt(new Date().toISOString());
+      setError((prev) => (prev.startsWith("Lab:") ? "" : prev));
+      if (opts?.manual) {
+        setStatusLine("Lab system log cleared. You can trigger new attacks in vuln-lab.");
+      }
+    } catch (e) {
+      setLabConnected(false);
+      setLogEntries([]);
+      if (opts?.manual) {
+        setError(
+          e instanceof Error
+            ? `Lab: ${e.message} — check that vuln-lab is running and NEXT_PUBLIC_LAB_BASE_URL matches this browser (e.g. http://127.0.0.1:3100).`
+            : "Lab: could not load system logs.",
+        );
+      }
     } finally {
-      setIsRefreshing(false);
+      setLogsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    async function loadScenarios() {
+    void refreshLabLogs();
+    const t = window.setInterval(() => void refreshLabLogs(), POLL_MS);
+    return () => window.clearInterval(t);
+  }, [refreshLabLogs]);
+
+  const runAnalysisOnLines = useCallback(
+    async (lines: string[], label: string) => {
+      if (lines.length === 0) return;
+      setBusy(true);
+      setError("");
+      setStatusLine(`${label}: analyzing…`);
       try {
-        const response = await getLabScenarios();
-        setScenarios(response.result);
-        if (response.result.length > 0) setSelectedScenario(response.result[0].id);
-      } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : "Failed to load scenarios.");
+        const input = buildLabLogPrompt(lines);
+        const res = await analyze(mode, input);
+        setAnalysisText(formatAnalysisResult(res.result as string | G2Result));
+        setTrace(res.trace || []);
+        setMeta(res.meta);
+        setStatusLine(`${label}: done.`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Analysis failed.");
+        setStatusLine(`${label}: failed.`);
+      } finally {
+        setBusy(false);
       }
-    }
-    void loadScenarios();
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 3000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
-
-  const eventCategoryCount = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const event of events) {
-      const category = asText(event.owaspCategory) || "Unknown";
-      counts[category] = (counts[category] || 0) + 1;
-    }
-    return counts;
-  }, [events]);
-
-  const monitor = useMemo(
-    () =>
-      deriveMonitorState({
-        mode,
-        trace,
-        currentStep,
-        runStatus,
-      }),
-    [mode, trace, currentStep, runStatus]
+    },
+    [mode],
   );
 
-  function buildBeginnerPrompt(logLines: string[], scenarioLabel: string) {
-    return [
-      "You are a website security assistant for non-technical users.",
-      "Task: detect if this is an active attack, then give a SHORT warning and immediate protection steps.",
-      "Critical rules:",
-      "- Do NOT explain your reasoning process.",
-      "- Do NOT say phrases like 'I will analyze' or 'I will first'.",
-      "- Start directly with: ALERT: ...",
-      "Output format:",
-      "1) ALERT (one sentence, plain language)",
-      "2) WHAT HAPPENED (2-3 bullets)",
-      "3) IMMEDIATE ACTIONS (max 5 bullets, concrete steps for website owner)",
-      "4) NEXT 24H CHECKLIST (max 4 bullets)",
-      "Keep it concise and practical. Avoid jargon where possible.",
-      "",
-      `Scenario hint: ${scenarioLabel}`,
-      "System logs from vulnerable website:",
-      ...logLines,
-    ].join("\n");
-  }
-
-  async function executeGuidedAnalysis(logLines: string[], scenarioLabel: string, runLabel: string) {
-    setAnalysisResult("");
-    setWarningText("");
-    setTrace([]);
-    setRunStatus("running");
-    setCurrentStep("");
-    setLiveStatus(`${runLabel}: preparing AI analysis...`);
-
-    const composedInput = buildBeginnerPrompt(logLines, scenarioLabel);
-    setPromptUsed(composedInput);
-    let receivedFinal = false;
-
-    await streamWorkspace(
-      {
-        task: "chat",
-        mode,
-        input: composedInput,
-      },
-      {
-        onEvent: (eventPayload) => {
-          if (eventPayload.type === "trace") {
-            setTrace((prev) => [...prev, eventPayload.step]);
-            setCurrentStep(eventPayload.step.step);
-            setLiveStatus(`${eventPayload.step.step}: ${eventPayload.step.what_it_does}`);
-            return;
-          }
-          if (eventPayload.type === "final") {
-            const finalText = eventPayload.result;
-            setAnalysisResult(finalText);
-            setWarningText(buildUserWarning(finalText, logLines));
-            setRunStatus("completed");
-            setCurrentStep("");
-            setLiveStatus(`${runLabel}: analysis completed.`);
-            receivedFinal = true;
-            return;
-          }
-          if (eventPayload.type === "error") {
-            setRunStatus("error");
-            setCurrentStep("");
-            setLiveStatus(`${runLabel}: analysis failed.`);
-            setError(eventPayload.error.message || "Unexpected stream error.");
-            return;
-          }
-          if (eventPayload.type === "done" && !receivedFinal) {
-            setLiveStatus(`${runLabel}: run stopped before final output.`);
-          }
-        },
-      }
-    );
-  }
-
-  async function runGuidedSimulation() {
-    setIsSimulating(true);
-    setError("");
-    setLiveStatus("Triggering attack simulation...");
-
-    try {
-      const simulation = await simulateLabScenario(selectedScenario);
-      setLiveStatus(`Simulation completed: ${simulation.result.scenarioName}`);
-      await new Promise((resolve) => window.setTimeout(resolve, 900));
-      const logsResponse = await getLabSystemLogs(15);
-      const logLines = logsResponse.result.map(
-        (entry) =>
-          `[${entry.timestamp}] ${entry.method} ${entry.path} status=${entry.status} latency_ms=${entry.latencyMs} ip=${entry.ip}` +
-          `${entry.attackDetected ? " attack_detected=true" : ""}` +
-          `${entry.scenarioId ? ` scenario=${entry.scenarioId}` : ""}` +
-          `${entry.riskHint ? ` risk=${entry.riskHint}` : ""}` +
-          `${entry.payloadSnippet ? ` payload="${entry.payloadSnippet}"` : ""}`
-      );
-      setSystemLogs(logLines);
-      const scenarioMeta = scenarios.find((item) => item.id === selectedScenario);
-      const scenarioLabel = scenarioMeta
-        ? `${scenarioMeta.name} (${scenarioMeta.method} ${scenarioMeta.endpoint})`
-        : selectedScenario;
-      await executeGuidedAnalysis(logLines, scenarioLabel, "Manual simulation");
-      await refresh();
-    } catch (requestError) {
-      setRunStatus("error");
-      setLiveStatus("Simulation run failed.");
-      setError(requestError instanceof Error ? requestError.message : "Simulation failed.");
-    } finally {
-      setIsSimulating(false);
+  const analyzeLatestAttack = useCallback(() => {
+    const attacks = logEntries.filter((e) => e.attackDetected);
+    if (attacks.length === 0) {
+      setError("No attack lines in the current lab log buffer. Trigger SQLi, XSS, or failed logins in the lab.");
+      return;
     }
-  }
+    const context = attacks.slice(0, 15).reverse().map(formatLabLine);
+    void runAnalysisOnLines(context, "Manual (latest attacks)");
+  }, [logEntries, runAnalysisOnLines]);
 
   useEffect(() => {
-    if (!autoModeEnabled || isSimulating || inFlightAutoRunRef.current) {
+    if (!autoAnalyze || !labConnected || busy || inFlightRef.current) {
       return;
     }
-    const latestAttackLog = systemLogs.find((line) => line.includes("attack_detected=true"));
-    if (!latestAttackLog) {
+    const latest = logEntries.find((e) => e.attackDetected);
+    if (!latest) {
       return;
     }
-    const reqMatch = latestAttackLog.match(/req=([a-zA-Z0-9-]+)/);
-    const reqId = reqMatch ? reqMatch[1] : latestAttackLog;
-    if (processedAttackIdsRef.current.has(reqId)) {
+    if (processedAttackIdsRef.current.has(latest.requestId)) {
       return;
     }
-    processedAttackIdsRef.current.add(reqId);
-    inFlightAutoRunRef.current = true;
-    setLiveStatus("Auto mode: new attack detected, running analysis...");
-    const recentAttackLogs = systemLogs.filter((line) => line.includes("attack_detected=true")).slice(0, 12);
-    const scenarioHintMatch = latestAttackLog.match(/scenario=([a-zA-Z0-9_]+)/);
-    const scenarioHint = scenarioHintMatch ? scenarioHintMatch[1] : "detected_attack";
-
-    void executeGuidedAnalysis(recentAttackLogs, `Auto-detected ${scenarioHint}`, "Auto detection")
-      .catch((requestError) => {
-        setRunStatus("error");
-        setLiveStatus("Auto mode: analysis failed.");
-        setError(requestError instanceof Error ? requestError.message : "Auto analysis failed.");
-      })
+    processedAttackIdsRef.current.add(latest.requestId);
+    inFlightRef.current = true;
+    setStatusLine("New attack in lab logs — analyzing…");
+    const attacks = logEntries.filter((e) => e.attackDetected).slice(0, 15).reverse();
+    const lines = attacks.map(formatLabLine);
+    void runAnalysisOnLines(lines, "Auto (new attack)")
       .finally(() => {
-        inFlightAutoRunRef.current = false;
+        inFlightRef.current = false;
       });
-  }, [autoModeEnabled, isSimulating, systemLogs]);
+  }, [autoAnalyze, labConnected, busy, logEntries, runAnalysisOnLines]);
+
+  const displayLines = logEntries.map(formatLabLine);
 
   return (
-    <main className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_480px]">
-      <section className="panel lg:col-span-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold">Unified Sandbox + Guided Dashboard</h2>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              Automated flow: simulate attack to capture website logs, then run guided AI explanation with live monitor.
+    <main className="mx-auto max-w-3xl space-y-6">
+      <section className="panel space-y-3">
+        <h2 className="text-lg font-semibold">Lab monitor</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Open the{" "}
+          <a className="underline" href={LAB_BASE} target="_blank" rel="noreferrer">
+            vuln-lab
+          </a>{" "}
+          in another window (same machine, default <code className="text-xs">{LAB_BASE}</code>). The lab page loads a demo <strong className="font-medium text-slate-800 dark:text-slate-200">browser SDK</strong>{" "}
+          (<code className="text-xs">copilot-sdk-demo.js</code>) that mimics a merchant site using our package: each <em>new</em> attack after page load triggers a native{" "}
+          <code className="text-xs">alert()</code> in that tab. This page polls the same log buffer and can run <strong className="font-medium text-slate-800 dark:text-slate-200">G1</strong> or{" "}
+          <strong className="font-medium text-slate-800 dark:text-slate-200">G2</strong> on new{" "}
+          <code className="text-xs">attack_detected</code> lines automatically. Flow detail:{" "}
+          <code className="text-xs">docs/architecture-current-state.md</code> and <code className="text-xs">docs/graph1.svg</code> /{" "}
+          <code className="text-xs">docs/graph2.svg</code>.
+        </p>
+        <p className="text-xs text-slate-500">
+          Requires <code className="text-xs">NEXT_PUBLIC_LAB_BASE_URL</code> to reach the lab from the browser (e.g. Docker host URL if the lab is not on
+          localhost from the web container&apos;s perspective).
+        </p>
+      </section>
+
+      <section className="panel space-y-3">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">How to simulate attacks (vuln-lab)</h3>
+        <p className="text-xs text-slate-500">
+          Start the lab in vulnerable mode so payloads are accepted and logged as attacks, e.g.{" "}
+          <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">LAB_MODE=vulnerable npm --prefix apps/vuln-lab run dev</code> (see{" "}
+          <code className="text-xs">apps/vuln-lab/README.md</code>).
+        </p>
+        <ol className="list-decimal space-y-3 pl-5 text-sm text-slate-700 dark:text-slate-300">
+          <li>
+            <span className="font-medium text-slate-800 dark:text-slate-200">SQL injection (login)</span>
+            <p className="mt-1 text-slate-600 dark:text-slate-400">
+              On the lab home page, under <strong>Sign in</strong>, enter any username and put{" "}
+              <code className="text-xs">' OR '1'='1</code> in the password field, then submit. The lab calls{" "}
+              <code className="text-xs">POST /lab/auth/login</code> (JSON). You should see <code className="text-xs">attack_detected=true</code>,{" "}
+              <code className="text-xs">scenario=sqliLogin</code>, <code className="text-xs">risk=SQLi</code> on the next poll here.
             </p>
+          </li>
+          <li>
+            <span className="font-medium text-slate-800 dark:text-slate-200">Reflected XSS (search)</span>
+            <p className="mt-1 text-slate-600 dark:text-slate-400">
+              Under <strong>Search</strong>, submit something that looks like HTML/JS, e.g.{" "}
+              <code className="text-xs">&lt;script&gt;alert(1)&lt;/script&gt;</code> or{" "}
+              <code className="text-xs">&lt;img src=x onerror=alert(1)&gt;</code>. That hits{" "}
+              <code className="text-xs">GET /lab/api/products?q=…</code>. Expect <code className="text-xs">scenario=reflectedXss</code> and{" "}
+              <code className="text-xs">risk=XSS</code> in the log.
+            </p>
+          </li>
+          <li>
+            <span className="font-medium text-slate-800 dark:text-slate-200">Brute-force pattern (credential stuffing style)</span>
+            <p className="mt-1 text-slate-600 dark:text-slate-400">
+              A <strong>single</strong> wrong password is treated as a normal 401 (no <code className="text-xs">attack_detected</code>). Submit{" "}
+              <strong>wrong credentials at least 3 times</strong> from the same IP within ~10 minutes (e.g. <code className="text-xs">admin</code> / wrong
+              password, click Sign in three times). The <strong>third</strong> failure logs <code className="text-xs">scenario=bruteForceLogin</code> and{" "}
+              <code className="text-xs">risk=BruteForce</code>.
+            </p>
+          </li>
+        </ol>
+        <p className="text-xs text-slate-500">
+          After each attack, this page should pick up new lines within a few seconds. If auto-analyze is on, analysis runs when a new <code className="text-xs">requestId</code>{" "}
+          appears; otherwise use <strong>Analyze latest attack</strong>.
+        </p>
+      </section>
+
+      <section className="panel space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Live lab log</h3>
+          <span className="text-xs text-slate-500">
+            {labConnected === false ? (
+              <span className="text-amber-700 dark:text-amber-300">Lab unreachable — is it running on {LAB_BASE}?</span>
+            ) : labConnected === true ? (
+              <>Polling · last {lastPollAt ? new Date(lastPollAt).toLocaleTimeString() : ""}</>
+            ) : (
+              "Connecting…"
+            )}
+          </span>
+        </div>
+        <pre className="code-block max-h-56 overflow-auto text-xs">{displayLines.length ? displayLines.join("\n") : "—"}</pre>
+        <p className="text-xs text-slate-500">{statusLine}</p>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-slate-600 dark:text-slate-400">Engine</span>
+            <select className="input w-auto py-1.5" value={mode} onChange={(e) => setMode(e.target.value as AgentMode)} disabled={busy}>
+              <option value="g1">G1</option>
+              <option value="g2">G2</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={autoAnalyze} onChange={(e) => setAutoAnalyze(e.target.checked)} disabled={busy} />
+            Auto-analyze new attacks
+          </label>
+          <button type="button" className="btn" disabled={busy || !labConnected} onClick={() => void analyzeLatestAttack()}>
+            {busy ? "Analyzing…" : "Analyze latest attack"}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => void refreshLabLogs({ manual: true })}
+            disabled={logsRefreshing}
+          >
+            {logsRefreshing ? "Clearing…" : "Clear logs & refresh"}
+          </button>
+        </div>
+        <p className="text-xs text-slate-500">
+          <strong className="font-medium text-slate-600 dark:text-slate-400">Clear logs & refresh</strong> wipes the lab&apos;s system log buffer (and its
+          log file) so you can retry attacks from a clean list. Background polling does not clear. To reset SDK <code className="text-xs">alert()</code> state on
+          the lab tab, reload that page.
+        </p>
+        {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
+      </section>
+
+      <section className="panel space-y-2">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Analysis</h3>
+        <pre className="code-block max-h-80 overflow-auto whitespace-pre-wrap text-sm">{analysisText || "—"}</pre>
+        {meta?.stop_reason ? (
+          <p className="text-xs text-slate-500">
+            {meta.stop_reason}
+            {meta.model ? ` · ${meta.model}` : ""}
+            {meta.duration_ms != null ? ` · ${Math.round(meta.duration_ms)}ms` : ""}
+          </p>
+        ) : null}
+      </section>
+
+      {trace.length > 0 ? (
+        <details className="panel">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700 dark:text-slate-300">Trace steps</summary>
+          <div className="mt-3">
+            <TracePanel trace={trace} />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              Last updated: {formatTimestamp(lastUpdatedAt)}
-            </span>
-            <button type="button" className="btn" onClick={() => void refresh()} disabled={isRefreshing}>
-              {isRefreshing ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
-        </div>
-        {error ? <p className="mt-2 text-sm text-rose-500">{error}</p> : null}
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">Automation Runner</h3>
-        <div className="mb-3 grid gap-2 md:grid-cols-2">
-          <label className="text-xs text-slate-600 dark:text-slate-300">
-            Scenario
-            <select
-              className="input mt-1"
-              value={selectedScenario}
-              onChange={(event) => setSelectedScenario(event.target.value)}
-              disabled={isSimulating}
-            >
-              {scenarios.map((scenario) => (
-                <option key={scenario.id} value={scenario.id}>
-                  {scenario.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-slate-600 dark:text-slate-300">
-            Agent Mode
-            <select className="input mt-1" value={mode} onChange={(event) => setMode(event.target.value as AgentMode)} disabled={isSimulating}>
-              <option value="g1">G1 (Single Agent)</option>
-              <option value="g2">G2 (Multiagent)</option>
-            </select>
-          </label>
-          <label className="text-xs text-slate-600 dark:text-slate-300">
-            Auto mode
-            <select
-              className="input mt-1"
-              value={autoModeEnabled ? "on" : "off"}
-              onChange={(event) => setAutoModeEnabled(event.target.value === "on")}
-              disabled={isSimulating}
-            >
-              <option value="on">ON (auto-run when attack log appears)</option>
-              <option value="off">OFF (manual only)</option>
-            </select>
-          </label>
-        </div>
-        <button type="button" className="btn mb-3 w-full" onClick={() => void runGuidedSimulation()} disabled={isSimulating || scenarios.length === 0}>
-          {isSimulating ? "Running simulation and analysis..." : "Run full automated flow"}
-        </button>
-        <div className="rounded-md border border-cyan-300 bg-cyan-50 p-3 text-xs text-cyan-900 dark:border-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-100">
-          <p className="font-semibold">Current activity</p>
-          <p className="mt-1">{liveStatus}</p>
-        </div>
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">Website System Logs (vuln-lab)</h3>
-        <pre className="code-block max-h-[260px]">{systemLogs.length ? systemLogs.slice(0, 30).join("\n") : "No system logs yet."}</pre>
-      </section>
-
-      <section className="panel lg:col-span-2">
-        <LiveMonitorPanel
-          mode={mode}
-          monitor={monitor}
-          liveStatus={liveStatus}
-          runInFlight={isSimulating}
-          phaseLayout="grid"
-          heading="h3"
-          showActivityCallout={false}
-        />
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">Prompt Sent To Chat Engine</h3>
-        <pre className="code-block max-h-[260px]">{promptUsed || "Run the automated flow to generate prompt."}</pre>
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">Beginner-Friendly AI Explanation</h3>
-        <pre className="code-block max-h-[260px] whitespace-pre-wrap">{analysisResult || "Run the automated flow to get explanation."}</pre>
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">User Warning</h3>
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-          {warningText || "No warning yet. Trigger or detect an attack to generate one."}
-        </div>
-      </section>
-
-      <section className="panel lg:col-span-2">
-        <h3 className="section-title mb-2">Technical Trace Details</h3>
-        <TracePanel trace={trace} />
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">Attack Stream</h3>
-        <div className="space-y-2">
-          {events.length === 0 ? (
-            <p className="subtle-text">No events yet. Trigger the automated flow to populate this panel.</p>
-          ) : (
-            events.slice(0, 20).map((event, index) => (
-              <article key={`${asText(event.timestamp)}-${index}`} className="rounded-md border border-slate-200 p-2 text-xs dark:border-slate-700">
-                <p className="font-medium text-slate-700 dark:text-slate-200">
-                  {asText(event.scenarioId) || "unknown-scenario"} · {asText(event.riskHint) || "risk:unknown"}
-                </p>
-                <p className="text-slate-600 dark:text-slate-400">
-                  {formatTimestamp(event.timestamp)} · {asText(event.method)} {asText(event.path)} · status {String(event.status ?? "-")}
-                </p>
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">CTI Detection Timeline</h3>
-        <div className="space-y-2">
-          {detections.length === 0 ? (
-            <p className="subtle-text">No detections yet. They appear after CTI analysis completes.</p>
-          ) : (
-            detections.slice(0, 20).map((item, index) => (
-              <article key={`${item.run_id || item.timestamp || index}`} className="rounded-md border border-slate-200 p-2 text-xs dark:border-slate-700">
-                <p className="font-medium text-slate-700 dark:text-slate-200">
-                  {item.endpoint || "unknown-endpoint"} · {item.mode || "n/a"} · {item.stop_reason || "unknown"}
-                </p>
-                <p className="text-slate-600 dark:text-slate-400">
-                  {formatTimestamp(item.timestamp)} · success: {String(item.success ?? false)} · duration: {String(item.duration_ms ?? "-")}ms
-                </p>
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">OWASP Category Counters</h3>
-        <div className="space-y-1 text-sm">
-          {Object.keys(eventCategoryCount).length === 0 ? (
-            <p className="subtle-text">No categorized events yet.</p>
-          ) : (
-            Object.entries(eventCategoryCount).map(([category, count]) => (
-              <p key={category} className="flex items-center justify-between rounded-md border border-slate-200 px-2 py-1 dark:border-slate-700">
-                <span>{category}</span>
-                <span className="font-semibold">{count}</span>
-              </p>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="panel">
-        <h3 className="section-title mb-2">OWASP ↔ MITRE Mapping</h3>
-        <div className="space-y-2 text-sm">
-          {Object.keys(mapping).length === 0 ? (
-            <p className="subtle-text">Loading mapping...</p>
-          ) : (
-            Object.entries(mapping).map(([key, value]) => (
-              <article key={key} className="rounded-md border border-slate-200 p-2 dark:border-slate-700">
-                <p className="font-medium">{key}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">{value.owasp}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">MITRE: {value.mitre.join(", ")}</p>
-              </article>
-            ))
-          )}
-        </div>
-      </section>
+        </details>
+      ) : null}
     </main>
   );
 }

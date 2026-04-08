@@ -1,8 +1,9 @@
 const express = require("express");
 
+const failedLoginTracker = require("../failedLoginTracker");
 const { OWASP_MITRE_MAP, categoryForScenario, scenarioCatalog } = require("../scenarios");
 
-function simulateRequestForScenario(config, scenarioId) {
+async function simulateRequestForScenario(config, scenarioId) {
   const baseUrl = `http://${config.host}:${config.port}`;
   const headers = { "x-lab-simulator": "dashboard" };
 
@@ -19,38 +20,19 @@ function simulateRequestForScenario(config, scenarioId) {
       headers,
     });
   }
-  if (scenarioId === "storedXssComment") {
-    return fetch(`${baseUrl}/lab/comment`, {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ message: "<img src=x onerror=alert('stored')>" }).toString(),
-    });
-  }
-  if (scenarioId === "idorProfile") {
-    return fetch(`${baseUrl}/lab/api/profile/1002?viewer=1001`, { method: "GET", headers });
-  }
-  if (scenarioId === "adminBypass") {
-    return fetch(`${baseUrl}/lab/admin?role=user&debug=true`, { method: "GET", headers });
-  }
   if (scenarioId === "bruteForceLogin") {
-    return fetch(`${baseUrl}/lab/login`, {
+    const url = `${baseUrl}/lab/login`;
+    const init = {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ username: "admin", password: "wrong-password" }).toString(),
-    });
-  }
-  if (scenarioId === "pathTraversalDownload") {
-    return fetch(`${baseUrl}/lab/download?file=${encodeURIComponent("../../.env")}`, {
-      method: "GET",
-      headers,
-    });
-  }
-  if (scenarioId === "unsafeDeserializer") {
-    return fetch(`${baseUrl}/lab/import-config`, {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ payload: "{\"__proto__\":{\"isAdmin\":true}}" }).toString(),
-    });
+    };
+    const need = failedLoginTracker.BRUTE_FORCE_THRESHOLD;
+    let last;
+    for (let i = 0; i < need; i += 1) {
+      last = await fetch(url, init);
+    }
+    return last;
   }
   return Promise.reject(new Error(`No simulation recipe for scenario '${scenarioId}'.`));
 }
@@ -76,7 +58,15 @@ function makeDashboardRouter({ config, telemetry }) {
     return res.json({ ok: true, result: OWASP_MITRE_MAP });
   });
 
+  router.post("/system-logs/reset", (req, res) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    failedLoginTracker.clearIp();
+    telemetry.clearSystemLogs();
+    return res.json({ ok: true, result: { cleared: true } });
+  });
+
   router.get("/system-logs", (req, res) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
     const limit = Number(req.query.limit || 80);
     const attackOnly = String(req.query.attack_only || "true").toLowerCase() !== "false";
     const entries = telemetry.getRecentSystemLogs(limit);

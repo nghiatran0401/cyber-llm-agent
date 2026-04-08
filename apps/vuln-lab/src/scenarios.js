@@ -1,9 +1,10 @@
 const { OWASP_MITRE_MAP, SCENARIO_MAP } = require("./owaspMap");
 
+/** Three demo scenarios aligned with the API sandbox keys (sqli, xss, bruteforce). */
 const scenarioCatalog = [
   {
     id: "sqliLogin",
-    name: "SQL Injection Login Bypass",
+    name: "SQL injection (login)",
     endpoint: "/lab/login",
     method: "POST",
     samplePayload: "' OR '1'='1",
@@ -11,59 +12,19 @@ const scenarioCatalog = [
   },
   {
     id: "reflectedXss",
-    name: "Reflected XSS Search",
+    name: "Cross-site scripting (search)",
     endpoint: "/lab/search",
     method: "GET",
-    samplePayload: "<script>alert('xss')</script>",
+    samplePayload: "<script>alert(1)</script>",
     riskHint: "XSS",
   },
   {
-    id: "storedXssComment",
-    name: "Stored XSS Comment",
-    endpoint: "/lab/comment",
-    method: "POST",
-    samplePayload: "<img src=x onerror=alert('stored')>",
-    riskHint: "StoredXSS",
-  },
-  {
-    id: "idorProfile",
-    name: "IDOR Profile Access",
-    endpoint: "/lab/api/profile/1002?viewer=1001",
-    method: "GET",
-    samplePayload: "viewer=1001 target=1002",
-    riskHint: "IDOR",
-  },
-  {
-    id: "adminBypass",
-    name: "Broken Access Control Admin",
-    endpoint: "/lab/admin?role=user&debug=true",
-    method: "GET",
-    samplePayload: "role=user&debug=true",
-    riskHint: "AccessControlBypass",
-  },
-  {
     id: "bruteForceLogin",
-    name: "Brute Force Login Attempts",
+    name: "Brute-force login attempts",
     endpoint: "/lab/login",
     method: "POST",
-    samplePayload: "admin:password123",
+    samplePayload: "wrong password ×3 within 10m (same IP)",
     riskHint: "BruteForce",
-  },
-  {
-    id: "pathTraversalDownload",
-    name: "Path Traversal Download",
-    endpoint: "/lab/download?file=../../.env",
-    method: "GET",
-    samplePayload: "../../.env",
-    riskHint: "PathTraversal",
-  },
-  {
-    id: "unsafeDeserializer",
-    name: "Unsafe Config Import",
-    endpoint: "/lab/import-config",
-    method: "POST",
-    samplePayload: "{\"__proto__\":{\"isAdmin\":true}}",
-    riskHint: "UnsafeDeserialization",
   },
 ];
 

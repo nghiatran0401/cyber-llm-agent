@@ -59,38 +59,52 @@ def _has_usable_tool_evidence(value: str, *, unavailable_markers: tuple[str, ...
     return not any(marker in lowered for marker in unavailable_markers)
 
 
-def _derive_threat_query(text: str) -> str:
-    content = (text or "").lower()
+def _derive_threat_query(*, log_analysis: str, raw_logs: str) -> str:
+    """CTI search string aligned with what the logs describe (avoid cloud→'credential stuffing' drift)."""
+    content = f"{raw_logs}\n{log_analysis}".lower()
+    if any(k in content for k in ("cloudtrail", "guardduty", "createaccesskey", "iam user", "iam-user")):
+        return "AWS IAM unauthorized access"
+    if any(k in content for k in ("s3", "listbucket", "getobject", "bucket=")):
+        return "AWS S3 data exfiltration"
     if "ransomware" in content:
         return "ransomware"
     if "phish" in content:
         return "phishing"
-    if "sql" in content:
+    if "sql" in content and "injection" in content:
         return "sql injection"
-    if "xss" in content:
+    if "xss" in content or "cross-site" in content:
         return "xss"
-    if "brute" in content or "credential" in content:
+    if "brute" in content or "password spray" in content or "failed login" in content or "4625" in content:
         return "credential stuffing"
-    if "ddos" in content or "scan" in content:
+    if "ddos" in content or ("port scan" in content and "network" in content):
         return "ddos"
-    return "malware"
+    return "cyber threat indicators"
 
 
 def plan_worker_tasks(state: AgentState) -> List[str]:
-    """Create dynamic worker plan based on current evidence."""
-    content = (
-        f"{state.get('logs', '')}\n{state.get('log_analysis', '')}\n"
-        f"{state.get('cti_evidence', '')}\n{state.get('rag_context', '')}"
-    ).lower()
+    """Create dynamic worker plan from primary artifacts only (not CTI/RAG text, to avoid query drift)."""
+    content = f"{state.get('logs', '')}\n{state.get('log_analysis', '')}".lower()
     tasks: List[str] = ["baseline_risk_synthesis"]
-    if any(k in content for k in ("failed login", "brute", "credential", "auth")):
+    if any(k in content for k in ("failed login", "brute", "password spray", "4625", "bad_password")):
         tasks.append("identity_containment_plan")
     if any(k in content for k in ("sql", "injection", "xss", "payload", "endpoint")):
         tasks.append("application_hardening_plan")
-    if any(k in content for k in ("scan", "ddos", "network", "port")):
+    if any(k in content for k in ("scan", "ddos", "syn_packets", "network", "port 445")):
         tasks.append("network_detection_plan")
-    if any(k in content for k in ("ransomware", "malware", "ioc", "cti")):
+    if any(
+        k in content
+        for k in (
+            "ransomware",
+            "trojan",
+            "malware family",
+            " malware ",
+            "endpoint malware",
+            "pos malware",
+        )
+    ):
         tasks.append("threat_hunt_plan")
+    if any(k in content for k in ("cloudtrail", "guardduty", "createaccesskey", "iam", "exfil")):
+        tasks.append("cloud_abuse_containment_plan")
     deduped: List[str] = []
     for task in tasks:
         if task not in deduped:
@@ -171,7 +185,7 @@ def threat_predictor_node(state: AgentState, llm: Any) -> AgentState:
     """Predict likely attack progression from analysis."""
     validate_state(state, REQUIRED_STATE_KEYS)
     log_state(state, "threat_predictor")
-    cti_query = _derive_threat_query(state["log_analysis"])
+    cti_query = _derive_threat_query(log_analysis=state["log_analysis"], raw_logs=state["logs"])
     if not _has_usable_tool_evidence(
         state.get("cti_evidence", ""),
         unavailable_markers=("cti unavailable", "unavailable"),

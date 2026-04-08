@@ -7,6 +7,7 @@ import {
   getLabScenarios,
   getLabSystemLogs,
   getLiveLog,
+  resetLabSystemLogs,
   getOwaspMitreMap,
   getRecentDetections,
   getSandboxScenarios,
@@ -264,5 +265,18 @@ describe("web api client", () => {
     expect(scenarios.result[0].id).toBe("sqliLogin");
     expect(simulated.result.scenarioId).toBe("sqliLogin");
     expect(systemLogs.result[0].requestId).toBe("req-1");
+  });
+
+  it("calls lab system log reset endpoint", async () => {
+    mockedFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, result: { cleared: true } }),
+    });
+    const reset = await resetLabSystemLogs();
+    expect(reset.result.cleared).toBe(true);
+    expect(mockedFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:3100/api/dashboard/system-logs/reset",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

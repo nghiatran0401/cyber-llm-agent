@@ -91,6 +91,16 @@ function createTelemetryStore(config) {
     return systemLogs.slice(0, Math.max(1, Math.min(limit, 200)));
   }
 
+  function clearSystemLogs() {
+    systemLogs.length = 0;
+    try {
+      ensureParentDir(config.systemLogFilePath);
+      fs.writeFileSync(config.systemLogFilePath, "", "utf8");
+    } catch (error) {
+      console.warn("[telemetry] could not truncate system log file:", error.message);
+    }
+  }
+
   return {
     recordEvent,
     recordDetection,
@@ -99,6 +109,7 @@ function createTelemetryStore(config) {
     getRecentDetections,
     getRecentSystemLogs,
     getStats,
+    clearSystemLogs,
   };
 }
 

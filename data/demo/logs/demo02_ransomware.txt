@@ -1,0 +1,4 @@
+2026-04-02T07:14:02Z edr host=WORKSTATION-EDGE-04 user=DOMAIN\jdoe process=WINWORD.EXE action=spawn child=cmd.exe
+2026-04-02T07:15:18Z edr host=WORKSTATION-EDGE-04 user=DOMAIN\jdoe process=cmd.exe child=powershell.exe
+2026-04-02T07:18:40Z fsensor host=WORKSTATION-EDGE-04 alert=bulk_rename path=\\Users\\jdoe\\Documents extensions_affected=.docx,.xlsx,.pdf count_5m=620 pattern_encrypted=*.locked
+2026-04-02T07:19:22Z helpdesk ticket=INC-4412 summary=User reports READ_ME_DECRYPT.txt on Desktop; wallpaper changed to ransom image

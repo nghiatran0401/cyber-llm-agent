@@ -1,0 +1,4 @@
+2026-04-02T08:04:10Z o365 mailbox=jdoe@corp.com event=mail_item_open subject=Fwd: Invoice_INV-2024-9912 attachment=Invoice_INV-2024-9912.xls
+2026-04-02T08:11:45Z o365 mailbox=jdoe@corp.com event=inbox_rule_created rule_name=External forward action=forward_to external_address=acct-verify-bad@outlook.com
+2026-04-02T08:19:02Z azuread signin user=jdoe@corp.com event=risk_event type=impossibleTravel previousLocation=London_GB currentLocation=Sydney_AU gap_minutes=38
+2026-04-02T08:21:55Z o365 event=consent_granted application_display_name=QuickMail Sync Helper scopes=Mail.ReadWrite Mail.Send offline_access granted_by=jdoe@corp.com

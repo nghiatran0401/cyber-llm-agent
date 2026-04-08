@@ -535,7 +535,7 @@ def analyze_g2(payload: AnalyzeRequest) -> ApiResponse:
     start_time = perf_counter()
     try:
         result, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = (
-            _normalize_analysis_result(run_g2_analysis(payload.input))
+            _normalize_analysis_result(run_g2_analysis(payload.input, session_id=payload.session_id))
         )
         return _build_success_response(
             request_id=request_id,

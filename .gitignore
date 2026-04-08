@@ -41,9 +41,6 @@ htmlcov/
 .tox/
 .hypothesis/
 
-# Logs
-*.log
-logs/
 
 # Data (keep structure, ignore sensitive data)
 data/sessions/*.json

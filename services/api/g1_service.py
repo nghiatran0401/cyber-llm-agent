@@ -347,7 +347,9 @@ def run_chat(user_input: str, mode: str = "g1", session_id: Optional[str] = None
 
     clean_input = validate_input(user_input, "input")
     if mode == "g2":
-        result, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = run_g2_analysis(clean_input)
+        result, trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = run_g2_analysis(
+            clean_input, session_id=session_id
+        )
         return (result.get("final_report", ""), trace, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label)
     return run_g1_analysis(clean_input, session_id=session_id)
 
@@ -365,6 +367,8 @@ def run_workspace_with_progress(
 
     clean_input = validate_input(user_input, "input")
     if (mode or "g1").lower() == "g2":
-        result, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = run_g2_analysis_with_progress(clean_input, on_step=on_step)
+        result, model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label = run_g2_analysis_with_progress(
+            clean_input, on_step=on_step, session_id=session_id
+        )
         return (str(result.get("final_report", "")), model, stop_reason, steps_used, prompt_version, rubric_score, rubric_label)
     return run_g1_analysis_with_progress(clean_input, on_step=on_step, session_id=session_id)

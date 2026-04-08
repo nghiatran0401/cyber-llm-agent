@@ -11,4 +11,4 @@ Log parser evidence:
 Retrieved context:
 {rag_context}
 
-Return key findings with severity and evidence.
+Return key findings with severity and evidence. Ground statements in the log lines and parser evidence; treat retrieved context as secondary hints only.

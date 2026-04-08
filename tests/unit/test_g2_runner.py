@@ -29,7 +29,7 @@ class _FakeLLM:
             return _FakeResponse("Analysis: brute force indicators found.")
         if "predict likely attacker" in lower:
             return _FakeResponse("Prediction: attacker may continue credential stuffing.")
-        if "response requirements" in lower or "immediate response" in lower:
+        if "produce practical response" in lower:
             return _FakeResponse("Response: block source IP and reset credentials.")
         if "strict incident response verifier" in lower:
             return _FakeResponse("VERDICT: PASS\nREASON: Supported by evidence.\nFIX: n/a")
@@ -104,7 +104,7 @@ def test_run_multiagent_with_trace_matches_canonical_sequence(monkeypatch):
 
 def test_run_multiagent_with_trace_stops_when_step_budget_exceeded(monkeypatch):
     llm = _FakeLLM()
-    monkeypatch.setattr("src.agents.g2.runner.Settings.MAX_AGENT_STEPS", 2)
+    monkeypatch.setattr("src.agents.g2.runner.g2_runtime_budget_caps", lambda: (2, 9_999))
     traced = run_multiagent_with_trace("Failed login and scan patterns detected.", llm=llm)
 
     assert traced["stop_reason"] == "budget_exceeded"
@@ -114,7 +114,7 @@ def test_run_multiagent_with_trace_stops_when_step_budget_exceeded(monkeypatch):
 
 def test_run_multiagent_with_trace_stops_when_tool_budget_exceeded(monkeypatch):
     llm = _FakeLLM()
-    monkeypatch.setattr("src.agents.g2.runner.Settings.MAX_AGENT_STEPS", 12)
+    monkeypatch.setattr("src.agents.g2.runner.g2_runtime_budget_caps", lambda: (12, 9_999))
     monkeypatch.setattr("src.agents.g2.runner.Settings.MAX_TOOL_CALLS", 1)
     monkeypatch.setattr("src.agents.g2.nodes.Settings.ENABLE_RAG", False)
     monkeypatch.setattr("src.agents.g2.nodes.Settings.OTX_API_KEY", "configured")

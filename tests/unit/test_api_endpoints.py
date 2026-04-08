@@ -52,8 +52,9 @@ def test_g1_endpoint_uses_service_layer(monkeypatch):
 def test_g2_endpoint_uses_service_layer(monkeypatch):
     client = TestClient(app)
 
-    def _fake_run_g2_analysis(user_input: str):
+    def _fake_run_g2_analysis(user_input: str, session_id=None):
         assert user_input == "test g2 input"
+        assert session_id is None
         return (
             {"final_report": "mocked g2 response", "runtime_budget": {"tool_calls_used": 1}},
             [],

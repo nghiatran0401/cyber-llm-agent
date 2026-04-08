@@ -19,6 +19,7 @@ CORE_WORKFLOW_TESTS = [
     "tests/unit/test_g1_service.py",
     "tests/unit/test_g2_service.py",
     "tests/unit/test_g2_runner.py",
+    "tests/unit/test_g2_input_gate.py",
     "tests/unit/test_tools.py",
     "tests/unit/test_rag_tools.py",
     "tests/unit/test_memory.py",

@@ -5,6 +5,16 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List
 
+# User turn includes concrete telemetry/log snippets (not only threat keywords like "ransomware").
+_USER_SUPPLIED_EVIDENCE_RE = re.compile(
+    r"(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}|"  # 20xx-xx-xx time
+    r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|"
+    r"\bevent\s*=|\brequestid\b|\bcorrelation[_\s-]?id\b|"
+    r"cloudtrail|cloudwatch|guardduty|azuread|\bo365\b|\bm365\b|sign-?in\s*log|"
+    r"\blog\b\s*analysis|4624\b|4625\b|4688\b)",
+    re.IGNORECASE,
+)
+
 _SEVERITY_ORDER = ("critical", "high", "medium", "low")
 
 # Major SOC-style headings used to slice sections (order not significant).
@@ -24,6 +34,28 @@ def _heading_family(name: str) -> str:
     if n in ("indicators", "findings"):
         return "indicators"
     return n
+
+
+def _normalize_report_line_for_heading_parse(line: str) -> str:
+    """Strip Markdown heading markers so ``Indicators:`` / ``**Recommended Actions:**`` both parse.
+
+    Models often emit ``**Heading:**`` (colon inside the bold span) so the line does *not* end with ``:``.
+    """
+    s = (line or "").strip()
+    if not s:
+        return s
+    s = re.sub(r"^\#{1,6}\s+", "", s)
+    if s.startswith("**") and s.endswith("**") and len(s) >= 6:
+        s = s[2:-2].strip()
+    if s.endswith(":"):
+        body = s[:-1].strip().strip("*").strip()
+        if body:
+            return f"{body}:"
+    return s
+
+
+def _normalize_report_for_heading_parse(text: str) -> str:
+    return "\n".join(_normalize_report_line_for_heading_parse(ln) for ln in (text or "").splitlines())
 
 
 def _extract_section_text(text: str, heading: str) -> str:
@@ -90,7 +122,7 @@ def extract_bullets(section_name: str, text: str) -> List[str]:
     Uses heading-based slicing so a blank line after ``Recommended actions:`` does not
     truncate the section (previous regex stopped at the first ``\\n\\n``).
     """
-    raw = text or ""
+    raw = _normalize_report_for_heading_parse(text or "")
     aliases: tuple[str, ...]
     sl = section_name.strip().lower()
     if sl == "findings":
@@ -215,7 +247,7 @@ def critic_validate_structured_output(
             return True, "Structured output passed critic checks."
         return False, "High-risk response missing recommended actions."
     if high_risk and not citations:
-        if relaxed:
+        if relaxed or _USER_SUPPLIED_EVIDENCE_RE.search(user_text or ""):
             return True, "Structured output passed critic checks."
         return False, "High-risk response missing evidence citations."
     return True, "Structured output passed critic checks."

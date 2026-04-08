@@ -1,0 +1,4 @@
+2026-04-02T04:10:00Z vpn-gw CORP-VPN-01 event=auth_failure src_ip=185.220.101.45 user=jsmith count_15m=140 reason=bad_password
+2026-04-02T04:21:55Z vpn-gw CORP-VPN-01 event=auth_success src_ip=185.220.101.45 user=jsmith logon_type=remote mfa=off
+2026-04-02T04:24:12Z edr host=FIN-LAPTOP-22 user=DOMAIN\jsmith parent=WINWORD.EXE child=powershell.exe cmdline_redacted=true integrity=medium
+2026-04-02T04:27:40Z netflow collector=edge-01 src_host=DB-PROD-01 dst_ip=185.220.101.45 dst_port=443 proto=tcp bytes_out_5m=8150000 baseline_p95=350000 anomaly=high

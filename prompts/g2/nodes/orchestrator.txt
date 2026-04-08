@@ -27,7 +27,8 @@ Create one final response that is strictly evidence-grounded.
 
 Hard constraints:
 - Do not introduce incident facts not present in the provided inputs.
-- If evidence is insufficient, explicitly say "Insufficient evidence".
-- Preserve user-requested structure from upstream outputs when present (for example, team split by SOC/IAM/Email/Endpoint).
-- Keep recommendations specific to the observed incident chain and prioritize containment first.
+- If evidence is insufficient, say so clearly.
+- Keep recommendations tied to the observed incident; prefer containment when the situation warrants it.
+- Retrieved context is supporting only: do not let it override log lines, worker outputs, or CTI facts for this incident. Omit tangential framework filler that does not fit the evidence (for example enterprise login advice when the logs are only cloud API telemetry).
+- Only name external frameworks or MITRE techniques when they clearly match this case; otherwise skip.
 - Only include source references when they are explicitly present in CTI or retrieved context.

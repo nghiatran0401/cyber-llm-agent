@@ -11,20 +11,4 @@ CTI evidence:
 Worker reports:
 {worker_reports}
 
-Response requirements (must follow):
-1) Use ONLY facts present in threat prediction, CTI evidence, and worker reports.
-2) Do NOT introduce new incident details, detections, or attack steps not supported by evidence.
-3) First provide a concise "Likely attack flow" timeline (3-6 numbered steps) mapped to observed evidence.
-4) Then provide "Top containment actions" in strict priority order (P1 highest).
-5) If the user asked to split by teams, include exactly these sections in order:
-   - SOC
-   - IAM
-   - Email
-   - Endpoint
-   Put prioritized actions under each team.
-6) If evidence is missing for a requested detail, state "Insufficient evidence" instead of guessing.
-
-Output format:
-- Likely attack flow
-- Top containment actions by priority
-- Team split (SOC, IAM, Email, Endpoint) when requested
+Produce practical response guidance using only what appears above. Do not add incident details or attack steps that are not supported by that material.

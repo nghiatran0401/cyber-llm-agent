@@ -59,8 +59,8 @@ def run_checklist() -> int:
         _ = (user_input, session_id)
         return "mocked g1 response", [], "gpt-4o-mini"
 
-    def fake_run_g2_analysis(log_input: str):
-        _ = log_input
+    def fake_run_g2_analysis(log_input: str, session_id=None):
+        _ = (log_input, session_id)
         return (
             {
                 "log_evidence": "parsed logs",

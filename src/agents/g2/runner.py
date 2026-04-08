@@ -36,6 +36,19 @@ from .state import MultiagentStepTrace, create_initial_state
 
 logger = setup_logger(__name__)
 
+# Floors so a low G1 `MAX_AGENT_STEPS` / `MAX_RUNTIME_SECONDS` cannot truncate G2 before
+# workers, incident responder, verifier, and orchestrator run.
+_G2_STEP_FLOOR = 18
+_G2_RUNTIME_FLOOR_SECONDS = 120
+
+
+def g2_runtime_budget_caps() -> tuple[int, int]:
+    """Return (max_steps, max_runtime_seconds) for one G2 multi-agent execution."""
+    return (
+        max(Settings.MAX_AGENT_STEPS, _G2_STEP_FLOOR),
+        max(Settings.MAX_RUNTIME_SECONDS, _G2_RUNTIME_FLOOR_SECONDS),
+    )
+
 
 def _summarize_text(text: str, max_len: int = 220) -> str:
     content = (text or "").strip().replace("\n", " ")
@@ -58,10 +71,11 @@ def run_multiagent_with_trace(
     trace: List[MultiagentStepTrace] = []
     steps_used = 0
     stop_reason = "completed"
+    g2_steps, g2_runtime_s = g2_runtime_budget_caps()
     budget_state = create_runtime_budget_state(
-        max_steps=Settings.MAX_AGENT_STEPS,
+        max_steps=g2_steps,
         max_tool_calls=Settings.MAX_TOOL_CALLS,
-        max_runtime_seconds=Settings.MAX_RUNTIME_SECONDS,
+        max_runtime_seconds=g2_runtime_s,
     )
     budget_token = activate_runtime_budget(budget_state)
 

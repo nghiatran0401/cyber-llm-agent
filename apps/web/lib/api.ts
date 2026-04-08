@@ -225,7 +225,16 @@ export async function simulateLabScenario(scenarioId: string): Promise<{ ok: boo
 }
 
 export async function getLabSystemLogs(limit = 80): Promise<{ ok: boolean; result: LabSystemLogEntry[] }> {
-  return requestLabJson<LabSystemLogEntry[]>(`/api/dashboard/system-logs?limit=${limit}`, {
+  const cacheBust = Date.now();
+  return requestLabJson<LabSystemLogEntry[]>(`/api/dashboard/system-logs?limit=${limit}&_=${cacheBust}`, {
     method: "GET",
+  });
+}
+
+/** Clears vuln-lab in-memory system log buffer and truncates the system log file (demo reset). */
+export async function resetLabSystemLogs(): Promise<{ ok: boolean; result: { cleared: boolean } }> {
+  return requestLabJson<{ cleared: boolean }>("/api/dashboard/system-logs/reset", {
+    method: "POST",
+    body: "{}",
   });
 }

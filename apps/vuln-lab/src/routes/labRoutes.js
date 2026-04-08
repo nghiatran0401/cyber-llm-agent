@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 
 const { categoryForScenario } = require("../scenarios");
+const failedLoginTracker = require("../failedLoginTracker");
 
 const comments = [];
 const users = [
@@ -94,7 +95,10 @@ function makeLabRouter({ config, telemetry, ctiBridge }) {
     const password = String(req.body.password || "");
     const suspicious = /('|--|;|\/\*|\*\/| or )/i.test(username) || /('|--|;| or )/i.test(password);
 
+    const clientIp = req.ip || req.socket.remoteAddress || "127.0.0.1";
+
     if (config.labMode === "vulnerable" && suspicious) {
+      failedLoginTracker.clearIp(clientIp);
       emit(req, {
         scenarioId: "sqliLogin",
         riskHint: "SQLi",
@@ -116,6 +120,7 @@ function makeLabRouter({ config, telemetry, ctiBridge }) {
     }
 
     if (username === "admin" && password === "password123") {
+      failedLoginTracker.clearIp(clientIp);
       emit(req, {
         scenarioId: "weakSession",
         riskHint: "WeakAuth",
@@ -134,13 +139,16 @@ function makeLabRouter({ config, telemetry, ctiBridge }) {
       return res.status(200).send("<h2>Welcome admin</h2><a href='/'>Back</a>");
     }
 
-    emit(req, {
-      scenarioId: "bruteForceLogin",
-      riskHint: "BruteForce",
-      payloadSnippet: `${username}:${password}`,
-      status: 401,
-      message: "Failed login attempt. Potential brute-force behavior if repeated.",
-    });
+    const { countInWindow, threshold, windowMs } = failedLoginTracker.recordFailedAttempt(clientIp);
+    if (countInWindow >= threshold) {
+      emit(req, {
+        scenarioId: "bruteForceLogin",
+        riskHint: "BruteForce",
+        payloadSnippet: `${username}:${password}`,
+        status: 401,
+        message: `${countInWindow} failed login attempts from this IP within ${Math.round(windowMs / 60000)}m — possible brute force or credential stuffing.`,
+      });
+    }
     if (responseType === "json") {
       return res.status(401).json({ ok: false, error: "Invalid email or password." });
     }

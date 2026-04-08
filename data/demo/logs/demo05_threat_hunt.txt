@@ -1,0 +1,7 @@
+2026-04-02T05:10:00Z ad-dc CORP-DC01 event=4625 target=VPN_SVC_ACCOUNT src_ip=45.142.193.10 failure_reason=bad_password count_15m=240
+2026-04-02T05:18:22Z ad-dc CORP-DC01 event=4625 target=jsmith src_ip=45.142.193.10 failure_reason=bad_password count_15m=18
+2026-04-02T05:22:01Z ad-dc CORP-DC01 event=4624 target=jsmith src_ip=45.142.193.10 logon_type=3 auth_package=Negotiate result=success
+2026-04-02T05:24:33Z edr host=FIN-LAPTOP-22 user=DOMAIN\jsmith process=powershell.exe cmdline="Test-NetConnection -ComputerName 10.0.0.0/24 -Port 445"
+2026-04-02T05:25:10Z dns resolver=internal-dns-01 client=FIN-LAPTOP-22 query=_ldap._tcp.corp.local type=SRV count_5m=45
+2026-04-02T05:26:02Z proxy vendor=zscaler user=jsmith action=connect dest_category=cloud_storage bytes=small count_5m=12
+2026-04-02T05:26:15Z fw segment=corp-servers src=FIN-LAPTOP-22 dst_net=10.0.20.0/24 dport=445 syn_5m=320 action=allow rule=workstation_to_server_smb

@@ -15,4 +15,4 @@ CTI evidence:
 Retrieved context:
 {rag_context}
 
-Return 3-6 concise bullets with actionable evidence-based outputs.
+Return concise, actionable points grounded in the evidence above.

@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 Chatbot
               </Link>
               <Link className="btn-secondary" href="/sandbox">
-                Simulator
+                Sandbox
               </Link>
             </nav>
           </header>

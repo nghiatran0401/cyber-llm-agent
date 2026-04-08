@@ -14,7 +14,7 @@ An AI assistant for security operations: it turns logs and natural-language ques
 | **Web** | Next.js app in `apps/web` — workspace UI with traces                                                 |
 | **Lab** | Deliberately vulnerable OWASP-style app in `apps/vuln-lab` (local learning only)                     |
 
-Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs/tool-contracts.md`](docs/tool-contracts.md). ReAct trace shape and runtime integration: [`docs/trace-contract.md`](docs/trace-contract.md). Tool-layer operations: [`docs/tooling-runbook.md`](docs/tooling-runbook.md).
+Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs/tool-contracts.md`](docs/tool-contracts.md). ReAct trace shape and runtime integration: [`docs/trace-contract.md`](docs/trace-contract.md). Tool-layer operations: [`docs/tooling-runbook.md`](docs/tooling-runbook.md). Current architecture snapshot: [`docs/architecture-current-state.md`](docs/architecture-current-state.md).
 
 ---
 
@@ -24,6 +24,18 @@ Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs
 - **G2:** implemented and active (not a placeholder).
 - **G2 runtime flow today:** `LogAnalyzer -> WorkerPlanner -> ThreatPredictor -> WorkerTask(s) -> IncidentResponder -> Verifier (with one retry) -> Orchestrator`.
 - **Trace + safety gates:** active for both G1/G2 (`stop_reason`, budget controls, output policy, action gating).
+
+---
+
+## Architecture diagrams
+
+**System architecture**
+
+![System architecture](docs/graph1.svg)
+
+**G1+G2 flow**
+
+![G1+G2 flow](docs/graph2.svg)
 
 ---
 
@@ -66,17 +78,17 @@ Frozen HTTP and tool contracts: [`docs/contracts.md`](docs/contracts.md), [`docs
 
 ## Everyday commands (Make)
 
-| Command                                    | Purpose                                                                                               |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `make lint`                                | Byte-compile critical Python packages (fast sanity check)                                             |
-| `make test`                                | Full pytest run for repository tests                                                                  |
-| `make test-ci`                             | Curated core-workflow Python suite used by CI (`scripts/run_test_ci.py`)                             |
-| `make test-web`                            | Frontend unit tests (Vitest)                                                                          |
-| `make benchmark` / `make benchmark-report` | Offline benchmark pipeline (CI-safe defaults)                                                         |
-| `make smoke`                               | Quick compile + memory/session smoke tests                                                            |
-| `make smoke-checklist`                     | Scripted API checklist (health, core routes, sandbox, RAG mocks)                                      |
-| `make ci`                                  | Lint + CI tests + benchmark + smoke + web tests (heavy; mirrors most of CI locally)                   |
-| `make validate-traces`                     | Trace validation helper (see `scripts/validate_traces.py`)                                            |
+| Command                                    | Purpose                                                                             |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `make lint`                                | Byte-compile critical Python packages (fast sanity check)                           |
+| `make test`                                | Full pytest run for repository tests                                                |
+| `make test-ci`                             | Curated core-workflow Python suite used by CI (`scripts/run_test_ci.py`)            |
+| `make test-web`                            | Frontend unit tests (Vitest)                                                        |
+| `make benchmark` / `make benchmark-report` | Offline benchmark pipeline (CI-safe defaults)                                       |
+| `make smoke`                               | Quick compile + memory/session smoke tests                                          |
+| `make smoke-checklist`                     | Scripted API checklist (health, core routes, sandbox, RAG mocks)                    |
+| `make ci`                                  | Lint + CI tests + benchmark + smoke + web tests (heavy; mirrors most of CI locally) |
+| `make validate-traces`                     | Trace validation helper (see `scripts/validate_traces.py`)                          |
 
 **CI on GitHub** (Python 3.10 + 3.11): `.github/workflows/ci.yml` runs `make lint`, `make test-ci`, `make benchmark`, memory smoke, and web tests.
 
@@ -128,7 +140,7 @@ Session **memory recall** uses the same `OPENAI_API_KEY` with `OPENAI_EMBEDDING_
 
 ## Sandbox and safety
 
-- OWASP-style **sandbox** API routes (`/api/v1/sandbox/*`) are always on for local demos.
+- OWASP-style **sandbox** API routes (`/api/v1/sandbox/*`) are always on for local demos. The web app **`/sandbox`** page **watches vuln-lab logs** (browser → lab `system-logs`) and runs **G1** or **G2** on new `attack_detected` lines via `analyze/g1|g2`. The **vuln-lab** is the minimal storefront (login + search) for those attacks.
 - Policy and gate reference: [`docs/policy-gates.md`](docs/policy-gates.md).
 - Heavier verification (live API checks + real-LLM benchmark mode): [`docs/benchmark-evaluation.md`](docs/benchmark-evaluation.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
@@ -163,7 +175,7 @@ src/
   utils/              # memory, sessions, evaluator, logging
 services/api/         # FastAPI app (routes, services, guardrails)
 apps/web/             # Next.js frontend
-apps/vuln-lab/        # training lab (Express)
+apps/vuln-lab/        # minimal 3-scenario vulnerable storefront (Express)
 tests/                # unit tests + integration (some need real API keys locally)
 scripts/              # benchmark, CI test runner, smoke checklist, trace validation
 data/                 # knowledge, benchmarks, logs, sessions (runtime artifacts)
