@@ -102,6 +102,12 @@ def main() -> int:
     raw_cases = load_dataset(dataset_path)
     cases = normalize_cases(raw_cases, case_limit=max(0, args.case_limit))
 
+    if args.provider == "openai" and not Settings.OPENAI_API_KEY:
+        print(
+            "Skipping benchmark run: OPENAI_API_KEY is not configured for provider=openai."
+        )
+        return 0
+
     agent = RealLLMBenchmarkAgent(agent_mode=args.agent_mode, provider=args.provider)
 
     evaluator = AgentEvaluator()
