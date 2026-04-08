@@ -107,7 +107,8 @@ class G1Agent:
         verbose: bool = True,
         memory: Optional[ConversationMemory] = None,
     ) -> None:
-        Settings.validate()
+        if backend_agent is None:
+            Settings.validate()
         
         self.session_id = session_id or f"session_{uuid4().hex[:10]}"
 
